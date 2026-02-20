@@ -1,0 +1,19 @@
+{
+  "name": "openbase",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "forwardPorts": [3000, 5432],
+  "remoteEnv": {
+    "DATABASE_URL": "postgres://postgres:postgres@db:5432/openbase"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Vue.volar",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}
