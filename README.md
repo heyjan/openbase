@@ -1,75 +1,48 @@
-# Nuxt Minimal Starter
+# Openbase
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+**Status:** Alpha — this project is under active development and may change without notice.
 
-## Setup
+Openbase is a spec-driven analytics dashboard focused on demand forecasting workflows, modular dashboards, and data source browsing.
 
-Make sure to install dependencies:
+## What’s included
 
-```bash
-# npm
-npm install
+- Guided admin setup (magic link + password) on first run.
+- Admin management with session-based authentication.
+- Dashboard editor with configurable modules and previews.
+- Data sources with a browser for tables/collections and rows.
+- SQLite and MongoDB connectors (more providers planned).
 
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
-```
-
-## Development Server
-
-Start the development server on `http://localhost:3000`:
+## Quick start (Docker)
 
 ```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
+docker-compose up --build
 ```
 
-## Production
+Then open `http://localhost:3000` and complete the setup flow on first run.
 
-Build the application for production:
+## Local development
 
-```bash
-# npm
-npm run build
+1. Install dependencies:
 
-# pnpm
-pnpm build
+   ```bash
+   npm install
+   ```
 
-# yarn
-yarn build
+2. Set the database URL (PostgreSQL required for the app metadata):
 
-# bun
-bun run build
-```
+   ```bash
+   export DATABASE_URL=postgres://postgres:postgres@localhost:5432/openbase
+   ```
 
-Locally preview production build:
+   Apply the schema in `db/schema.sql` if you are not using Docker.
 
-```bash
-# npm
-npm run preview
+3. Start the dev server:
 
-# pnpm
-pnpm preview
+   ```bash
+   npm run dev
+   ```
 
-# yarn
-yarn preview
+## Using data sources
 
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+- **SQLite:** Provide a local file path on the data sources page.
+- **MongoDB:** Provide a connection URI and database name; collections are listed and browsable.
