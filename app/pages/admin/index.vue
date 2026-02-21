@@ -1,8 +1,19 @@
 <script setup lang="ts">
-import { Database, LayoutDashboard, Plus, Search, Shield } from 'lucide-vue-next'
+import {
+  Database,
+  LayoutDashboard,
+  Link2,
+  Plus,
+  RefreshCw,
+  Search,
+  Shield
+} from 'lucide-vue-next'
+import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
+import type { Dashboard } from '~/types/dashboard'
 
 const { list, remove } = useDashboard()
+const toast = useToast()
 
 const { data: dashboards, pending, error, refresh } = useAsyncData(
   'admin-dashboards',
@@ -12,16 +23,32 @@ const { data: dashboards, pending, error, refresh } = useAsyncData(
 
 const deleting = ref<string | null>(null)
 const deleteError = ref('')
+const confirmDeleteOpen = ref(false)
+const pendingDeleteDashboard = ref<Dashboard | null>(null)
 
-const deleteDashboard = async (id: string) => {
+const openDeleteConfirm = (dashboard: Dashboard) => {
+  pendingDeleteDashboard.value = dashboard
+  confirmDeleteOpen.value = true
+}
+
+const deleteDashboard = async () => {
+  if (!pendingDeleteDashboard.value) {
+    return
+  }
+
+  const id = pendingDeleteDashboard.value.id
   deleteError.value = ''
   deleting.value = id
   try {
     await remove(id)
     await refresh()
+    confirmDeleteOpen.value = false
+    pendingDeleteDashboard.value = null
+    toast.success('Dashboard deleted')
   } catch (err) {
     deleteError.value =
       err instanceof Error ? err.message : 'Unable to delete dashboard'
+    toast.error('Unable to delete dashboard', deleteError.value)
   } finally {
     deleting.value = null
   }
@@ -56,6 +83,27 @@ const deleteDashboard = async (id: string) => {
         >
           <Search class="h-4 w-4" />
           Saved queries
+        </NuxtLink>
+        <NuxtLink
+          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
+          to="/admin/templates"
+        >
+          <LayoutDashboard class="h-4 w-4" />
+          Templates
+        </NuxtLink>
+        <NuxtLink
+          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
+          to="/admin/ingestion"
+        >
+          <RefreshCw class="h-4 w-4" />
+          Ingestion
+        </NuxtLink>
+        <NuxtLink
+          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
+          to="/admin/share-links"
+        >
+          <Link2 class="h-4 w-4" />
+          Share links
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"
@@ -108,7 +156,7 @@ const deleteDashboard = async (id: string) => {
               <button
                 class="rounded border border-red-200 px-3 py-1.5 text-red-700 hover:border-red-300"
                 :disabled="deleting === dashboard.id"
-                @click="deleteDashboard(dashboard.id)"
+                @click="openDeleteConfirm(dashboard)"
               >
                 Delete
               </button>
@@ -124,5 +172,15 @@ const deleteDashboard = async (id: string) => {
         {{ deleteError }}
       </p>
     </div>
+
+    <ConfirmDialog
+      v-model="confirmDeleteOpen"
+      title="Delete dashboard?"
+      :message="pendingDeleteDashboard ? `This permanently removes '${pendingDeleteDashboard.name}' and all modules.` : 'This permanently removes the selected dashboard.'"
+      confirm-label="Delete dashboard"
+      confirm-tone="danger"
+      :pending="pendingDeleteDashboard ? deleting === pendingDeleteDashboard.id : false"
+      @confirm="deleteDashboard"
+    />
   </section>
 </template>

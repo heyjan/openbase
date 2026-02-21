@@ -1,5 +1,6 @@
 import { defineEventHandler } from 'h3'
+import { getIngestionStatus } from '~~/server/utils/ingestion-store'
 
-export default defineEventHandler(() => {
-  return { ok: true }
+export default defineEventHandler(async () => {
+  return await getIngestionStatus()
 })

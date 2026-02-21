@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { Database, Plus, RefreshCw } from 'lucide-vue-next'
+import { Database, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
+import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 import type { DataSource } from '~/types/data-source'
 
-const { list, create, test } = useDataSources()
+const { list, create, test, remove } = useDataSources()
+const toast = useToast()
 
 const sources = ref<DataSource[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
+const deletingId = ref<string | null>(null)
+const confirmDeleteOpen = ref(false)
+const pendingDeleteSource = ref<DataSource | null>(null)
 
 const newSource = reactive({
   name: '',
@@ -27,6 +32,7 @@ const loadSources = async () => {
   } catch (err) {
     errorMessage.value =
       err instanceof Error ? err.message : 'Failed to load data sources'
+    toast.error('Failed to load data sources', errorMessage.value)
   } finally {
     loading.value = false
   }
@@ -50,9 +56,11 @@ const addSource = async () => {
     newSource.uri = ''
     newSource.database = ''
     await loadSources()
+    toast.success('Data source added')
   } catch (err) {
     createError.value =
       err instanceof Error ? err.message : 'Failed to create data source'
+    toast.error('Failed to create data source', createError.value)
   } finally {
     creating.value = false
   }
@@ -68,10 +76,39 @@ const testSource = async (source: DataSource) => {
     const result = await test(source.id)
     const label = source.type === 'mongodb' ? 'Collections' : 'Tables'
     testMessage.value = `Connected. ${label} found: ${result.tables?.length ?? 0}`
+    toast.success('Connection test successful', testMessage.value)
   } catch (err) {
     testMessage.value = err instanceof Error ? err.message : 'Test failed'
+    toast.error('Connection test failed', testMessage.value)
   } finally {
     testingId.value = null
+  }
+}
+
+const openDeleteConfirm = (source: DataSource) => {
+  pendingDeleteSource.value = source
+  confirmDeleteOpen.value = true
+}
+
+const deleteSource = async () => {
+  if (!pendingDeleteSource.value) {
+    return
+  }
+
+  deletingId.value = pendingDeleteSource.value.id
+  errorMessage.value = ''
+  try {
+    await remove(pendingDeleteSource.value.id)
+    await loadSources()
+    confirmDeleteOpen.value = false
+    pendingDeleteSource.value = null
+    toast.success('Data source deleted')
+  } catch (err) {
+    errorMessage.value =
+      err instanceof Error ? err.message : 'Failed to delete data source'
+    toast.error('Failed to delete data source', errorMessage.value)
+  } finally {
+    deletingId.value = null
   }
 }
 
@@ -215,6 +252,14 @@ onMounted(loadSources)
                 <RefreshCw class="h-4 w-4" />
                 Test connection
               </button>
+              <button
+                class="inline-flex items-center gap-2 rounded border border-red-200 px-3 py-1.5 text-red-700 hover:border-red-300 disabled:opacity-50"
+                :disabled="deletingId === source.id"
+                @click="openDeleteConfirm(source)"
+              >
+                <Trash2 class="h-4 w-4" />
+                {{ deletingId === source.id ? 'Deleting…' : 'Delete' }}
+              </button>
             </div>
           </div>
         </div>
@@ -224,5 +269,15 @@ onMounted(loadSources)
         {{ testMessage }}
       </p>
     </div>
+
+    <ConfirmDialog
+      v-model="confirmDeleteOpen"
+      title="Delete data source?"
+      :message="pendingDeleteSource ? `This removes data source '${pendingDeleteSource.name}'. Queries using it will fail.` : 'This removes the selected data source.'"
+      confirm-label="Delete data source"
+      confirm-tone="danger"
+      :pending="pendingDeleteSource ? deletingId === pendingDeleteSource.id : false"
+      @confirm="deleteSource"
+    />
   </section>
 </template>

@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import type { ModuleType } from '~/types/module'
+import type { ModuleTemplate } from '~/types/template'
 
 const props = defineProps<{
   disabled?: boolean
 }>()
 
 const emit = defineEmits<{
-  (event: 'add', moduleType: ModuleType): void
+  (
+    event: 'add',
+    payload: { type: ModuleType; template?: ModuleTemplate }
+  ): void
 }>()
 
 type PaletteItem = {
@@ -48,32 +52,115 @@ const items: PaletteItem[] = [
   }
 ]
 
-const addModule = (moduleType: ModuleType) => {
+const { list: listTemplates } = useTemplates()
+
+const templates = ref<ModuleTemplate[]>([])
+const templatesLoading = ref(false)
+const templateError = ref('')
+const templateSelection = reactive<Record<ModuleType, string>>({
+  time_series_chart: '',
+  outlier_table: '',
+  kpi_card: '',
+  data_table: '',
+  annotation_log: '',
+  form_input: ''
+})
+
+const templatesForType = (type: ModuleType) =>
+  templates.value.filter((template) => template.type === type)
+
+const loadTemplates = async () => {
+  templatesLoading.value = true
+  templateError.value = ''
+  try {
+    templates.value = await listTemplates()
+  } catch (error) {
+    templateError.value =
+      error instanceof Error ? error.message : 'Failed to load templates'
+  } finally {
+    templatesLoading.value = false
+  }
+}
+
+const addModule = (payload: { type: ModuleType; template?: ModuleTemplate }) => {
   if (props.disabled) {
     return
   }
-  emit('add', moduleType)
+  emit('add', payload)
 }
+
+const addBlankModule = (moduleType: ModuleType) => {
+  addModule({ type: moduleType })
+}
+
+const addFromTemplate = (moduleType: ModuleType) => {
+  const selectedTemplateId = templateSelection[moduleType]
+  if (!selectedTemplateId) {
+    return
+  }
+  const template = templates.value.find((item) => item.id === selectedTemplateId)
+  if (!template) {
+    return
+  }
+  addModule({ type: moduleType, template })
+}
+
+onMounted(loadTemplates)
 </script>
 
 <template>
   <aside class="rounded border border-gray-200 bg-white p-4 shadow-sm">
     <div class="mb-3">
       <h3 class="text-sm font-semibold text-gray-900">Module Palette</h3>
-      <p class="mt-1 text-xs text-gray-500">Add modules to the dashboard canvas.</p>
+      <p class="mt-1 text-xs text-gray-500">Add blank modules or create from templates.</p>
     </div>
 
-    <div class="grid gap-2">
-      <button
+    <p v-if="templatesLoading" class="mb-2 text-xs text-gray-500">Loading templates…</p>
+    <p v-else-if="templateError" class="mb-2 text-xs text-red-600">{{ templateError }}</p>
+
+    <div class="grid gap-3">
+      <div
         v-for="item in items"
         :key="item.type"
-        class="rounded border border-gray-200 px-3 py-2 text-left hover:border-gray-300 disabled:opacity-50"
-        :disabled="disabled"
-        @click="addModule(item.type)"
+        class="rounded border border-gray-200 px-3 py-2"
       >
         <p class="text-sm font-medium text-gray-800">{{ item.label }}</p>
         <p class="text-xs text-gray-500">{{ item.description }}</p>
-      </button>
+
+        <div class="mt-2 flex gap-2">
+          <button
+            class="rounded border border-gray-200 px-2.5 py-1 text-xs text-gray-700 hover:border-gray-300 disabled:opacity-50"
+            :disabled="disabled"
+            @click="addBlankModule(item.type)"
+          >
+            Add blank
+          </button>
+        </div>
+
+        <div v-if="templatesForType(item.type).length" class="mt-2 space-y-2">
+          <select
+            v-model="templateSelection[item.type]"
+            class="w-full rounded border border-gray-300 px-2 py-1.5 text-xs"
+            :disabled="disabled"
+          >
+            <option value="">Select template…</option>
+            <option
+              v-for="template in templatesForType(item.type)"
+              :key="template.id"
+              :value="template.id"
+            >
+              {{ template.name }}
+            </option>
+          </select>
+          <button
+            class="rounded border border-gray-200 px-2.5 py-1 text-xs text-gray-700 hover:border-gray-300 disabled:opacity-50"
+            :disabled="disabled || !templateSelection[item.type]"
+            @click="addFromTemplate(item.type)"
+          >
+            Add from template
+          </button>
+        </div>
+      </div>
     </div>
   </aside>
 </template>

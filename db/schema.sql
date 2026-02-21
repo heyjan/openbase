@@ -84,6 +84,20 @@ CREATE TABLE IF NOT EXISTS module_templates (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS ingestion_pipeline_runs (
+  id           VARCHAR(36) PRIMARY KEY,
+  pipeline     VARCHAR(64) NOT NULL,
+  status       VARCHAR(20) NOT NULL,
+  message      TEXT,
+  row_count    INTEGER,
+  started_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at  TIMESTAMPTZ,
+  triggered_by VARCHAR(255)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ingestion_pipeline_runs_pipeline_started
+ON ingestion_pipeline_runs (pipeline, started_at DESC);
+
 CREATE TABLE IF NOT EXISTS annotations (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dashboard_id  UUID REFERENCES dashboards(id),

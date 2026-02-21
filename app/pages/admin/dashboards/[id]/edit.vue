@@ -3,13 +3,16 @@ import { Save } from 'lucide-vue-next'
 import DashboardEditor from '~/components/dashboard/DashboardEditor.vue'
 import ModuleConfigPanel from '~/components/dashboard/ModuleConfigPanel.vue'
 import ModulePalette from '~/components/dashboard/ModulePalette.vue'
+import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 import type { ModuleConfig, ModuleType } from '~/types/module'
+import type { ModuleTemplate } from '~/types/template'
 
 const route = useRoute()
 const dashboardId = computed(() => String(route.params.id || ''))
 const { getById, update } = useDashboard()
 const { list, create, update: updateModule, remove, updateLayout } = useModules()
+const toast = useToast()
 
 const { data: dashboard, pending, error, refresh } = useAsyncData(
   () => getById(dashboardId.value),
@@ -24,6 +27,8 @@ const moduleActionId = ref<string | null>(null)
 const selectedModuleId = ref<string | null>(null)
 const layoutDirty = ref(false)
 const savingLayout = ref(false)
+const confirmDeleteOpen = ref(false)
+const pendingDeleteModuleId = ref<string | null>(null)
 
 const selectedModule = computed(() =>
   modules.value.find((item) => item.id === selectedModuleId.value) ?? null
@@ -49,14 +54,18 @@ const loadModules = async () => {
   }
 }
 
-const addModule = async (type: ModuleType) => {
+const addModule = async (payload: {
+  type: ModuleType
+  template?: ModuleTemplate
+}) => {
   moduleActionError.value = ''
   moduleActionId.value = 'new'
   try {
     const maxGridY = modules.value.reduce((max, item) => Math.max(max, item.gridY + item.gridH), 0)
     await create(dashboardId.value, {
-      type,
-      title: undefined,
+      type: payload.type,
+      title: payload.template?.name,
+      config: payload.template?.config,
       gridX: 0,
       gridY: maxGridY,
       gridW: 6,
@@ -64,9 +73,11 @@ const addModule = async (type: ModuleType) => {
     })
     await loadModules()
     selectedModuleId.value = modules.value[modules.value.length - 1]?.id ?? selectedModuleId.value
+    toast.success(payload.template ? 'Module added from template' : 'Module added')
   } catch (err) {
     moduleActionError.value =
       err instanceof Error ? err.message : 'Failed to add module'
+    toast.error('Failed to add module', moduleActionError.value)
   } finally {
     moduleActionId.value = null
   }
@@ -95,24 +106,40 @@ const saveModule = async (module: ModuleConfig) => {
     })
     await loadModules()
     selectedModuleId.value = module.id
+    toast.success('Module saved')
   } catch (err) {
     moduleActionError.value =
       err instanceof Error ? err.message : 'Failed to update module'
+    toast.error('Failed to save module', moduleActionError.value)
   } finally {
     moduleActionId.value = null
   }
 }
 
-const deleteModule = async (moduleId: string) => {
+const openDeleteModuleConfirm = (moduleId: string) => {
+  pendingDeleteModuleId.value = moduleId
+  confirmDeleteOpen.value = true
+}
+
+const deleteModule = async () => {
+  if (!pendingDeleteModuleId.value) {
+    return
+  }
+
+  const moduleId = pendingDeleteModuleId.value
   moduleActionError.value = ''
   moduleActionId.value = moduleId
   try {
     await remove(moduleId)
     await loadModules()
     selectedModuleId.value = modules.value[0]?.id ?? null
+    confirmDeleteOpen.value = false
+    pendingDeleteModuleId.value = null
+    toast.success('Module deleted')
   } catch (err) {
     moduleActionError.value =
       err instanceof Error ? err.message : 'Failed to delete module'
+    toast.error('Failed to delete module', moduleActionError.value)
   } finally {
     moduleActionId.value = null
   }
@@ -136,9 +163,11 @@ const saveCurrentLayout = async () => {
       }))
     )
     await loadModules()
+    toast.success('Layout saved')
   } catch (err) {
     moduleActionError.value =
       err instanceof Error ? err.message : 'Failed to save layout'
+    toast.error('Failed to save layout', moduleActionError.value)
   } finally {
     savingLayout.value = false
   }
@@ -176,8 +205,10 @@ const save = async () => {
       description: form.description || undefined
     })
     await refresh()
+    toast.success('Dashboard metadata saved')
   } catch (err) {
     saveError.value = err instanceof Error ? err.message : 'Failed to save'
+    toast.error('Failed to save dashboard', saveError.value)
   } finally {
     saving.value = false
   }
@@ -292,12 +323,22 @@ const save = async () => {
             :saving="selectedModuleBusy"
             :deleting="selectedModuleBusy"
             @save="saveModule"
-            @delete="deleteModule"
+            @delete="openDeleteModuleConfirm"
           />
         </div>
 
         <p v-if="moduleActionError" class="text-sm text-red-600">{{ moduleActionError }}</p>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-model="confirmDeleteOpen"
+      title="Delete module?"
+      message="This permanently removes the selected module from the dashboard."
+      confirm-label="Delete module"
+      confirm-tone="danger"
+      :pending="pendingDeleteModuleId ? moduleActionId === pendingDeleteModuleId : false"
+      @confirm="deleteModule"
+    />
   </section>
 </template>

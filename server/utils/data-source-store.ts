@@ -90,8 +90,24 @@ export const updateDataSource = async (
 }
 
 export const deleteDataSource = async (id: string) => {
-  const result = await query('DELETE FROM data_sources WHERE id = $1', [id])
-  if (result.rowCount === 0) {
-    throw createError({ statusCode: 404, statusMessage: 'Data source not found' })
+  try {
+    const result = await query('DELETE FROM data_sources WHERE id = $1', [id])
+    if (result.rowCount === 0) {
+      throw createError({ statusCode: 404, statusMessage: 'Data source not found' })
+    }
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === '23503'
+    ) {
+      throw createError({
+        statusCode: 409,
+        statusMessage:
+          'Data source is in use by one or more saved queries. Remove those queries first.'
+      })
+    }
+    throw error
   }
 }

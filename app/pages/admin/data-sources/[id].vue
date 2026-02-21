@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ChevronDown, Table } from 'lucide-vue-next'
+import { ChevronDown, Table, Trash2 } from 'lucide-vue-next'
+import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 
 const route = useRoute()
 const dataSourceId = computed(() => String(route.params.id || ''))
-const { getById, listTables, getRows } = useDataSources()
+const { getById, listTables, getRows, remove } = useDataSources()
+const toast = useToast()
 
 const { data: source, pending, error } = useAsyncData(
   () => getById(dataSourceId.value),
@@ -27,6 +29,9 @@ const rows = ref<Record<string, unknown>[]>([])
 const columns = ref<string[]>([])
 const rowsLoading = ref(false)
 const rowsError = ref('')
+const deleting = ref(false)
+const deleteError = ref('')
+const confirmDeleteOpen = ref(false)
 
 const loadTables = async () => {
   tableLoading.value = true
@@ -42,6 +47,7 @@ const loadTables = async () => {
       err instanceof Error
         ? err.message
         : `Failed to load ${tableLabelPlural.value}`
+    toast.error('Failed to load tables', tableError.value)
   } finally {
     tableLoading.value = false
   }
@@ -61,8 +67,26 @@ const loadRows = async () => {
     columns.value = result.columns
   } catch (err) {
     rowsError.value = err instanceof Error ? err.message : 'Failed to load rows'
+    toast.error('Failed to load rows', rowsError.value)
   } finally {
     rowsLoading.value = false
+  }
+}
+
+const deleteSource = async () => {
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await remove(dataSourceId.value)
+    confirmDeleteOpen.value = false
+    toast.success('Data source deleted')
+    await navigateTo('/admin/data-sources')
+  } catch (err) {
+    deleteError.value =
+      err instanceof Error ? err.message : 'Failed to delete data source'
+    toast.error('Failed to delete data source', deleteError.value)
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -85,7 +109,18 @@ onMounted(loadTables)
       ]"
       back-to="/admin/data-sources"
       back-label="Back to data sources"
-    />
+    >
+      <template #actions>
+        <button
+          class="inline-flex items-center gap-2 rounded border border-red-200 px-3 py-2 text-sm text-red-700 hover:border-red-300 disabled:opacity-50"
+          :disabled="deleting"
+          @click="confirmDeleteOpen = true"
+        >
+          <Trash2 class="h-4 w-4" />
+          {{ deleting ? 'Deleting…' : 'Delete data source' }}
+        </button>
+      </template>
+    </PageHeader>
 
     <p v-if="pending" class="mt-6 text-sm text-gray-500">Loading data source…</p>
     <p v-else-if="error" class="mt-6 text-sm text-red-600">
@@ -93,6 +128,8 @@ onMounted(loadTables)
     </p>
 
     <div v-else class="mt-6 space-y-6">
+      <p v-if="deleteError" class="text-sm text-red-600">{{ deleteError }}</p>
+
       <div class="rounded border border-gray-200 bg-white p-4 shadow-sm">
         <h2 class="text-lg font-semibold">{{ source?.name }}</h2>
         <p class="text-xs text-gray-500">{{ source?.type }}</p>
@@ -176,5 +213,15 @@ onMounted(loadTables)
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-model="confirmDeleteOpen"
+      title="Delete data source?"
+      :message="source ? `This removes data source '${source.name}'. Queries using it will fail.` : 'This removes the selected data source.'"
+      confirm-label="Delete data source"
+      confirm-tone="danger"
+      :pending="deleting"
+      @confirm="deleteSource"
+    />
   </section>
 </template>
