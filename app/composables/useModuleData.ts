@@ -14,29 +14,64 @@ const emptyModuleData = (): ModuleDataResult => ({
 })
 
 const getSavedQueryId = (module: ModuleConfig) => {
-  const raw =
-    module.config.saved_query_id ?? module.config.savedQueryId
-  return typeof raw === 'string' ? raw.trim() : ''
+  return module.queryVisualizationQueryId?.trim() ?? ''
 }
 
 export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
-  const route = useRoute()
+  const fallbackRoute = reactive({
+    params: {} as Record<string, unknown>,
+    query: {} as Record<string, unknown>,
+    path: '',
+    fullPath: ''
+  })
 
-  const slug = computed(() =>
+  let route: ReturnType<typeof useRoute>
+  try {
+    route = useRoute()
+  } catch {
+    route = fallbackRoute as ReturnType<typeof useRoute>
+  }
+
+  const publicSlug = computed(() =>
     typeof route.params.slug === 'string' ? route.params.slug : ''
+  )
+  const dashboardId = computed(() =>
+    typeof route.params.id === 'string' ? route.params.id : ''
   )
   const token = computed(() =>
     typeof route.query.token === 'string' ? route.query.token : ''
   )
   const savedQueryId = computed(() => getSavedQueryId(moduleRef.value))
+  const isPublicDashboardRoute = computed(() =>
+    route.path.startsWith('/d/') && !!publicSlug.value
+  )
+  const isAdminDashboardEditRoute = computed(() =>
+    route.path.startsWith('/admin/dashboards/') &&
+    route.path.endsWith('/edit') &&
+    !!dashboardId.value
+  )
 
   const canFetch = computed(() => {
-    return (
-      route.path.startsWith('/d/') &&
-      !!slug.value &&
-      !!token.value &&
-      !!savedQueryId.value
-    )
+    if (!savedQueryId.value) {
+      return false
+    }
+    if (isPublicDashboardRoute.value) {
+      return !!token.value
+    }
+    if (isAdminDashboardEditRoute.value) {
+      return true
+    }
+    return false
+  })
+
+  const endpoint = computed(() => {
+    if (isPublicDashboardRoute.value) {
+      return `/api/dashboards/${publicSlug.value}/modules/${moduleRef.value.id}/data`
+    }
+    if (isAdminDashboardEditRoute.value) {
+      return `/api/admin/dashboards/${dashboardId.value}/modules/${moduleRef.value.id}/data`
+    }
+    return ''
   })
 
   const queryParams = computed<Record<string, unknown>>(() => {
@@ -47,46 +82,77 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
       }
       params[key] = value
     }
-    params.token = token.value
+    if (isPublicDashboardRoute.value) {
+      params.token = token.value
+    } else {
+      delete params.token
+    }
     return params
   })
 
-  const { data, pending, error, refresh } = useAsyncData<ModuleDataResult>(
-    async () => {
-      if (!canFetch.value) {
-        return emptyModuleData()
-      }
-      return await $fetch<ModuleDataResult>(
-        `/api/dashboards/${slug.value}/modules/${moduleRef.value.id}/data`,
-        { query: queryParams.value }
-      )
-    },
-    {
-      server: false,
-      default: emptyModuleData,
-      watch: [
-        () => moduleRef.value.id,
-        () => savedQueryId.value,
-        () => slug.value,
-        () => token.value,
-        () => route.fullPath
-      ]
-    }
-  )
+  const data = ref<ModuleDataResult>(emptyModuleData())
+  const pending = ref(false)
+  const errorMessage = ref('')
+  let requestSeq = 0
 
-  const errorMessage = computed(() => {
-    if (!error.value) {
-      return ''
+  const refresh = async () => {
+    const requestId = ++requestSeq
+
+    if (!canFetch.value || !endpoint.value) {
+      data.value = emptyModuleData()
+      pending.value = false
+      errorMessage.value = ''
+      return
     }
-    return error.value instanceof Error
-      ? error.value.message
-      : 'Failed to load module data'
-  })
+
+    pending.value = true
+    errorMessage.value = ''
+
+    try {
+      const response = await $fetch<ModuleDataResult>(endpoint.value, {
+        query: queryParams.value
+      })
+
+      if (requestId !== requestSeq) {
+        return
+      }
+
+      data.value = response
+    } catch (error) {
+      if (requestId !== requestSeq) {
+        return
+      }
+
+      errorMessage.value =
+        error instanceof Error ? error.message : 'Failed to load module data'
+      data.value = emptyModuleData()
+    } finally {
+      if (requestId === requestSeq) {
+        pending.value = false
+      }
+    }
+  }
+
+  watch(
+    [
+      () => moduleRef.value.id,
+      () => savedQueryId.value,
+      () => publicSlug.value,
+      () => dashboardId.value,
+      () => token.value,
+      () => route.path,
+      () => route.fullPath
+    ],
+    () => {
+      refresh()
+    },
+    { immediate: true }
+  )
 
   return {
     data,
     pending,
-    error: errorMessage,
+    error: computed(() => errorMessage.value),
     refresh,
     canFetch
   }
