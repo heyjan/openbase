@@ -66,3 +66,45 @@ export const testMongoConnection = async (uri: string, database: string) => {
   const tables = await listMongoCollections(uri, database)
   return { ok: true, tables }
 }
+
+export const runMongoQuery = async (
+  uri: string,
+  database: string,
+  collection: string,
+  filter: Record<string, unknown>,
+  limit: number
+) => {
+  const { client, db } = await connectMongo(uri, database)
+  try {
+    const collections = await db
+      .listCollections({ name: collection }, { nameOnly: true })
+      .toArray()
+    if (!collections.length) {
+      throw createError({ statusCode: 404, statusMessage: 'Collection not found' })
+    }
+    const docs = await db
+      .collection(collection)
+      .find(filter, { limit })
+      .toArray()
+    const rows = docs.map((doc) => {
+      const { _id, ...rest } = doc as Record<string, unknown>
+      return {
+        _id:
+          _id && typeof _id === 'object' && 'toString' in _id
+            ? (_id as { toString: () => string }).toString()
+            : _id,
+        ...rest
+      }
+    })
+    const columns = rows.length
+      ? Array.from(new Set(rows.flatMap((row) => Object.keys(row))))
+      : []
+    return {
+      rows,
+      columns,
+      rowCount: rows.length
+    }
+  } finally {
+    await client.close()
+  }
+}

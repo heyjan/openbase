@@ -9,5 +9,5 @@ export default defineEventHandler(async (event) => {
   }
   const payload = await readBody(event)
   const input = parseModuleInput(payload)
-  return createModule(dashboardId, input)
+  return await createModule(dashboardId, input)
 })

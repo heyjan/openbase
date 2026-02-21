@@ -10,5 +10,5 @@ export default defineEventHandler(async (event) => {
 
   const payload = await readBody(event)
   const updates = parseDashboardUpdate(payload)
-  return updateDashboard(id, updates)
+  return await updateDashboard(id, updates)
 })

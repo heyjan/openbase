@@ -9,5 +9,5 @@ export default defineEventHandler(async (event) => {
   }
   const payload = await readBody(event)
   const updates = parseModuleUpdate(payload)
-  return updateModule(moduleId, updates)
+  return await updateModule(moduleId, updates)
 })

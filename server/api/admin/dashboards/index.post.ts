@@ -5,5 +5,5 @@ import { parseDashboardInput } from '~~/server/utils/dashboard-validators'
 export default defineEventHandler(async (event) => {
   const payload = await readBody(event)
   const input = parseDashboardInput(payload)
-  return createDashboard(input)
+  return await createDashboard(input)
 })

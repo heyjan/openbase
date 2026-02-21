@@ -9,5 +9,5 @@ export default defineEventHandler(async (event) => {
   }
   const payload = await readBody(event)
   const layout = parseLayoutUpdate(payload)
-  return updateModuleLayout(dashboardId, layout)
+  return await updateModuleLayout(dashboardId, layout)
 })

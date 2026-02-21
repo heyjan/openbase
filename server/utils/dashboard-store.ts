@@ -1,205 +1,351 @@
 import { randomUUID } from 'crypto'
 import { createError } from 'h3'
+import { getDb, query } from './db'
 import type { Dashboard, DashboardInput, DashboardUpdate } from '~/types/dashboard'
 import type { ModuleConfig, ModuleInput, ModuleLayoutUpdate, ModuleUpdate } from '~/types/module'
 
-type DashboardStore = {
-  dashboards: Map<string, Dashboard>
-  modules: Map<string, ModuleConfig[]>
+type DashboardRow = {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  tags: string[] | null
+  share_token: string
+  created_at: string
+  updated_at: string
 }
 
-const storeKey = '__openbaseDashboardStore'
-
-const getStore = (): DashboardStore => {
-  const global = globalThis as typeof globalThis & {
-    [storeKey]?: DashboardStore
-  }
-
-  if (!global[storeKey]) {
-    global[storeKey] = { dashboards: new Map(), modules: new Map() }
-  }
-
-  return global[storeKey]
+type ModuleRow = {
+  id: string
+  dashboard_id: string
+  type: ModuleConfig['type']
+  title: string | null
+  config: Record<string, unknown> | null
+  grid_x: number
+  grid_y: number
+  grid_w: number
+  grid_h: number
 }
 
 const generateToken = () => randomUUID().replace(/-/g, '')
 
-const createDefaultModules = (dashboardId: string): ModuleConfig[] => [
-  {
-    id: randomUUID(),
-    dashboardId,
-    type: 'kpi_card',
-    title: 'KPI Card',
-    config: {},
-    gridX: 0,
-    gridY: 0,
-    gridW: 6,
-    gridH: 4
-  }
-]
+const mapDashboard = (row: DashboardRow): Dashboard => ({
+  id: row.id,
+  name: row.name,
+  slug: row.slug,
+  description: row.description ?? undefined,
+  tags: row.tags ?? [],
+  shareToken: row.share_token,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at
+})
 
-export const listDashboards = (): Dashboard[] => {
-  return Array.from(getStore().dashboards.values())
-}
+const mapModule = (row: ModuleRow): ModuleConfig => ({
+  id: row.id,
+  dashboardId: row.dashboard_id,
+  type: row.type,
+  title: row.title ?? undefined,
+  config: row.config ?? {},
+  gridX: row.grid_x,
+  gridY: row.grid_y,
+  gridW: row.grid_w,
+  gridH: row.grid_h
+})
 
-export const getDashboardById = (id: string): Dashboard => {
-  const dashboard = getStore().dashboards.get(id)
-  if (!dashboard) {
-    throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
-  }
-  return dashboard
-}
+const isUniqueViolation = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  (error as { code?: string }).code === '23505'
 
-export const getDashboardBySlug = (slug: string): Dashboard => {
-  const dashboard = listDashboards().find((item) => item.slug === slug)
-  if (!dashboard) {
-    throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
-  }
-  return dashboard
-}
-
-const ensureSlugUnique = (slug: string, currentId?: string) => {
-  const existing = listDashboards().find(
-    (item) => item.slug === slug && item.id !== currentId
-  )
-  if (existing) {
+const toConflictError = (error: unknown) => {
+  if (isUniqueViolation(error)) {
     throw createError({ statusCode: 409, statusMessage: 'Slug already exists' })
   }
+  throw error
 }
 
-export const createDashboard = (input: DashboardInput): Dashboard => {
-  ensureSlugUnique(input.slug)
-  const now = new Date().toISOString()
-  const dashboard: Dashboard = {
-    id: randomUUID(),
-    name: input.name,
-    slug: input.slug,
-    description: input.description,
-    tags: input.tags ?? [],
-    shareToken: generateToken(),
-    createdAt: now,
-    updatedAt: now
+export const listDashboards = async (): Promise<Dashboard[]> => {
+  const result = await query<DashboardRow>(
+    `SELECT id, name, slug, description, tags, share_token, created_at, updated_at
+     FROM dashboards
+     ORDER BY updated_at DESC`
+  )
+  return result.rows.map(mapDashboard)
+}
+
+export const getDashboardById = async (id: string): Promise<Dashboard> => {
+  const result = await query<DashboardRow>(
+    `SELECT id, name, slug, description, tags, share_token, created_at, updated_at
+     FROM dashboards
+     WHERE id = $1`,
+    [id]
+  )
+  const dashboard = result.rows[0]
+  if (!dashboard) {
+    throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
+  }
+  return mapDashboard(dashboard)
+}
+
+export const getDashboardBySlug = async (slug: string): Promise<Dashboard> => {
+  const result = await query<DashboardRow>(
+    `SELECT id, name, slug, description, tags, share_token, created_at, updated_at
+     FROM dashboards
+     WHERE slug = $1 AND is_active = true`,
+    [slug]
+  )
+  const dashboard = result.rows[0]
+  if (!dashboard) {
+    throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
+  }
+  return mapDashboard(dashboard)
+}
+
+export const createDashboard = async (input: DashboardInput): Promise<Dashboard> => {
+  const db = getDb()
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+    const created = await client.query<DashboardRow>(
+      `INSERT INTO dashboards (name, slug, description, tags, share_token)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, slug, description, tags, share_token, created_at, updated_at`,
+      [input.name, input.slug, input.description ?? null, input.tags ?? [], generateToken()]
+    )
+    const dashboard = created.rows[0]
+
+    await client.query(
+      `INSERT INTO modules (dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [dashboard.id, 'kpi_card', 'KPI Card', {}, 0, 0, 6, 4, 0]
+    )
+
+    await client.query('COMMIT')
+    return mapDashboard(dashboard)
+  } catch (error) {
+    await client.query('ROLLBACK')
+    toConflictError(error)
+  } finally {
+    client.release()
   }
 
-  const store = getStore()
-  store.dashboards.set(dashboard.id, dashboard)
-  store.modules.set(dashboard.id, createDefaultModules(dashboard.id))
-  return dashboard
+  throw createError({ statusCode: 500, statusMessage: 'Failed to create dashboard' })
 }
 
 export const updateDashboard = (
   id: string,
   updates: DashboardUpdate
-): Dashboard => {
-  const existing = getDashboardById(id)
+): Promise<Dashboard> => {
+  const fields: string[] = []
+  const values: unknown[] = []
+  let index = 1
 
-  if (updates.slug) {
-    ensureSlugUnique(updates.slug, id)
+  if (updates.name !== undefined) {
+    fields.push(`name = $${index++}`)
+    values.push(updates.name)
+  }
+  if (updates.slug !== undefined) {
+    fields.push(`slug = $${index++}`)
+    values.push(updates.slug)
+  }
+  if (updates.description !== undefined) {
+    fields.push(`description = $${index++}`)
+    values.push(updates.description ?? null)
+  }
+  if (updates.tags !== undefined) {
+    fields.push(`tags = $${index++}`)
+    values.push(updates.tags)
   }
 
-  const updated: Dashboard = {
-    ...existing,
-    ...updates,
-    tags: updates.tags ?? existing.tags,
-    updatedAt: new Date().toISOString()
+  if (!fields.length) {
+    return getDashboardById(id)
   }
 
-  getStore().dashboards.set(id, updated)
-  return updated
+  values.push(id)
+  return query<DashboardRow>(
+    `UPDATE dashboards
+     SET ${fields.join(', ')}, updated_at = now()
+     WHERE id = $${index}
+     RETURNING id, name, slug, description, tags, share_token, created_at, updated_at`,
+    values
+  )
+    .then((result) => {
+      const row = result.rows[0]
+      if (!row) {
+        throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
+      }
+      return mapDashboard(row)
+    })
+    .catch((error) => {
+      toConflictError(error)
+      throw error
+    })
 }
 
-export const deleteDashboard = (id: string) => {
-  const store = getStore()
-  if (!store.dashboards.delete(id)) {
+export const deleteDashboard = async (id: string) => {
+  const result = await query('DELETE FROM dashboards WHERE id = $1', [id])
+  if (result.rowCount === 0) {
     throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
   }
-  store.modules.delete(id)
 }
 
-export const rotateDashboardToken = (id: string): Dashboard => {
-  const existing = getDashboardById(id)
-  const updated: Dashboard = {
-    ...existing,
-    shareToken: generateToken(),
-    updatedAt: new Date().toISOString()
+export const rotateDashboardToken = async (id: string): Promise<Dashboard> => {
+  const result = await query<DashboardRow>(
+    `UPDATE dashboards
+     SET share_token = $1, updated_at = now()
+     WHERE id = $2
+     RETURNING id, name, slug, description, tags, share_token, created_at, updated_at`,
+    [generateToken(), id]
+  )
+  const row = result.rows[0]
+  if (!row) {
+    throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
   }
-  getStore().dashboards.set(id, updated)
-  return updated
+  return mapDashboard(row)
 }
 
-export const listModules = (dashboardId: string): ModuleConfig[] => {
-  getDashboardById(dashboardId)
-  return getStore().modules.get(dashboardId) ?? []
+export const listModules = async (dashboardId: string): Promise<ModuleConfig[]> => {
+  await getDashboardById(dashboardId)
+  const result = await query<ModuleRow>(
+    `SELECT id, dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h
+     FROM modules
+     WHERE dashboard_id = $1
+     ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+    [dashboardId]
+  )
+  return result.rows.map(mapModule)
 }
 
-export const createModule = (dashboardId: string, input: ModuleInput): ModuleConfig => {
-  getDashboardById(dashboardId)
-  const module: ModuleConfig = {
-    id: randomUUID(),
-    dashboardId,
-    type: input.type,
-    title: input.title,
-    config: input.config ?? {},
-    gridX: input.gridX ?? 0,
-    gridY: input.gridY ?? 0,
-    gridW: input.gridW ?? 6,
-    gridH: input.gridH ?? 4
+export const createModule = async (
+  dashboardId: string,
+  input: ModuleInput
+): Promise<ModuleConfig> => {
+  await getDashboardById(dashboardId)
+  const result = await query<ModuleRow>(
+    `INSERT INTO modules (
+       dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h, sort_order
+     )
+     VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8,
+       COALESCE((SELECT MAX(sort_order) + 1 FROM modules WHERE dashboard_id = $1), 0)
+     )
+     RETURNING id, dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h`,
+    [
+      dashboardId,
+      input.type,
+      input.title ?? null,
+      input.config ?? {},
+      input.gridX ?? 0,
+      input.gridY ?? 0,
+      input.gridW ?? 6,
+      input.gridH ?? 4
+    ]
+  )
+  return mapModule(result.rows[0])
+}
+
+const getModuleById = async (moduleId: string): Promise<ModuleConfig> => {
+  const result = await query<ModuleRow>(
+    `SELECT id, dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h
+     FROM modules
+     WHERE id = $1`,
+    [moduleId]
+  )
+  const row = result.rows[0]
+  if (!row) {
+    throw createError({ statusCode: 404, statusMessage: 'Module not found' })
   }
-  const modules = listModules(dashboardId)
-  modules.push(module)
-  getStore().modules.set(dashboardId, modules)
-  return module
+  return mapModule(row)
 }
 
-const findModule = (moduleId: string) => {
-  const store = getStore()
-  for (const [dashboardId, modules] of store.modules.entries()) {
-    const index = modules.findIndex((item) => item.id === moduleId)
-    if (index >= 0) {
-      return { dashboardId, modules, index }
-    }
+export const updateModule = async (
+  moduleId: string,
+  updates: ModuleUpdate
+): Promise<ModuleConfig> => {
+  const fields: string[] = []
+  const values: unknown[] = []
+  let index = 1
+
+  if (updates.title !== undefined) {
+    fields.push(`title = $${index++}`)
+    values.push(updates.title)
   }
-  throw createError({ statusCode: 404, statusMessage: 'Module not found' })
-}
-
-export const updateModule = (moduleId: string, updates: ModuleUpdate): ModuleConfig => {
-  const match = findModule(moduleId)
-  const existing = match.modules[match.index]
-  const updated: ModuleConfig = {
-    ...existing,
-    ...updates,
-    config: updates.config ?? existing.config
+  if (updates.config !== undefined) {
+    fields.push(`config = $${index++}`)
+    values.push(updates.config)
   }
-  match.modules.splice(match.index, 1, updated)
-  getStore().modules.set(match.dashboardId, match.modules)
-  return updated
+  if (updates.gridX !== undefined) {
+    fields.push(`grid_x = $${index++}`)
+    values.push(updates.gridX)
+  }
+  if (updates.gridY !== undefined) {
+    fields.push(`grid_y = $${index++}`)
+    values.push(updates.gridY)
+  }
+  if (updates.gridW !== undefined) {
+    fields.push(`grid_w = $${index++}`)
+    values.push(updates.gridW)
+  }
+  if (updates.gridH !== undefined) {
+    fields.push(`grid_h = $${index++}`)
+    values.push(updates.gridH)
+  }
+
+  if (!fields.length) {
+    return getModuleById(moduleId)
+  }
+
+  values.push(moduleId)
+  const result = await query<ModuleRow>(
+    `UPDATE modules
+     SET ${fields.join(', ')}, updated_at = now()
+     WHERE id = $${index}
+     RETURNING id, dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h`,
+    values
+  )
+  const row = result.rows[0]
+  if (!row) {
+    throw createError({ statusCode: 404, statusMessage: 'Module not found' })
+  }
+  return mapModule(row)
 }
 
-export const deleteModule = (moduleId: string) => {
-  const match = findModule(moduleId)
-  match.modules.splice(match.index, 1)
-  getStore().modules.set(match.dashboardId, match.modules)
+export const deleteModule = async (moduleId: string) => {
+  const result = await query('DELETE FROM modules WHERE id = $1', [moduleId])
+  if (result.rowCount === 0) {
+    throw createError({ statusCode: 404, statusMessage: 'Module not found' })
+  }
 }
 
-export const updateModuleLayout = (
+export const updateModuleLayout = async (
   dashboardId: string,
   layout: ModuleLayoutUpdate[]
-) => {
-  const modules = listModules(dashboardId)
-  const updatesById = new Map(layout.map((item) => [item.id, item]))
-  const updated = modules.map((module) => {
-    const update = updatesById.get(module.id)
-    if (!update) {
-      return module
+): Promise<ModuleConfig[]> => {
+  await getDashboardById(dashboardId)
+  if (!layout.length) {
+    return listModules(dashboardId)
+  }
+
+  const db = getDb()
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+    for (const item of layout) {
+      await client.query(
+        `UPDATE modules
+         SET grid_x = $1, grid_y = $2, grid_w = $3, grid_h = $4, updated_at = now()
+         WHERE id = $5 AND dashboard_id = $6`,
+        [item.gridX, item.gridY, item.gridW, item.gridH, item.id, dashboardId]
+      )
     }
-    return {
-      ...module,
-      gridX: update.gridX,
-      gridY: update.gridY,
-      gridW: update.gridW,
-      gridH: update.gridH
-    }
-  })
-  getStore().modules.set(dashboardId, updated)
-  return updated
+    await client.query('COMMIT')
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+
+  return listModules(dashboardId)
 }

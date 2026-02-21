@@ -52,3 +52,32 @@ export const testSqliteConnection = (filepath: string) => {
   const tables = listSqliteTables(filepath)
   return { ok: true, tables }
 }
+
+export const runSqliteQuery = (
+  filepath: string,
+  queryText: string,
+  parameters: Record<string, unknown>,
+  limit: number
+) => {
+  const db = openDatabase(filepath)
+  try {
+    const cleanedQuery = queryText.trim().replace(/;\s*$/, '')
+    const wrappedQuery = `SELECT * FROM (${cleanedQuery}) AS _openbase_query LIMIT :__openbase_limit_internal`
+    const statement = db.prepare(wrappedQuery)
+    const rows = statement.all({
+      ...parameters,
+      __openbase_limit_internal: limit
+    }) as Record<string, unknown>[]
+    const columns =
+      rows.length > 0
+        ? Object.keys(rows[0])
+        : statement.columns().map((column) => String(column.name))
+    return {
+      rows,
+      columns,
+      rowCount: rows.length
+    }
+  } finally {
+    db.close()
+  }
+}

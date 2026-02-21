@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DashboardGrid from '~/components/dashboard/DashboardGrid.vue'
+import GlobalFilterBar from '~/components/dashboard/GlobalFilterBar.vue'
 
 const route = useRoute()
 const { getPublic } = useDashboard()
@@ -34,6 +35,9 @@ const { data: response, pending, error } = useAsyncData(
       <p v-if="response?.dashboard.description" class="mt-2 text-sm text-gray-600">
         {{ response.dashboard.description }}
       </p>
+      <div class="mt-4">
+        <GlobalFilterBar :modules="response?.modules || []" />
+      </div>
       <div class="mt-6">
         <DashboardGrid v-if="response?.modules?.length" :modules="response.modules" />
         <p v-else class="text-sm text-gray-500">No modules yet.</p>

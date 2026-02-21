@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Database, LayoutDashboard, Plus, Shield } from 'lucide-vue-next'
+import { Database, LayoutDashboard, Plus, Search, Shield } from 'lucide-vue-next'
 import PageHeader from '~/components/ui/PageHeader.vue'
 
 const { list, remove } = useDashboard()
@@ -49,6 +49,13 @@ const deleteDashboard = async (id: string) => {
         >
           <Shield class="h-4 w-4" />
           Manage admins
+        </NuxtLink>
+        <NuxtLink
+          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
+          to="/admin/queries"
+        >
+          <Search class="h-4 w-4" />
+          Saved queries
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"

@@ -1,11 +1,10 @@
 import { createError, defineEventHandler, getRouterParam } from 'h3'
-import { deleteSavedQuery } from '~~/server/utils/query-store'
+import { getSavedQueryById } from '~~/server/utils/query-store'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) {
     throw createError({ statusCode: 400, statusMessage: 'Missing saved query id' })
   }
-  await deleteSavedQuery(id)
-  return { ok: true }
+  return await getSavedQueryById(id)
 })
