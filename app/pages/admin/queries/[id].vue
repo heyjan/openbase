@@ -28,6 +28,9 @@ const saving = ref(false)
 const previewing = ref(false)
 const errorMessage = ref('')
 const previewResult = ref<SavedQueryPreviewResult | null>(null)
+const lastSavedSignature = ref('')
+const skipNextRouteLoad = ref(false)
+const clientReady = ref(false)
 
 const dataSources = ref<DataSource[]>([])
 const form = ref<QueryEditorValue>({
@@ -36,6 +39,42 @@ const form = ref<QueryEditorValue>({
   description: '',
   queryText: ''
 })
+
+type QueryPayload = {
+  name: string
+  dataSourceId: string
+  description?: string
+  queryText: string
+  parameters: Record<string, never>
+}
+
+const canPreview = computed(
+  () => Boolean(form.value.name.trim() && form.value.dataSourceId && form.value.queryText.trim())
+)
+
+const buildPayload = (): QueryPayload => ({
+  name: form.value.name.trim(),
+  dataSourceId: form.value.dataSourceId,
+  description: form.value.description.trim() || undefined,
+  queryText: form.value.queryText,
+  parameters: {}
+})
+
+const getPayloadSignature = (payload: QueryPayload) =>
+  JSON.stringify({
+    name: payload.name,
+    dataSourceId: payload.dataSourceId,
+    description: payload.description ?? '',
+    queryText: payload.queryText
+  })
+
+const validatePayload = (payload: QueryPayload) => {
+  if (!payload.name || !payload.dataSourceId || !payload.queryText.trim()) {
+    errorMessage.value = 'Name, data source, and query text are required.'
+    return false
+  }
+  return true
+}
 
 const load = async () => {
   loading.value = true
@@ -51,6 +90,7 @@ const load = async () => {
         ...form.value,
         dataSourceId: form.value.dataSourceId || sources[0]?.id || ''
       }
+      lastSavedSignature.value = ''
       return
     }
 
@@ -61,6 +101,13 @@ const load = async () => {
       description: query.description ?? '',
       queryText: query.queryText
     }
+    lastSavedSignature.value = getPayloadSignature({
+      name: query.name,
+      dataSourceId: query.dataSourceId,
+      description: query.description ?? undefined,
+      queryText: query.queryText,
+      parameters: {}
+    })
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to load query editor'
@@ -71,6 +118,46 @@ const load = async () => {
 
 const updateForm = (value: QueryEditorValue) => {
   form.value = value
+}
+
+const persistQuery = async () => {
+  const payload = buildPayload()
+  if (!validatePayload(payload)) {
+    return null
+  }
+
+  const payloadSignature = getPayloadSignature(payload)
+  const needsCreate = isNew.value
+  const needsUpdate = !needsCreate && payloadSignature !== lastSavedSignature.value
+
+  if (!needsCreate && !needsUpdate) {
+    return queryId.value
+  }
+
+  saving.value = true
+  try {
+    if (needsCreate) {
+      const created = await create(payload)
+      lastSavedSignature.value = payloadSignature
+
+      if (queryId.value !== created.id) {
+        skipNextRouteLoad.value = true
+        await navigateTo(`/admin/queries/${created.id}`, { replace: true })
+      }
+
+      return created.id
+    }
+
+    await update(queryId.value, payload)
+    lastSavedSignature.value = payloadSignature
+    return queryId.value
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Failed to save query'
+    return null
+  } finally {
+    saving.value = false
+  }
 }
 
 const mapVisualizationToModule = (visualization: QueryPreviewVisualization) => {
@@ -109,47 +196,19 @@ const mapVisualizationToModule = (visualization: QueryPreviewVisualization) => {
 const saveQuery = async () => {
   errorMessage.value = ''
   previewResult.value = null
-
-  const payload = {
-    name: form.value.name.trim(),
-    dataSourceId: form.value.dataSourceId,
-    description: form.value.description.trim() || undefined,
-    queryText: form.value.queryText,
-    parameters: {}
-  }
-
-  if (!payload.name || !payload.dataSourceId || !payload.queryText.trim()) {
-    errorMessage.value = 'Name, data source, and query text are required.'
-    return
-  }
-
-  saving.value = true
-  try {
-    if (isNew.value) {
-      const created = await create(payload)
-      await navigateTo(`/admin/queries/${created.id}`)
-      return
-    }
-
-    await update(queryId.value, payload)
-    await load()
-  } catch (error) {
-    errorMessage.value =
-      error instanceof Error ? error.message : 'Failed to save query'
-  } finally {
-    saving.value = false
-  }
+  await persistQuery()
 }
 
 const runPreview = async () => {
-  if (isNew.value) {
+  errorMessage.value = ''
+  const savedQueryId = await persistQuery()
+  if (!savedQueryId) {
     return
   }
-  errorMessage.value = ''
 
   previewing.value = true
   try {
-    previewResult.value = await preview(queryId.value, { limit: 100 })
+    previewResult.value = await preview(savedQueryId, { limit: 100 })
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to run preview'
@@ -162,8 +221,15 @@ const saveVisualization = async (payload: {
   name: string
   visualization: QueryPreviewVisualization
 }) => {
-  if (isNew.value) {
-    errorMessage.value = 'Save query first to create visualizations.'
+  errorMessage.value = ''
+  const name = payload.name.trim()
+  if (!name) {
+    errorMessage.value = 'Visualization name is required.'
+    return
+  }
+
+  const savedQueryId = await persistQuery()
+  if (!savedQueryId) {
     return
   }
 
@@ -171,8 +237,8 @@ const saveVisualization = async (payload: {
 
   try {
     await createVisualization({
-      savedQueryId: queryId.value,
-      name: payload.name.trim(),
+      savedQueryId,
+      name,
       moduleType: mapped.moduleType,
       config: {
         ...mapped.config
@@ -187,10 +253,20 @@ const saveVisualization = async (payload: {
 }
 
 watch(queryId, () => {
+  if (!clientReady.value) {
+    return
+  }
+  if (skipNextRouteLoad.value) {
+    skipNextRouteLoad.value = false
+    return
+  }
   load()
 })
 
-await load()
+onMounted(async () => {
+  clientReady.value = true
+  await load()
+})
 </script>
 
 <template>
@@ -207,7 +283,7 @@ await load()
       back-label="Back to queries"
     />
 
-    <p v-if="loading" class="mt-6 text-sm text-gray-500">Loading editor…</p>
+    <p v-if="loading || !clientReady" class="mt-6 text-sm text-gray-500">Loading editor…</p>
 
     <div v-else class="mt-6">
       <QueryEditor
@@ -215,7 +291,7 @@ await load()
         :data-sources="dataSources"
         :saving="saving"
         :previewing="previewing"
-        :can-preview="!isNew"
+        :can-preview="canPreview"
         :preview-result="previewResult"
         :error-message="errorMessage"
         @update:value="updateForm"

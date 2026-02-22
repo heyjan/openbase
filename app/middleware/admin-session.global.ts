@@ -1,8 +1,4 @@
 export default defineNuxtRouteMiddleware(async (to) => {
-  if (!process.client) {
-    return
-  }
-
   if (!to.path.startsWith('/admin')) {
     return
   }
@@ -12,7 +8,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   try {
-    await $fetch('/api/auth/me')
+    const authFetch = process.server ? useRequestFetch() : $fetch
+    await authFetch('/api/auth/me')
   } catch {
     return navigateTo('/admin/login')
   }

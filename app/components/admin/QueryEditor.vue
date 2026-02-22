@@ -61,6 +61,11 @@ const onSelectInput = (event: Event, key: keyof QueryEditorValue) => {
   updateValue(key, target?.value ?? '')
 }
 
+const onTextInput = (event: Event, key: keyof QueryEditorValue) => {
+  const target = event.target as HTMLInputElement | HTMLTextAreaElement | null
+  updateValue(key, target?.value ?? '')
+}
+
 const toggleVisualizationMenu = () => {
   if (!props.previewResult) {
     return
@@ -96,10 +101,11 @@ watch(
     <div class="grid gap-4 md:grid-cols-2">
       <label class="block text-sm font-medium text-gray-700">
         Name
-        <UInput
-          :model-value="value.name"
-          class="mt-1 w-full"
-          @update:model-value="updateValue('name', String($event ?? ''))"
+        <input
+          :value="value.name"
+          type="text"
+          class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+          @input="onTextInput($event, 'name')"
         />
       </label>
 
@@ -124,20 +130,21 @@ watch(
 
     <label class="mt-4 block text-sm font-medium text-gray-700">
       Description
-      <UInput
-        :model-value="value.description"
-        class="mt-1 w-full"
-        @update:model-value="updateValue('description', String($event ?? ''))"
+      <input
+        :value="value.description"
+        type="text"
+        class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+        @input="onTextInput($event, 'description')"
       />
     </label>
 
     <label class="mt-4 block text-sm font-medium text-gray-700">
       Query text
-      <UTextarea
-        :model-value="value.queryText"
+      <textarea
+        :value="value.queryText"
         :rows="10"
-        class="mt-1 w-full font-mono text-xs"
-        @update:model-value="updateValue('queryText', String($event ?? ''))"
+        class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 font-mono text-xs"
+        @input="onTextInput($event, 'queryText')"
       />
     </label>
 
@@ -155,7 +162,7 @@ watch(
         color="neutral"
         variant="outline"
         size="sm"
-        :disabled="previewing || !canPreview"
+        :disabled="previewing || saving || !canPreview"
         @click="emit('preview')"
       >
         {{ previewing ? 'Running...' : 'Run preview' }}
@@ -169,14 +176,15 @@ watch(
       >
         {{ visualizationMenuOpen ? 'Hide visualizations' : 'Visualizations' }}
       </UButton>
-      <UInput
-        v-if="previewResult && canPreview"
+      <input
+        v-if="previewResult"
         v-model="visualizationDraftName"
-        class="min-w-52"
+        type="text"
+        class="min-w-52 rounded border border-gray-300 bg-white px-3 py-2 text-sm"
         placeholder="Visualization name"
       />
       <UButton
-        v-if="previewResult && canPreview"
+        v-if="previewResult"
         color="neutral"
         variant="outline"
         size="sm"
@@ -185,7 +193,7 @@ watch(
         Save visualization
       </UButton>
       <p v-if="!canPreview" class="text-xs text-gray-500">
-        Save query first to enable preview.
+        Name, data source, and query text are required to run preview.
       </p>
     </div>
 

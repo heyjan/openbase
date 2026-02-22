@@ -3,6 +3,7 @@ import {
   Database,
   LayoutDashboard,
   Link2,
+  LogOut,
   Plus,
   RefreshCw,
   Search,
@@ -25,6 +26,7 @@ const deleting = ref<string | null>(null)
 const deleteError = ref('')
 const confirmDeleteOpen = ref(false)
 const pendingDeleteDashboard = ref<Dashboard | null>(null)
+const loggingOut = ref(false)
 
 const openDeleteConfirm = (dashboard: Dashboard) => {
   pendingDeleteDashboard.value = dashboard
@@ -51,6 +53,21 @@ const deleteDashboard = async () => {
     toast.error('Unable to delete dashboard', deleteError.value)
   } finally {
     deleting.value = null
+  }
+}
+
+const logout = async () => {
+  loggingOut.value = true
+  try {
+    await $fetch('/api/auth/logout', {
+      method: 'POST'
+    })
+    await navigateTo('/admin/login')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unable to log out'
+    toast.error('Unable to log out', message)
+  } finally {
+    loggingOut.value = false
   }
 }
 </script>
@@ -112,6 +129,14 @@ const deleteDashboard = async () => {
           <Plus class="h-4 w-4" />
           New dashboard
         </NuxtLink>
+        <button
+          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="loggingOut"
+          @click="logout"
+        >
+          <LogOut class="h-4 w-4" />
+          {{ loggingOut ? 'Logging out...' : 'Logout' }}
+        </button>
       </template>
     </PageHeader>
 
