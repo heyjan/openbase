@@ -2,7 +2,14 @@ import { randomUUID } from 'crypto'
 import { createError } from 'h3'
 import { getDb, query } from './db'
 import type { Dashboard, DashboardInput, DashboardUpdate } from '~/types/dashboard'
-import type { ModuleConfig, ModuleInput, ModuleLayoutUpdate, ModuleUpdate } from '~/types/module'
+import {
+  getModuleMinGridHeight,
+  getModuleMinGridWidth,
+  type ModuleConfig,
+  type ModuleInput,
+  type ModuleLayoutUpdate,
+  type ModuleUpdate
+} from '~/types/module'
 
 type DashboardRow = {
   id: string
@@ -21,6 +28,8 @@ type ModuleRow = {
   type: ModuleConfig['type']
   title: string | null
   config: Record<string, unknown> | null
+  query_visualization_id: string | null
+  query_visualization_saved_query_id: string | null
   grid_x: number
   grid_y: number
   grid_w: number
@@ -46,10 +55,12 @@ const mapModule = (row: ModuleRow): ModuleConfig => ({
   type: row.type,
   title: row.title ?? undefined,
   config: row.config ?? {},
-  gridX: row.grid_x,
-  gridY: row.grid_y,
-  gridW: row.grid_w,
-  gridH: row.grid_h
+  queryVisualizationId: row.query_visualization_id ?? undefined,
+  queryVisualizationQueryId: row.query_visualization_saved_query_id ?? undefined,
+  gridX: Math.max(0, row.grid_x),
+  gridY: Math.max(0, row.grid_y),
+  gridW: Math.max(getModuleMinGridWidth(row.type), row.grid_w),
+  gridH: Math.max(getModuleMinGridHeight(row.type), row.grid_h)
 })
 
 const isUniqueViolation = (error: unknown) =>
@@ -57,6 +68,12 @@ const isUniqueViolation = (error: unknown) =>
   error !== null &&
   'code' in error &&
   (error as { code?: string }).code === '23505'
+
+const isForeignKeyViolation = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  (error as { code?: string }).code === '23503'
 
 const toConflictError = (error: unknown) => {
   if (isUniqueViolation(error)) {
@@ -114,12 +131,6 @@ export const createDashboard = async (input: DashboardInput): Promise<Dashboard>
       [input.name, input.slug, input.description ?? null, input.tags ?? [], generateToken()]
     )
     const dashboard = created.rows[0]
-
-    await client.query(
-      `INSERT INTO modules (dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [dashboard.id, 'kpi_card', 'KPI Card', {}, 0, 0, 6, 4, 0]
-    )
 
     await client.query('COMMIT')
     return mapDashboard(dashboard)
@@ -184,9 +195,47 @@ export const updateDashboard = (
 }
 
 export const deleteDashboard = async (id: string) => {
-  const result = await query('DELETE FROM dashboards WHERE id = $1', [id])
-  if (result.rowCount === 0) {
-    throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
+  const db = getDb()
+  const client = await db.connect()
+
+  try {
+    await client.query('BEGIN')
+
+    // Existing annotations may be linked to outlier rows.
+    await client.query(
+      `UPDATE forecast_outliers
+       SET annotation_id = NULL
+       WHERE annotation_id IN (
+         SELECT id
+         FROM annotations
+         WHERE dashboard_id = $1
+       )`,
+      [id]
+    )
+
+    await client.query('DELETE FROM access_log WHERE dashboard_id = $1', [id])
+    await client.query('DELETE FROM annotations WHERE dashboard_id = $1', [id])
+
+    const result = await client.query('DELETE FROM dashboards WHERE id = $1', [id])
+    if (result.rowCount === 0) {
+      throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
+    }
+
+    await client.query('COMMIT')
+  } catch (error) {
+    await client.query('ROLLBACK')
+
+    if (isForeignKeyViolation(error)) {
+      throw createError({
+        statusCode: 409,
+        statusMessage:
+          'Dashboard cannot be deleted because related records still reference it.'
+      })
+    }
+
+    throw error
+  } finally {
+    client.release()
   }
 }
 
@@ -208,10 +257,22 @@ export const rotateDashboardToken = async (id: string): Promise<Dashboard> => {
 export const listModules = async (dashboardId: string): Promise<ModuleConfig[]> => {
   await getDashboardById(dashboardId)
   const result = await query<ModuleRow>(
-    `SELECT id, dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h
-     FROM modules
-     WHERE dashboard_id = $1
-     ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+    `SELECT
+       m.id,
+       m.dashboard_id,
+       m.type,
+       m.title,
+       m.config,
+       m.query_visualization_id,
+       qv.saved_query_id AS query_visualization_saved_query_id,
+       m.grid_x,
+       m.grid_y,
+       m.grid_w,
+       m.grid_h
+     FROM modules m
+     LEFT JOIN query_visualizations qv ON qv.id = m.query_visualization_id
+     WHERE m.dashboard_id = $1
+     ORDER BY m.sort_order ASC NULLS LAST, m.created_at ASC`,
     [dashboardId]
   )
   return result.rows.map(mapModule)
@@ -222,34 +283,57 @@ export const createModule = async (
   input: ModuleInput
 ): Promise<ModuleConfig> => {
   await getDashboardById(dashboardId)
-  const result = await query<ModuleRow>(
-    `INSERT INTO modules (
-       dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h, sort_order
-     )
-     VALUES (
-       $1, $2, $3, $4, $5, $6, $7, $8,
-       COALESCE((SELECT MAX(sort_order) + 1 FROM modules WHERE dashboard_id = $1), 0)
-     )
-     RETURNING id, dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h`,
-    [
-      dashboardId,
-      input.type,
-      input.title ?? null,
-      input.config ?? {},
-      input.gridX ?? 0,
-      input.gridY ?? 0,
-      input.gridW ?? 6,
-      input.gridH ?? 4
-    ]
-  )
-  return mapModule(result.rows[0])
+  try {
+    const result = await query<{ id: string }>(
+      `INSERT INTO modules (
+         dashboard_id, type, title, config, query_visualization_id, grid_x, grid_y, grid_w, grid_h, sort_order
+       )
+       VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9,
+         COALESCE((SELECT MAX(sort_order) + 1 FROM modules WHERE dashboard_id = $1), 0)
+       )
+       RETURNING id`,
+      [
+        dashboardId,
+        input.type,
+        input.title ?? null,
+        input.config ?? {},
+        input.queryVisualizationId ?? null,
+        input.gridX ?? 0,
+        input.gridY ?? 0,
+        input.gridW ?? 6,
+        input.gridH ?? 5
+      ]
+    )
+    return await getModuleById(result.rows[0].id)
+  } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid query visualization id'
+      })
+    }
+    throw error
+  }
 }
 
 const getModuleById = async (moduleId: string): Promise<ModuleConfig> => {
   const result = await query<ModuleRow>(
-    `SELECT id, dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h
-     FROM modules
-     WHERE id = $1`,
+    `SELECT
+       m.id,
+       m.dashboard_id,
+       m.type,
+       m.title,
+       m.config,
+       m.query_visualization_id,
+       qv.saved_query_id AS query_visualization_saved_query_id,
+       m.grid_x,
+       m.grid_y,
+       m.grid_w,
+       m.grid_h
+     FROM modules m
+     LEFT JOIN query_visualizations qv ON qv.id = m.query_visualization_id
+     WHERE m.id = $1`,
     [moduleId]
   )
   const row = result.rows[0]
@@ -275,6 +359,10 @@ export const updateModule = async (
     fields.push(`config = $${index++}`)
     values.push(updates.config)
   }
+  if (updates.queryVisualizationId !== undefined) {
+    fields.push(`query_visualization_id = $${index++}`)
+    values.push(updates.queryVisualizationId)
+  }
   if (updates.gridX !== undefined) {
     fields.push(`grid_x = $${index++}`)
     values.push(updates.gridX)
@@ -297,18 +385,28 @@ export const updateModule = async (
   }
 
   values.push(moduleId)
-  const result = await query<ModuleRow>(
-    `UPDATE modules
-     SET ${fields.join(', ')}, updated_at = now()
-     WHERE id = $${index}
-     RETURNING id, dashboard_id, type, title, config, grid_x, grid_y, grid_w, grid_h`,
-    values
-  )
-  const row = result.rows[0]
-  if (!row) {
-    throw createError({ statusCode: 404, statusMessage: 'Module not found' })
+  try {
+    const result = await query<{ id: string }>(
+      `UPDATE modules
+       SET ${fields.join(', ')}, updated_at = now()
+       WHERE id = $${index}
+       RETURNING id`,
+      values
+    )
+    const row = result.rows[0]
+    if (!row) {
+      throw createError({ statusCode: 404, statusMessage: 'Module not found' })
+    }
+    return await getModuleById(row.id)
+  } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid query visualization id'
+      })
+    }
+    throw error
   }
-  return mapModule(row)
 }
 
 export const deleteModule = async (moduleId: string) => {

@@ -62,7 +62,14 @@ export const runSqliteQuery = (
   const db = openDatabase(filepath)
   try {
     const cleanedQuery = queryText.trim().replace(/;\s*$/, '')
-    const wrappedQuery = `SELECT * FROM (${cleanedQuery}) AS _openbase_query LIMIT :__openbase_limit_internal`
+    // SQLite does not support PostgreSQL-style casts like `value::numeric`.
+    // Strip the cast suffix to keep common cross-database queries working.
+    const sqliteCompatibleQuery = cleanedQuery.replace(
+      /\s*::\s*(?:"[^"]+"|[a-zA-Z_][a-zA-Z0-9_.]*)/g,
+      ''
+    )
+
+    const wrappedQuery = `SELECT * FROM (${sqliteCompatibleQuery}) AS _openbase_query LIMIT $__openbase_limit_internal`
     const statement = db.prepare(wrappedQuery)
     const rows = statement.all({
       ...parameters,
@@ -77,6 +84,12 @@ export const runSqliteQuery = (
       columns,
       rowCount: rows.length
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to run SQLite query'
+    throw createError({
+      statusCode: 400,
+      statusMessage: message
+    })
   } finally {
     db.close()
   }

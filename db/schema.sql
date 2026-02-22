@@ -46,10 +46,11 @@ CREATE TABLE IF NOT EXISTS modules (
   type          VARCHAR(50) NOT NULL,
   title         VARCHAR(255),
   config        JSONB NOT NULL,
+  query_visualization_id UUID,
   grid_x        INT NOT NULL DEFAULT 0,
   grid_y        INT NOT NULL DEFAULT 0,
   grid_w        INT NOT NULL DEFAULT 6,
-  grid_h        INT NOT NULL DEFAULT 4,
+  grid_h        INT NOT NULL DEFAULT 5,
   sort_order    INT DEFAULT 0,
   created_at    TIMESTAMPTZ DEFAULT now(),
   updated_at    TIMESTAMPTZ DEFAULT now()
@@ -84,6 +85,37 @@ CREATE TABLE IF NOT EXISTS module_templates (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS query_visualizations (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  saved_query_id UUID NOT NULL REFERENCES saved_queries(id) ON DELETE CASCADE,
+  name           VARCHAR(255) NOT NULL,
+  module_type    VARCHAR(50) NOT NULL,
+  config         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at     TIMESTAMPTZ DEFAULT now(),
+  updated_at     TIMESTAMPTZ DEFAULT now()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'modules_query_visualization_id_fkey'
+  ) THEN
+    ALTER TABLE modules
+    ADD CONSTRAINT modules_query_visualization_id_fkey
+    FOREIGN KEY (query_visualization_id)
+    REFERENCES query_visualizations(id)
+    ON DELETE SET NULL;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_query_visualizations_saved_query_id
+ON query_visualizations(saved_query_id);
+
+CREATE INDEX IF NOT EXISTS idx_modules_query_visualization_id
+ON modules(query_visualization_id);
+
 CREATE TABLE IF NOT EXISTS ingestion_pipeline_runs (
   id           VARCHAR(36) PRIMARY KEY,
   pipeline     VARCHAR(64) NOT NULL,
@@ -100,7 +132,7 @@ ON ingestion_pipeline_runs (pipeline, started_at DESC);
 
 CREATE TABLE IF NOT EXISTS annotations (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  dashboard_id  UUID REFERENCES dashboards(id),
+  dashboard_id  UUID REFERENCES dashboards(id) ON DELETE CASCADE,
   asin          VARCHAR(20),
   product_group VARCHAR(255),
   event_date    DATE,
@@ -112,7 +144,7 @@ CREATE TABLE IF NOT EXISTS annotations (
 
 CREATE TABLE IF NOT EXISTS access_log (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  dashboard_id UUID REFERENCES dashboards(id),
+  dashboard_id UUID REFERENCES dashboards(id) ON DELETE CASCADE,
   share_token  VARCHAR(64),
   accessed_at  TIMESTAMPTZ DEFAULT now(),
   ip_address   INET,
@@ -165,7 +197,7 @@ CREATE TABLE IF NOT EXISTS forecast_outliers (
   actual_value   NUMERIC(10, 2),
   p_level_used   VARCHAR(10),
   status         VARCHAR(20) DEFAULT 'new',
-  annotation_id  UUID REFERENCES annotations(id),
+  annotation_id  UUID REFERENCES annotations(id) ON DELETE SET NULL,
   UNIQUE(asin, forecast_week, p_level_used)
 );
 

@@ -75,17 +75,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const moduleConfig = module.config || {}
-  const savedQueryId =
-    typeof moduleConfig.saved_query_id === 'string'
-      ? moduleConfig.saved_query_id
-      : typeof moduleConfig.savedQueryId === 'string'
-        ? moduleConfig.savedQueryId
-        : ''
+  const savedQueryId = module.queryVisualizationQueryId ?? ''
 
-  if (!savedQueryId) {
+  if (!savedQueryId.trim()) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Module is missing saved_query_id in config'
+      statusMessage: 'Module is missing a linked query visualization'
     })
   }
 

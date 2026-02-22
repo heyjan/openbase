@@ -1,5 +1,18 @@
+<script setup lang="ts">
+const props = withDefaults(
+  defineProps<{
+    color?: 'primary' | 'neutral' | 'success' | 'warning' | 'error'
+    variant?: 'solid' | 'outline' | 'soft' | 'subtle'
+  }>(),
+  {
+    color: 'neutral',
+    variant: 'subtle'
+  }
+)
+</script>
+
 <template>
-  <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">
+  <UBadge :color="props.color" :variant="props.variant">
     <slot />
-  </span>
+  </UBadge>
 </template>

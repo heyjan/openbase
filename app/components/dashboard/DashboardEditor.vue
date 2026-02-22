@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { h, render } from 'vue'
 import type { GridStack, GridStackNode, GridStackWidget, RenderFcn } from 'gridstack'
-import type { ModuleConfig } from '~/types/module'
+import {
+  getModuleMinGridHeight,
+  getModuleMinGridWidth,
+  type ModuleConfig
+} from '~/types/module'
 import DashboardGridItem from '~/components/dashboard/DashboardGridItem.vue'
 
 const props = withDefaults(
@@ -19,6 +23,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (event: 'select', moduleId: string): void
   (event: 'patch', payload: { id: string; changes: Partial<ModuleConfig> }): void
+  (event: 'update-module', payload: { id: string; changes: Partial<ModuleConfig> }): void
   (event: 'delete', moduleId: string): void
   (event: 'duplicate', moduleId: string): void
   (event: 'edit-query', moduleId: string): void
@@ -38,7 +43,7 @@ const moduleLayoutKey = computed(() =>
   props.modules
     .map(
       (module) =>
-        `${module.id}:${module.gridX}:${module.gridY}:${Math.max(3, module.gridW)}:${Math.max(2, module.gridH)}`
+        `${module.id}:${module.gridX}:${module.gridY}:${Math.max(getModuleMinGridWidth(module.type), module.gridW)}:${Math.max(getModuleMinGridHeight(module.type), module.gridH)}`
     )
     .join('|')
 )
@@ -48,10 +53,10 @@ const buildWidget = (module: ModuleConfig): GridStackWidget => ({
   id: module.id,
   x: module.gridX,
   y: module.gridY,
-  w: Math.max(3, module.gridW),
-  h: Math.max(2, module.gridH),
-  minW: 3,
-  minH: 2
+  w: Math.max(getModuleMinGridWidth(module.type), module.gridW),
+  h: Math.max(getModuleMinGridHeight(module.type), module.gridH),
+  minW: getModuleMinGridWidth(module.type),
+  minH: getModuleMinGridHeight(module.type)
 })
 
 const scrollModuleIntoView = async (moduleId: string) => {
@@ -77,6 +82,8 @@ const renderWidgetCard = (moduleId: string, mountEl: HTMLElement) => {
     module,
     selected: props.selectedModuleId === moduleId,
     onSelect: () => emit('select', moduleId),
+    onUpdateModule: (payload: { id: string; changes: Partial<ModuleConfig> }) =>
+      emit('update-module', payload),
     onDelete: () => emit('delete', moduleId),
     onDuplicate: () => emit('duplicate', moduleId),
     onEditQuery: () => emit('edit-query', moduleId)
@@ -148,8 +155,8 @@ const onGridChange = (_event: Event, items: GridStackNode[]) => {
     const next = {
       gridX: item.x ?? current.gridX,
       gridY: item.y ?? current.gridY,
-      gridW: Math.max(3, item.w ?? current.gridW),
-      gridH: Math.max(2, item.h ?? current.gridH)
+      gridW: Math.max(getModuleMinGridWidth(current.type), item.w ?? current.gridW),
+      gridH: Math.max(getModuleMinGridHeight(current.type), item.h ?? current.gridH)
     }
 
     if (
@@ -227,7 +234,8 @@ const initGrid = async () => {
         minRow: 1,
         alwaysShowResizeHandle: true,
         draggable: {
-          handle: '.module-drag-handle'
+          handle: '.module-drag-handle',
+          cancel: 'input,textarea,button,select,[contenteditable]'
         },
         resizable: {
           handles: 'n,ne,e,se,s,sw,w,nw'

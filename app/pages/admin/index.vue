@@ -13,7 +13,7 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 import type { Dashboard } from '~/types/dashboard'
 
 const { list, remove } = useDashboard()
-const toast = useToast()
+const toast = useAppToast()
 
 const { data: dashboards, pending, error, refresh } = useAsyncData(
   'admin-dashboards',
@@ -86,10 +86,10 @@ const deleteDashboard = async () => {
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
-          to="/admin/templates"
+          to="/admin/visualizations"
         >
           <LayoutDashboard class="h-4 w-4" />
-          Templates
+          Visualizations
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"

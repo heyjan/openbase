@@ -5,7 +5,7 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 import type { DataSource } from '~/types/data-source'
 
 const { list, create, test, remove } = useDataSources()
-const toast = useToast()
+const toast = useAppToast()
 
 const sources = ref<DataSource[]>([])
 const loading = ref(false)

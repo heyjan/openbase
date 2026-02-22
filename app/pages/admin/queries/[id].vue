@@ -2,6 +2,7 @@
 import PageHeader from '~/components/ui/PageHeader.vue'
 import QueryEditor from '~/components/admin/QueryEditor.vue'
 import type { DataSource } from '~/types/data-source'
+import type { ModuleType } from '~/types/module'
 import type { SavedQueryPreviewResult } from '~/types/query'
 
 type QueryEditorValue = {
@@ -9,8 +10,9 @@ type QueryEditorValue = {
   dataSourceId: string
   description: string
   queryText: string
-  parametersText: string
 }
+
+type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie'
 
 const route = useRoute()
 const queryId = computed(() => String(route.params.id || ''))
@@ -18,6 +20,8 @@ const isNew = computed(() => queryId.value === 'new')
 
 const { list: listDataSources } = useDataSources()
 const { getById, create, update, preview } = useQueries()
+const { create: createVisualization } = useQueryVisualizations()
+const toast = useAppToast()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -30,24 +34,8 @@ const form = ref<QueryEditorValue>({
   name: '',
   dataSourceId: '',
   description: '',
-  queryText: '',
-  parametersText: '{}'
+  queryText: ''
 })
-
-const parseParametersText = () => {
-  const text = form.value.parametersText.trim() || '{}'
-  try {
-    const parsed = JSON.parse(text)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('Parameters must be a JSON object')
-    }
-    return parsed as Record<string, unknown>
-  } catch (error) {
-    throw new Error(
-      error instanceof Error ? error.message : 'Invalid parameters JSON'
-    )
-  }
-}
 
 const load = async () => {
   loading.value = true
@@ -71,8 +59,7 @@ const load = async () => {
       name: query.name,
       dataSourceId: query.dataSourceId,
       description: query.description ?? '',
-      queryText: query.queryText,
-      parametersText: JSON.stringify(query.parameters ?? {}, null, 2)
+      queryText: query.queryText
     }
   } catch (error) {
     errorMessage.value =
@@ -86,24 +73,49 @@ const updateForm = (value: QueryEditorValue) => {
   form.value = value
 }
 
+const mapVisualizationToModule = (visualization: QueryPreviewVisualization) => {
+  if (visualization === 'table') {
+    return {
+      moduleType: 'data_table' as ModuleType,
+      config: {} as Record<string, unknown>
+    }
+  }
+  if (visualization === 'bar') {
+    return {
+      moduleType: 'bar_chart' as ModuleType,
+      config: {} as Record<string, unknown>
+    }
+  }
+  if (visualization === 'pie') {
+    return {
+      moduleType: 'pie_chart' as ModuleType,
+      config: {} as Record<string, unknown>
+    }
+  }
+  if (visualization === 'area') {
+    return {
+      moduleType: 'time_series_chart' as ModuleType,
+      config: {
+        area: true
+      } as Record<string, unknown>
+    }
+  }
+  return {
+    moduleType: 'line_chart' as ModuleType,
+    config: {} as Record<string, unknown>
+  }
+}
+
 const saveQuery = async () => {
   errorMessage.value = ''
   previewResult.value = null
-
-  let parameters: Record<string, unknown>
-  try {
-    parameters = parseParametersText()
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Invalid parameters JSON'
-    return
-  }
 
   const payload = {
     name: form.value.name.trim(),
     dataSourceId: form.value.dataSourceId,
     description: form.value.description.trim() || undefined,
     queryText: form.value.queryText,
-    parameters
+    parameters: {}
   }
 
   if (!payload.name || !payload.dataSourceId || !payload.queryText.trim()) {
@@ -135,17 +147,9 @@ const runPreview = async () => {
   }
   errorMessage.value = ''
 
-  let parameters: Record<string, unknown>
-  try {
-    parameters = parseParametersText()
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Invalid parameters JSON'
-    return
-  }
-
   previewing.value = true
   try {
-    previewResult.value = await preview(queryId.value, { parameters, limit: 100 })
+    previewResult.value = await preview(queryId.value, { limit: 100 })
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to run preview'
@@ -154,11 +158,39 @@ const runPreview = async () => {
   }
 }
 
+const saveVisualization = async (payload: {
+  name: string
+  visualization: QueryPreviewVisualization
+}) => {
+  if (isNew.value) {
+    errorMessage.value = 'Save query first to create visualizations.'
+    return
+  }
+
+  const mapped = mapVisualizationToModule(payload.visualization)
+
+  try {
+    await createVisualization({
+      savedQueryId: queryId.value,
+      name: payload.name.trim(),
+      moduleType: mapped.moduleType,
+      config: {
+        ...mapped.config
+      }
+    })
+    toast.success('Visualization saved')
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Failed to save visualization'
+    toast.error('Failed to save visualization', errorMessage.value)
+  }
+}
+
 watch(queryId, () => {
   load()
 })
 
-onMounted(load)
+await load()
 </script>
 
 <template>
@@ -189,6 +221,7 @@ onMounted(load)
         @update:value="updateForm"
         @save="saveQuery"
         @preview="runPreview"
+        @save-visualization="saveVisualization"
       />
     </div>
   </section>

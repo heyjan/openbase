@@ -5,9 +5,10 @@ services:
     build:
       context: .
       dockerfile: .devcontainer/Dockerfile
+    userns_mode: keep-id
     volumes:
-      - .:/workspace:cached
-    command: npm run dev -- --host 0.0.0.0 --port 3000
+      - .:/workspace:z
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000"
     ports:
       - "3000:3000"
     environment:
@@ -25,7 +26,7 @@ services:
       POSTGRES_DB: openbase
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro,z
     ports:
       - "5432:5432"
 

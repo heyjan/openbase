@@ -2,7 +2,7 @@
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-vue-next'
 import type { ToastTone } from '~/types/toast'
 
-const { toasts, dismiss } = useToast()
+const { toasts, dismiss } = useAppToast()
 
 const toneClasses: Record<ToastTone, string> = {
   success: 'border-emerald-200 bg-emerald-50 text-emerald-900',

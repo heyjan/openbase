@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import type { ModuleConfig } from '~/types/module'
+import { isTextModuleType, type ModuleConfig } from '~/types/module'
 
 export type ModuleDataResult = {
   rows: Record<string, unknown>[]
@@ -52,6 +52,9 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
   )
 
   const canFetch = computed(() => {
+    if (isTextModuleType(moduleRef.value.type)) {
+      return false
+    }
     if (!savedQueryId.value) {
       return false
     }
@@ -136,6 +139,7 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
   watch(
     [
       () => moduleRef.value.id,
+      () => moduleRef.value.type,
       () => savedQueryId.value,
       () => publicSlug.value,
       () => dashboardId.value,

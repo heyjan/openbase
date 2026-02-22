@@ -6,7 +6,7 @@ import type { ModuleType } from '~/types/module'
 import type { ModuleTemplate } from '~/types/template'
 
 const { list, create, remove } = useTemplates()
-const toast = useToast()
+const toast = useAppToast()
 
 const templates = ref<ModuleTemplate[]>([])
 const loading = ref(false)
@@ -25,6 +25,9 @@ const form = reactive({
 
 const moduleTypes: Array<{ value: ModuleType; label: string }> = [
   { value: 'time_series_chart', label: 'Time Series Chart' },
+  { value: 'line_chart', label: 'Line Chart' },
+  { value: 'bar_chart', label: 'Bar Chart' },
+  { value: 'pie_chart', label: 'Pie Chart' },
   { value: 'outlier_table', label: 'Outlier Table' },
   { value: 'kpi_card', label: 'KPI Card' },
   { value: 'data_table', label: 'Data Table' },

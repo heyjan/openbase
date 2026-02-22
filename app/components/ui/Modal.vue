@@ -1,5 +1,9 @@
+<script setup lang="ts">
+const modelValue = defineModel<boolean>({ default: false })
+</script>
+
 <template>
-  <div class="rounded border border-gray-200 bg-white p-4 shadow-sm">
+  <UModal v-model:open="modelValue">
     <slot />
-  </div>
+  </UModal>
 </template>

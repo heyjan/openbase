@@ -3,6 +3,9 @@ import type { ModuleType } from '~/types/module'
 
 const allowedModuleTypes: ModuleType[] = [
   'time_series_chart',
+  'line_chart',
+  'bar_chart',
+  'pie_chart',
   'outlier_table',
   'kpi_card',
   'data_table',

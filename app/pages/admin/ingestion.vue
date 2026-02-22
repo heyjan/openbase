@@ -8,7 +8,7 @@ import type {
 } from '~/types/ingestion'
 
 const { getStatus, trigger } = useIngestion()
-const toast = useToast()
+const toast = useAppToast()
 
 const pipelines = ref<IngestionPipeline[]>([])
 const recentRuns = ref<IngestionRun[]>([])

@@ -26,6 +26,21 @@ const items: PaletteItem[] = [
     description: 'Single metric with trend context'
   },
   {
+    type: 'line_chart',
+    label: 'Line Chart',
+    description: 'Classic trend chart for one or more metrics'
+  },
+  {
+    type: 'bar_chart',
+    label: 'Bar Chart',
+    description: 'Category comparison with grouped or stacked bars'
+  },
+  {
+    type: 'pie_chart',
+    label: 'Pie Chart',
+    description: 'Distribution breakdown by category'
+  },
+  {
     type: 'time_series_chart',
     label: 'Time Series',
     description: 'Multi-series line visualization'
@@ -57,14 +72,15 @@ const { list: listTemplates } = useTemplates()
 const templates = ref<ModuleTemplate[]>([])
 const templatesLoading = ref(false)
 const templateError = ref('')
-const templateSelection = reactive<Record<ModuleType, string>>({
-  time_series_chart: '',
-  outlier_table: '',
-  kpi_card: '',
-  data_table: '',
-  annotation_log: '',
-  form_input: ''
-})
+const templateSelection = reactive<Record<ModuleType, string>>(
+  items.reduce(
+    (selection, item) => ({
+      ...selection,
+      [item.type]: ''
+    }),
+    {} as Record<ModuleType, string>
+  )
+)
 
 const templatesForType = (type: ModuleType) =>
   templates.value.filter((template) => template.type === type)

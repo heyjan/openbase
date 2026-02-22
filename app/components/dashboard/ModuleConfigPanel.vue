@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import type { ModuleConfig } from '~/types/module'
+import {
+  isTextModuleType,
+  type ModuleConfig,
+  type TextModuleType
+} from '~/types/module'
 import type { ModuleTemplate } from '~/types/template'
+
+type FontSizePreset = 'M' | 'L' | 'XL'
 
 const props = defineProps<{
   module?: ModuleConfig | null
@@ -14,7 +20,25 @@ const emit = defineEmits<{
 }>()
 
 const { list: listTemplates, create: createTemplate } = useTemplates()
-const toast = useToast()
+const toast = useAppToast()
+const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/
+const fontSizePresets: FontSizePreset[] = ['M', 'L', 'XL']
+
+const textModuleDefaults: Record<
+  TextModuleType,
+  { text: string; fontSize: FontSizePreset; color: string }
+> = {
+  header: {
+    text: 'Section Title',
+    fontSize: 'L',
+    color: '#1a1a1a'
+  },
+  subheader: {
+    text: 'Subsection',
+    fontSize: 'M',
+    color: '#6b7280'
+  }
+}
 
 const draft = reactive<ModuleConfig>({
   id: '',
@@ -25,7 +49,17 @@ const draft = reactive<ModuleConfig>({
   gridX: 0,
   gridY: 0,
   gridW: 6,
-  gridH: 4
+  gridH: 5
+})
+
+const textConfigDraft = reactive<{
+  text: string
+  fontSize: FontSizePreset
+  color: string
+}>({
+  text: textModuleDefaults.header.text,
+  fontSize: textModuleDefaults.header.fontSize,
+  color: textModuleDefaults.header.color
 })
 
 const configText = ref('{}')
@@ -36,6 +70,21 @@ const templateError = ref('')
 const selectedTemplateId = ref('')
 const templateName = ref('')
 const savingTemplate = ref(false)
+
+const isTextModule = computed(
+  () => !!props.module && isTextModuleType(props.module.type)
+)
+
+const colorHexWithoutHash = computed({
+  get: () =>
+    textConfigDraft.color.startsWith('#')
+      ? textConfigDraft.color.slice(1)
+      : textConfigDraft.color,
+  set: (value: string) => {
+    const sanitized = value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6)
+    textConfigDraft.color = sanitized ? `#${sanitized}` : '#'
+  }
+})
 
 const filteredTemplates = computed(() => {
   if (!props.module) {
@@ -50,6 +99,62 @@ const parseConfigText = () => {
     throw new Error('Config must be a JSON object.')
   }
   return parsed as Record<string, unknown>
+}
+
+const normalizeTextConfig = (
+  moduleType: TextModuleType,
+  config: Record<string, unknown> | null | undefined
+) => {
+  const defaults = textModuleDefaults[moduleType]
+  const record = config ?? {}
+
+  const text =
+    typeof record.text === 'string' && record.text.trim()
+      ? record.text.trim()
+      : defaults.text
+  const fontSize = record.fontSize
+  const color = record.color
+
+  return {
+    text,
+    fontSize:
+      fontSize === 'M' || fontSize === 'L' || fontSize === 'XL'
+        ? fontSize
+        : defaults.fontSize,
+    color:
+      typeof color === 'string' && HEX_COLOR_REGEX.test(color)
+        ? color
+        : defaults.color
+  }
+}
+
+const parseTextConfig = () => {
+  const text = textConfigDraft.text.trim()
+  if (!text) {
+    throw new Error('Text is required.')
+  }
+
+  if (!fontSizePresets.includes(textConfigDraft.fontSize)) {
+    throw new Error('Font size must be one of M, L, or XL.')
+  }
+
+  const color = textConfigDraft.color.trim()
+  if (!HEX_COLOR_REGEX.test(color)) {
+    throw new Error('Color must be a 6-digit hex value like #1a1a1a.')
+  }
+
+  return {
+    text,
+    fontSize: textConfigDraft.fontSize,
+    color
+  } as Record<string, unknown>
+}
+
+const parseDraftConfig = () => {
+  if (!props.module) {
+    return {}
+  }
+  return isTextModuleType(props.module.type) ? parseTextConfig() : parseConfigText()
 }
 
 const loadTemplates = async () => {
@@ -71,6 +176,7 @@ watch(
     if (!module) {
       return
     }
+
     draft.id = module.id
     draft.dashboardId = module.dashboardId
     draft.type = module.type
@@ -82,8 +188,22 @@ watch(
     draft.gridH = module.gridH
     configText.value = JSON.stringify(module.config ?? {}, null, 2)
     parseError.value = ''
+    templateError.value = ''
     selectedTemplateId.value = ''
-    templateName.value = module.title?.trim() || ''
+    templateName.value =
+      module.title?.trim() ||
+      (isTextModuleType(module.type)
+        ? module.type === 'header'
+          ? 'Header'
+          : 'Subheader'
+        : '')
+
+    if (isTextModuleType(module.type)) {
+      const normalized = normalizeTextConfig(module.type, module.config)
+      textConfigDraft.text = normalized.text
+      textConfigDraft.fontSize = normalized.fontSize
+      textConfigDraft.color = normalized.color
+    }
   },
   { immediate: true }
 )
@@ -96,16 +216,15 @@ const save = () => {
   parseError.value = ''
   let parsedConfig: Record<string, unknown>
   try {
-    parsedConfig = parseConfigText()
+    parsedConfig = parseDraftConfig()
   } catch (error) {
-    parseError.value =
-      error instanceof Error ? error.message : 'Invalid JSON config.'
+    parseError.value = error instanceof Error ? error.message : 'Invalid module config.'
     return
   }
 
   emit('save', {
     ...draft,
-    title: draft.title?.trim() || undefined,
+    title: isTextModule.value ? undefined : draft.title?.trim() || undefined,
     config: parsedConfig
   })
 }
@@ -127,8 +246,16 @@ const applyTemplate = () => {
     return
   }
 
-  draft.title = draft.title?.trim() || template.name
-  configText.value = JSON.stringify(template.config ?? {}, null, 2)
+  if (isTextModuleType(props.module.type)) {
+    const normalized = normalizeTextConfig(props.module.type, template.config ?? {})
+    textConfigDraft.text = normalized.text
+    textConfigDraft.fontSize = normalized.fontSize
+    textConfigDraft.color = normalized.color
+  } else {
+    draft.title = draft.title?.trim() || template.name
+    configText.value = JSON.stringify(template.config ?? {}, null, 2)
+  }
+
   parseError.value = ''
   toast.success('Template applied', 'Save module to persist these changes.')
 }
@@ -140,10 +267,9 @@ const saveCurrentAsTemplate = async () => {
 
   let parsedConfig: Record<string, unknown>
   try {
-    parsedConfig = parseConfigText()
+    parsedConfig = parseDraftConfig()
   } catch (error) {
-    parseError.value =
-      error instanceof Error ? error.message : 'Invalid JSON config.'
+    parseError.value = error instanceof Error ? error.message : 'Invalid module config.'
     return
   }
 
@@ -185,7 +311,10 @@ onMounted(loadTemplates)
         <p class="mt-1 text-xs text-gray-500">{{ module.type.replace(/_/g, ' ') }}</p>
       </div>
 
-      <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+      <label
+        v-if="!isTextModule"
+        class="block text-xs font-medium uppercase tracking-wide text-gray-600"
+      >
         Title
         <input
           v-model="draft.title"
@@ -193,47 +322,63 @@ onMounted(loadTemplates)
         />
       </label>
 
-      <div class="grid grid-cols-2 gap-2">
+      <div v-if="isTextModule" class="space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
         <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-          X
+          Text
           <input
-            v-model.number="draft.gridX"
-            type="number"
-            min="0"
+            v-model="textConfigDraft.text"
             class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            placeholder="Section title..."
           />
         </label>
+
+        <div class="text-xs font-medium uppercase tracking-wide text-gray-600">
+          Font Size
+          <div class="mt-1 inline-flex rounded border border-gray-300 bg-white p-0.5">
+            <button
+              v-for="size in fontSizePresets"
+              :key="size"
+              type="button"
+              class="rounded px-3 py-1 text-xs font-semibold"
+              :class="
+                textConfigDraft.fontSize === size
+                  ? 'bg-gray-900 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              "
+              @click="textConfigDraft.fontSize = size"
+            >
+              {{ size }}
+            </button>
+          </div>
+        </div>
+
         <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-          Y
-          <input
-            v-model.number="draft.gridY"
-            type="number"
-            min="0"
-            class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-        </label>
-        <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-          Width
-          <input
-            v-model.number="draft.gridW"
-            type="number"
-            min="1"
-            max="12"
-            class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-        </label>
-        <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-          Height
-          <input
-            v-model.number="draft.gridH"
-            type="number"
-            min="1"
-            class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
+          Color
+          <div class="mt-1 flex items-center gap-2">
+            <div class="rounded border border-gray-300 bg-white px-2 py-2 text-sm text-gray-500">
+              #
+            </div>
+            <input
+              v-model="colorHexWithoutHash"
+              class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
+              maxlength="6"
+              placeholder="1a1a1a"
+            />
+            <span
+              class="h-8 w-8 rounded border border-gray-300"
+              :style="{
+                backgroundColor:
+                  textConfigDraft.color.length === 7 ? textConfigDraft.color : 'transparent'
+              }"
+            ></span>
+          </div>
         </label>
       </div>
 
-      <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+      <label
+        v-else
+        class="block text-xs font-medium uppercase tracking-wide text-gray-600"
+      >
         Config (JSON)
         <textarea
           v-model="configText"

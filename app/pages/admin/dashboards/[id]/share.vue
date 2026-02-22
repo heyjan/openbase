@@ -6,12 +6,16 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 
 const route = useRoute()
 const dashboardId = computed(() => String(route.params.id || ''))
+const asyncKey = computed(() => `admin-dashboard-share-${dashboardId.value}`)
 const { getById, rotateToken } = useDashboard()
-const toast = useToast()
+const toast = useAppToast()
 
-const { data: dashboard, pending, error, refresh } = useAsyncData(
+const { data: dashboard, pending, error, refresh } = await useAsyncData(
+  asyncKey,
   () => getById(dashboardId.value),
-  { server: false }
+  {
+    watch: [dashboardId]
+  }
 )
 
 const rotating = ref(false)
@@ -61,6 +65,10 @@ const copyShareLink = async () => {
     copying.value = false
   }
 }
+
+const onShareLinksChanged = async () => {
+  await refresh()
+}
 </script>
 
 <template>
@@ -108,7 +116,11 @@ const copyShareLink = async () => {
         </div>
       </div>
 
-      <ShareLinkManager :dashboard-id="dashboardId" :show-title="false" />
+      <ShareLinkManager
+        :dashboard-id="dashboardId"
+        :show-title="false"
+        @changed="onShareLinksChanged"
+      />
 
       <p v-if="rotateError" class="text-sm text-red-600">{{ rotateError }}</p>
     </div>

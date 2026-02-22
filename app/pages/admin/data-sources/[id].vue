@@ -6,7 +6,7 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 const route = useRoute()
 const dataSourceId = computed(() => String(route.params.id || ''))
 const { getById, listTables, getRows, remove } = useDataSources()
-const toast = useToast()
+const toast = useAppToast()
 
 const { data: source, pending, error } = useAsyncData(
   () => getById(dataSourceId.value),

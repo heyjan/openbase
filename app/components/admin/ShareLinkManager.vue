@@ -13,8 +13,12 @@ const props = withDefaults(
   }
 )
 
+const emit = defineEmits<{
+  (event: 'changed'): void
+}>()
+
 const { list, revoke } = useShareLinks()
-const toast = useToast()
+const toast = useAppToast()
 
 const links = ref<ShareLink[]>([])
 const loading = ref(false)
@@ -168,10 +172,16 @@ const revokeLink = async () => {
 
   try {
     await revoke(token)
-    await loadLinks()
+    if (props.dashboardId) {
+      links.value = links.value.filter((link) => link.shareToken !== token)
+      selectedTokens.value = selectedTokens.value.filter((item) => item !== token)
+    } else {
+      await loadLinks()
+    }
     confirmSingleRevokeOpen.value = false
     pendingRevokeToken.value = null
     toast.success('Share link revoked')
+    emit('changed')
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to revoke share link'
@@ -203,10 +213,16 @@ const revokeSelectedLinks = async () => {
     for (const token of targets) {
       await revoke(token)
     }
-    selectedTokens.value = []
-    await loadLinks()
+    selectedTokens.value = selectedTokens.value.filter((token) => !targets.includes(token))
+    if (props.dashboardId) {
+      const revokedTokenSet = new Set(targets)
+      links.value = links.value.filter((link) => !revokedTokenSet.has(link.shareToken))
+    } else {
+      await loadLinks()
+    }
     confirmBulkRevokeOpen.value = false
     toast.success('Selected share links revoked')
+    emit('changed')
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to revoke selected links'

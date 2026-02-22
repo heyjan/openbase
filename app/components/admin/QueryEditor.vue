@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import QueryPreviewResult from '~/components/admin/QueryPreviewResult.vue'
 import type { DataSource } from '~/types/data-source'
 import type { SavedQueryPreviewResult } from '~/types/query'
 
@@ -7,7 +8,13 @@ type QueryEditorValue = {
   dataSourceId: string
   description: string
   queryText: string
-  parametersText: string
+}
+
+type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie'
+
+type SaveVisualizationPayload = {
+  name: string
+  visualization: QueryPreviewVisualization
 }
 
 const props = defineProps<{
@@ -24,7 +31,20 @@ const emit = defineEmits<{
   (event: 'update:value', value: QueryEditorValue): void
   (event: 'save'): void
   (event: 'preview'): void
+  (event: 'save-visualization', payload: SaveVisualizationPayload): void
 }>()
+
+const visualizationMenuOpen = ref(false)
+const selectedVisualization = ref<QueryPreviewVisualization>('table')
+const visualizationDraftName = ref('')
+
+const visualizationLabel: Record<QueryPreviewVisualization, string> = {
+  table: 'Table',
+  line: 'Line Chart',
+  area: 'Area Chart',
+  bar: 'Bar Chart',
+  pie: 'Pie Chart'
+}
 
 const updateValue = <K extends keyof QueryEditorValue>(
   key: K,
@@ -36,15 +56,39 @@ const updateValue = <K extends keyof QueryEditorValue>(
   })
 }
 
-const onTextInput = (event: Event, key: keyof QueryEditorValue) => {
-  const target = event.target as HTMLInputElement | HTMLTextAreaElement | null
-  updateValue(key, target?.value ?? '')
-}
-
 const onSelectInput = (event: Event, key: keyof QueryEditorValue) => {
   const target = event.target as HTMLSelectElement | null
   updateValue(key, target?.value ?? '')
 }
+
+const toggleVisualizationMenu = () => {
+  if (!props.previewResult) {
+    return
+  }
+  visualizationMenuOpen.value = !visualizationMenuOpen.value
+}
+
+const saveVisualization = () => {
+  const queryName = props.value.name.trim() || 'Query'
+  const fallbackName = `${queryName} ${visualizationLabel[selectedVisualization.value]}`
+  const name = visualizationDraftName.value.trim() || fallbackName
+  visualizationDraftName.value = name
+  emit('save-visualization', {
+    name,
+    visualization: selectedVisualization.value
+  })
+}
+
+watch(
+  () => props.previewResult,
+  (result) => {
+    if (!result) {
+      visualizationMenuOpen.value = false
+      selectedVisualization.value = 'table'
+      visualizationDraftName.value = ''
+    }
+  }
+)
 </script>
 
 <template>
@@ -52,10 +96,10 @@ const onSelectInput = (event: Event, key: keyof QueryEditorValue) => {
     <div class="grid gap-4 md:grid-cols-2">
       <label class="block text-sm font-medium text-gray-700">
         Name
-        <input
-          :value="value.name"
-          class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          @input="onTextInput($event, 'name')"
+        <UInput
+          :model-value="value.name"
+          class="mt-1 w-full"
+          @update:model-value="updateValue('name', String($event ?? ''))"
         />
       </label>
 
@@ -80,48 +124,66 @@ const onSelectInput = (event: Event, key: keyof QueryEditorValue) => {
 
     <label class="mt-4 block text-sm font-medium text-gray-700">
       Description
-      <input
-        :value="value.description"
-        class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-        @input="onTextInput($event, 'description')"
+      <UInput
+        :model-value="value.description"
+        class="mt-1 w-full"
+        @update:model-value="updateValue('description', String($event ?? ''))"
       />
     </label>
 
     <label class="mt-4 block text-sm font-medium text-gray-700">
       Query text
-      <textarea
-        :value="value.queryText"
-        rows="10"
-        class="mt-1 w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs"
-        @input="onTextInput($event, 'queryText')"
-      ></textarea>
-    </label>
-
-    <label class="mt-4 block text-sm font-medium text-gray-700">
-      Default parameters (JSON object)
-      <textarea
-        :value="value.parametersText"
-        rows="5"
-        class="mt-1 w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs"
-        @input="onTextInput($event, 'parametersText')"
-      ></textarea>
+      <UTextarea
+        :model-value="value.queryText"
+        :rows="10"
+        class="mt-1 w-full font-mono text-xs"
+        @update:model-value="updateValue('queryText', String($event ?? ''))"
+      />
     </label>
 
     <div class="mt-4 flex flex-wrap items-center gap-2">
-      <button
-        class="rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+      <UButton
+        color="neutral"
+        variant="solid"
+        size="sm"
         :disabled="saving"
         @click="emit('save')"
       >
         {{ saving ? 'Saving...' : 'Save query' }}
-      </button>
-      <button
-        class="rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300 disabled:opacity-50"
+      </UButton>
+      <UButton
+        color="neutral"
+        variant="outline"
+        size="sm"
         :disabled="previewing || !canPreview"
         @click="emit('preview')"
       >
         {{ previewing ? 'Running...' : 'Run preview' }}
-      </button>
+      </UButton>
+      <UButton
+        color="neutral"
+        variant="ghost"
+        size="sm"
+        :disabled="!previewResult"
+        @click="toggleVisualizationMenu"
+      >
+        {{ visualizationMenuOpen ? 'Hide visualizations' : 'Visualizations' }}
+      </UButton>
+      <UInput
+        v-if="previewResult && canPreview"
+        v-model="visualizationDraftName"
+        class="min-w-52"
+        placeholder="Visualization name"
+      />
+      <UButton
+        v-if="previewResult && canPreview"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        @click="saveVisualization"
+      >
+        Save visualization
+      </UButton>
       <p v-if="!canPreview" class="text-xs text-gray-500">
         Save query first to enable preview.
       </p>
@@ -129,39 +191,12 @@ const onSelectInput = (event: Event, key: keyof QueryEditorValue) => {
 
     <p v-if="errorMessage" class="mt-3 text-sm text-red-600">{{ errorMessage }}</p>
 
-    <div v-if="previewResult" class="mt-4 rounded border border-gray-100 bg-gray-50 p-3">
-      <div class="flex items-center justify-between text-xs text-gray-500">
-        <p>Rows: {{ previewResult.rowCount }}</p>
-        <p>Columns: {{ previewResult.columns.length }}</p>
-      </div>
-
-      <div class="mt-2 overflow-auto">
-        <table class="min-w-full border-collapse text-left text-xs">
-          <thead class="bg-white text-gray-500">
-            <tr>
-              <th v-for="column in previewResult.columns" :key="column" class="px-2 py-1">
-                {{ column }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(row, rowIndex) in previewResult.rows"
-              :key="rowIndex"
-              class="border-t border-gray-100"
-            >
-              <td
-                v-for="column in previewResult.columns"
-                :key="`${rowIndex}-${column}`"
-                class="max-w-72 truncate px-2 py-1 text-gray-700"
-                :title="String(row[column] ?? '')"
-              >
-                {{ row[column] }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <QueryPreviewResult
+      v-if="previewResult"
+      :result="previewResult"
+      :show-visualization-menu="visualizationMenuOpen"
+      :visualization="selectedVisualization"
+      @update:visualization="selectedVisualization = $event"
+    />
   </section>
 </template>
