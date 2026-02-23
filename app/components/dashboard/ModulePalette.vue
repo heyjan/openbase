@@ -36,6 +36,11 @@ const items: PaletteItem[] = [
     description: 'Category comparison with grouped or stacked bars'
   },
   {
+    type: 'scatter_chart',
+    label: 'Scatter Chart',
+    description: 'Compare numeric relationships with bubble sizing'
+  },
+  {
     type: 'pie_chart',
     label: 'Pie Chart',
     description: 'Distribution breakdown by category'

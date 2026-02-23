@@ -4,10 +4,12 @@ import { runPostgresQuery } from './data-source-adapters/postgresql'
 import { runRestQuery } from './data-source-adapters/rest-api'
 import { runMongoQuery } from './mongodb-connector'
 import { runSqliteQuery } from './sqlite-connector'
+import { prepareQueryVariables } from '~~/shared/utils/query-variables'
 
 type SavedQueryWithSourceRow = {
   saved_query_id: string
   query_text: string
+  query_parameters: Record<string, unknown> | null
   data_source_id: string
   data_source_type: string
   data_source_connection: Record<string, unknown>
@@ -20,9 +22,17 @@ export type QueryExecutionResult = {
   rowCount: number
 }
 
-const disallowedWriteSql = /\b(insert|update|delete|drop|alter|truncate|create|replace|grant|revoke)\b/i
 const allowedReadSql = /^\s*(select|with)\b/i
 const positionalParametersPattern = /\$\d+\b/
+const writeStatementPattern =
+  /\b(insert\s+into|update\s+\S+\s+set|delete\s+from|drop\s+\S+|alter\s+\S+|truncate\s+\S+|create\s+\S+|grant\s+\S+|revoke\s+\S+|replace\s+into)\b/i
+
+const stripSqlLiteralsAndComments = (sql: string) =>
+  sql
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n\r]*/g, ' ')
+    .replace(/'(?:''|[^'])*'/g, "''")
+    .replace(/"(?:[^"]|"")*"/g, '""')
 
 const parseLimit = (value: number | undefined, fallback: number, max: number) => {
   const raw = value ?? fallback
@@ -57,7 +67,8 @@ const assertReadOnlySql = (queryText: string) => {
       statusMessage: 'Only SELECT/CTE queries are allowed'
     })
   }
-  if (disallowedWriteSql.test(normalized)) {
+  const normalizedWithoutLiterals = stripSqlLiteralsAndComments(normalized)
+  if (writeStatementPattern.test(normalizedWithoutLiterals)) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Write operations are not allowed in saved queries'
@@ -72,14 +83,33 @@ const assertReadOnlySql = (queryText: string) => {
   return normalized
 }
 
+const prepareSqlQuery = (
+  queryText: string,
+  runtimeParameters: Record<string, unknown>,
+  queryParameters: Record<string, unknown> | null | undefined
+) => {
+  const readOnlySql = assertReadOnlySql(queryText)
+  try {
+    return prepareQueryVariables({
+      queryText: readOnlySql,
+      runtimeParameters,
+      queryParameters
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid query variables'
+    throw createError({ statusCode: 400, statusMessage: message })
+  }
+}
+
 export const runQuery = async (input: {
   dataSourceType: string
   connection: Record<string, unknown>
   queryText: string
   parameters?: Record<string, unknown>
+  queryParameters?: Record<string, unknown> | null
   limit?: number
 }): Promise<QueryExecutionResult> => {
-  const parameters = normalizeParameters(input.parameters)
+  const runtimeParameters = normalizeParameters(input.parameters)
   const limit = parseLimit(input.limit, 100, 1000)
 
   if (input.dataSourceType === 'sqlite') {
@@ -87,14 +117,16 @@ export const runQuery = async (input: {
     if (!filepath.trim()) {
       throw createError({ statusCode: 400, statusMessage: 'SQLite file path is required' })
     }
-    return runSqliteQuery(filepath, assertReadOnlySql(input.queryText), parameters, limit)
+    const prepared = prepareSqlQuery(input.queryText, runtimeParameters, input.queryParameters)
+    return runSqliteQuery(filepath, prepared.queryText, prepared.parameters, limit)
   }
 
   if (input.dataSourceType === 'postgresql' || input.dataSourceType === 'postgres') {
+    const prepared = prepareSqlQuery(input.queryText, runtimeParameters, input.queryParameters)
     return runPostgresQuery(
       input.connection,
-      assertReadOnlySql(input.queryText),
-      parameters,
+      prepared.queryText,
+      prepared.parameters,
       limit
     )
   }
@@ -109,7 +141,7 @@ export const runQuery = async (input: {
         statusMessage: 'MongoDB saved query text must be a collection name'
       })
     }
-    return runMongoQuery(uri, database, collection, parameters, limit)
+    return runMongoQuery(uri, database, collection, runtimeParameters, limit)
   }
 
   if (input.dataSourceType === 'rest_api') {
@@ -131,6 +163,7 @@ export const runSavedQueryById = async (input: {
     `SELECT
        sq.id AS saved_query_id,
        sq.query_text,
+       sq.parameters AS query_parameters,
        ds.id AS data_source_id,
        ds.type AS data_source_type,
        ds.connection AS data_source_connection,
@@ -157,6 +190,7 @@ export const runSavedQueryById = async (input: {
     connection: row.data_source_connection || {},
     queryText: row.query_text,
     parameters: input.parameters ?? {},
+    queryParameters: row.query_parameters ?? {},
     limit: input.limit
   })
 }

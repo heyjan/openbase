@@ -1,3 +1,5 @@
+import type { QueryParameterConfig } from '~~/shared/utils/query-variables'
+
 export type SavedQuery = {
   id: string
   dataSourceId: string
@@ -5,7 +7,7 @@ export type SavedQuery = {
   name: string
   description?: string
   queryText: string
-  parameters: Record<string, unknown>
+  parameters: QueryParameterConfig
   createdAt: string
   updatedAt: string
 }
@@ -15,7 +17,7 @@ export type SavedQueryInput = {
   name: string
   description?: string
   queryText: string
-  parameters?: Record<string, unknown>
+  parameters?: QueryParameterConfig
 }
 
 export type SavedQueryPreviewResult = {

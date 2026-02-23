@@ -12,14 +12,14 @@ type QueryEditorValue = {
   queryText: string
 }
 
-type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie'
+type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie' | 'scatter'
 
 const route = useRoute()
 const queryId = computed(() => String(route.params.id || ''))
 const isNew = computed(() => queryId.value === 'new')
 
 const { list: listDataSources } = useDataSources()
-const { getById, create, update, preview } = useQueries()
+const { list: listQueries, getById, create, update, preview } = useQueries()
 const { create: createVisualization } = useQueryVisualizations()
 const toast = useAppToast()
 
@@ -31,6 +31,9 @@ const previewResult = ref<SavedQueryPreviewResult | null>(null)
 const lastSavedSignature = ref('')
 const skipNextRouteLoad = ref(false)
 const clientReady = ref(false)
+const queryParameters = ref<Record<string, unknown>>({})
+const previewParameters = ref<Record<string, unknown>>({})
+const savedQueryOptions = ref<Array<{ id: string; name: string }>>([])
 
 const dataSources = ref<DataSource[]>([])
 const form = ref<QueryEditorValue>({
@@ -45,7 +48,7 @@ type QueryPayload = {
   dataSourceId: string
   description?: string
   queryText: string
-  parameters: Record<string, never>
+  parameters: Record<string, unknown>
 }
 
 const canPreview = computed(
@@ -57,7 +60,7 @@ const buildPayload = (): QueryPayload => ({
   dataSourceId: form.value.dataSourceId,
   description: form.value.description.trim() || undefined,
   queryText: form.value.queryText,
-  parameters: {}
+  parameters: queryParameters.value
 })
 
 const getPayloadSignature = (payload: QueryPayload) =>
@@ -65,7 +68,8 @@ const getPayloadSignature = (payload: QueryPayload) =>
     name: payload.name,
     dataSourceId: payload.dataSourceId,
     description: payload.description ?? '',
-    queryText: payload.queryText
+    queryText: payload.queryText,
+    parameters: payload.parameters
   })
 
 const validatePayload = (payload: QueryPayload) => {
@@ -82,14 +86,23 @@ const load = async () => {
   previewResult.value = null
 
   try {
-    const sources = await listDataSources()
+    const [sources, queries] = await Promise.all([
+      listDataSources(),
+      listQueries()
+    ])
     dataSources.value = sources
+    savedQueryOptions.value = queries.map((query) => ({
+      id: query.id,
+      name: query.name
+    }))
 
     if (isNew.value) {
       form.value = {
         ...form.value,
         dataSourceId: form.value.dataSourceId || sources[0]?.id || ''
       }
+      queryParameters.value = {}
+      previewParameters.value = {}
       lastSavedSignature.value = ''
       return
     }
@@ -101,12 +114,14 @@ const load = async () => {
       description: query.description ?? '',
       queryText: query.queryText
     }
+    queryParameters.value = query.parameters ?? {}
+    previewParameters.value = {}
     lastSavedSignature.value = getPayloadSignature({
       name: query.name,
       dataSourceId: query.dataSourceId,
       description: query.description ?? undefined,
       queryText: query.queryText,
-      parameters: {}
+      parameters: query.parameters ?? {}
     })
   } catch (error) {
     errorMessage.value =
@@ -118,6 +133,14 @@ const load = async () => {
 
 const updateForm = (value: QueryEditorValue) => {
   form.value = value
+}
+
+const updatePreviewParameters = (value: Record<string, unknown>) => {
+  previewParameters.value = value
+}
+
+const updateQueryParameters = (value: Record<string, unknown>) => {
+  queryParameters.value = value
 }
 
 const persistQuery = async () => {
@@ -179,6 +202,12 @@ const mapVisualizationToModule = (visualization: QueryPreviewVisualization) => {
       config: {} as Record<string, unknown>
     }
   }
+  if (visualization === 'scatter') {
+    return {
+      moduleType: 'scatter_chart' as ModuleType,
+      config: {} as Record<string, unknown>
+    }
+  }
   if (visualization === 'area') {
     return {
       moduleType: 'time_series_chart' as ModuleType,
@@ -208,7 +237,10 @@ const runPreview = async () => {
 
   previewing.value = true
   try {
-    previewResult.value = await preview(savedQueryId, { limit: 100 })
+    previewResult.value = await preview(savedQueryId, {
+      limit: 100,
+      parameters: previewParameters.value
+    })
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to run preview'
@@ -289,12 +321,18 @@ onMounted(async () => {
       <QueryEditor
         :value="form"
         :data-sources="dataSources"
+        :query-parameters="queryParameters"
+        :saved-queries="savedQueryOptions"
+        :current-query-id="isNew ? '' : queryId"
+        :preview-parameters="previewParameters"
         :saving="saving"
         :previewing="previewing"
         :can-preview="canPreview"
         :preview-result="previewResult"
         :error-message="errorMessage"
         @update:value="updateForm"
+        @update:query-parameters="updateQueryParameters"
+        @update:preview-parameters="updatePreviewParameters"
         @save="saveQuery"
         @preview="runPreview"
         @save-visualization="saveVisualization"

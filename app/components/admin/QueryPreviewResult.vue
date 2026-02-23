@@ -4,7 +4,7 @@ import EChart from '~/components/charts/EChart.vue'
 import Table from '~/components/ui/Table.vue'
 import type { SavedQueryPreviewResult } from '~/types/query'
 
-type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie'
+type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie' | 'scatter'
 
 type VisualizationOption = {
   id: QueryPreviewVisualization
@@ -47,6 +47,11 @@ const visualizationOptions: VisualizationOption[] = [
     id: 'pie',
     label: 'Pie',
     description: 'Distribution by category'
+  },
+  {
+    id: 'scatter',
+    label: 'Scatter',
+    description: 'Relationship between numeric fields'
   }
 ]
 
@@ -154,6 +159,81 @@ const pieData = computed(() => {
 const hasCartesianData = computed(() => rows.value.length > 0 && seriesColumns.value.length > 0)
 const hasPieData = computed(() => pieData.value.length > 0)
 
+const scatterXColumn = computed(() => numericColumns.value[0] ?? '')
+const scatterYColumn = computed(
+  () => numericColumns.value.find((column) => column !== scatterXColumn.value) ?? ''
+)
+const scatterSizeColumn = computed(
+  () =>
+    numericColumns.value.find(
+      (column) => column !== scatterXColumn.value && column !== scatterYColumn.value
+    ) ?? scatterYColumn.value
+)
+const scatterLabelColumn = computed(() => categoryColumns.value[0] ?? '')
+
+const scatterData = computed(() => {
+  if (!scatterXColumn.value || !scatterYColumn.value || !scatterSizeColumn.value) {
+    return [] as Array<{ value: [number, number, number]; name?: string }>
+  }
+
+  return rows.value
+    .map((row) => {
+      const x = toNumber(row[scatterXColumn.value])
+      const y = toNumber(row[scatterYColumn.value])
+      const size = toNumber(row[scatterSizeColumn.value])
+
+      if (x === null || y === null || size === null) {
+        return null
+      }
+
+      const label =
+        scatterLabelColumn.value &&
+        row[scatterLabelColumn.value] !== null &&
+        row[scatterLabelColumn.value] !== undefined
+          ? String(row[scatterLabelColumn.value]).trim()
+          : ''
+
+      return {
+        value: [x, y, size] as [number, number, number],
+        name: label || undefined
+      }
+    })
+    .filter((item): item is { value: [number, number, number]; name?: string } => item !== null)
+})
+
+const scatterSizeExtent = computed(() => {
+  const sizes = scatterData.value.map((item) => item.value[2])
+  if (!sizes.length) {
+    return { min: 0, max: 0 }
+  }
+  return {
+    min: Math.min(...sizes),
+    max: Math.max(...sizes)
+  }
+})
+
+const scaleScatterSymbolSize = (value: unknown) => {
+  if (!Array.isArray(value)) {
+    return 10
+  }
+
+  const rawSize = Number(value[2])
+  if (!Number.isFinite(rawSize)) {
+    return 10
+  }
+
+  const span = scatterSizeExtent.value.max - scatterSizeExtent.value.min
+  if (span <= 0) {
+    return 24
+  }
+
+  const ratio = (rawSize - scatterSizeExtent.value.min) / span
+  const clamped = Math.max(0, Math.min(1, ratio))
+  return 10 + clamped * 32
+}
+
+const hasScatterData = computed(() => scatterData.value.length > 0)
+
 const chartOption = computed<EChartsOption>(() => {
   if (props.visualization === 'pie') {
     return {
@@ -177,6 +257,49 @@ const chartOption = computed<EChartsOption>(() => {
             borderWidth: 2
           },
           label: { color: '#374151' }
+        }
+      ]
+    }
+  }
+
+  if (props.visualization === 'scatter') {
+    return {
+      tooltip: {
+        trigger: 'item'
+      },
+      grid: {
+        left: 12,
+        right: 12,
+        top: 18,
+        bottom: 28,
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        name: scatterXColumn.value || 'X',
+        nameGap: 20,
+        axisLabel: { color: '#6b7280' },
+        splitLine: { lineStyle: { color: '#e5e7eb' } }
+      },
+      yAxis: {
+        type: 'value',
+        name: scatterYColumn.value || 'Y',
+        nameGap: 30,
+        axisLabel: { color: '#6b7280' },
+        splitLine: { lineStyle: { color: '#e5e7eb' } }
+      },
+      series: [
+        {
+          type: 'scatter',
+          data: scatterData.value,
+          symbolSize: scaleScatterSymbolSize,
+          itemStyle: {
+            color: '#2563eb',
+            opacity: 0.78
+          },
+          emphasis: {
+            focus: 'series'
+          }
         }
       ]
     }
@@ -290,6 +413,14 @@ const chartOption = computed<EChartsOption>(() => {
             using <span class="font-medium text-gray-700">{{ pieValueColumn || 'value' }}</span>.
           </p>
           <p
+            v-else-if="visualization === 'scatter'"
+            class="mb-2 text-xs text-gray-500"
+          >
+            X: <span class="font-medium text-gray-700">{{ scatterXColumn || 'none' }}</span>
+            | Y: <span class="font-medium text-gray-700">{{ scatterYColumn || 'none' }}</span>
+            | Size: <span class="font-medium text-gray-700">{{ scatterSizeColumn || 'none' }}</span>
+          </p>
+          <p
             v-else
             class="mb-2 text-xs text-gray-500"
           >
@@ -304,7 +435,13 @@ const chartOption = computed<EChartsOption>(() => {
             No suitable category/value columns found for pie chart rendering.
           </p>
           <p
-            v-else-if="visualization !== 'pie' && !hasCartesianData"
+            v-else-if="visualization === 'scatter' && !hasScatterData"
+            class="text-sm text-gray-500"
+          >
+            Need at least two numeric columns to render a scatter chart.
+          </p>
+          <p
+            v-else-if="visualization !== 'pie' && visualization !== 'scatter' && !hasCartesianData"
             class="text-sm text-gray-500"
           >
             No numeric series columns found for chart rendering.

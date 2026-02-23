@@ -2,6 +2,7 @@ export type ModuleType =
   | 'time_series_chart'
   | 'line_chart'
   | 'bar_chart'
+  | 'scatter_chart'
   | 'pie_chart'
   | 'outlier_table'
   | 'kpi_card'

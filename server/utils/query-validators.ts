@@ -1,4 +1,5 @@
 import { createError } from 'h3'
+import { parseVariableDefinitions } from '~~/shared/utils/query-variables'
 
 const asRecord = (value: unknown, fieldName: string) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -7,11 +8,30 @@ const asRecord = (value: unknown, fieldName: string) => {
   return value as Record<string, unknown>
 }
 
-const parseParameters = (value: unknown) => {
+const parseRuntimeParameters = (value: unknown) => {
   if (value === undefined || value === null) {
     return {}
   }
   return asRecord(value, 'parameters')
+}
+
+const parseSavedQueryParameters = (value: unknown) => {
+  const parameters = parseRuntimeParameters(value)
+  try {
+    const hasVariables = Object.prototype.hasOwnProperty.call(parameters, 'variables')
+    const variables = parseVariableDefinitions(parameters)
+    if (!hasVariables) {
+      return parameters
+    }
+    return {
+      ...parameters,
+      variables
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Invalid query parameters.variables'
+    throw createError({ statusCode: 400, statusMessage: message })
+  }
 }
 
 const parseString = (value: unknown, fieldName: string) => {
@@ -41,7 +61,7 @@ export const parseSavedQueryInput = (value: unknown) => {
     name,
     description,
     queryText,
-    parameters: parseParameters(record.parameters)
+    parameters: parseSavedQueryParameters(record.parameters)
   }
 }
 
@@ -73,7 +93,7 @@ export const parseSavedQueryUpdate = (value: unknown) => {
     updates.queryText = parseString(rawQueryText, 'query text')
   }
   if (record.parameters !== undefined) {
-    updates.parameters = parseParameters(record.parameters)
+    updates.parameters = parseSavedQueryParameters(record.parameters)
   }
 
   return updates
@@ -88,7 +108,7 @@ export const parseQueryRunInput = (value: unknown) => {
   }
 
   const record = asRecord(value, 'payload')
-  const parameters = parseParameters(record.parameters ?? record.filters)
+  const parameters = parseRuntimeParameters(record.parameters ?? record.filters)
 
   let limit = 100
   if (record.limit !== undefined) {

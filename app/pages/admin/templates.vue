@@ -27,6 +27,7 @@ const moduleTypes: Array<{ value: ModuleType; label: string }> = [
   { value: 'time_series_chart', label: 'Time Series Chart' },
   { value: 'line_chart', label: 'Line Chart' },
   { value: 'bar_chart', label: 'Bar Chart' },
+  { value: 'scatter_chart', label: 'Scatter Chart' },
   { value: 'pie_chart', label: 'Pie Chart' },
   { value: 'outlier_table', label: 'Outlier Table' },
   { value: 'kpi_card', label: 'KPI Card' },

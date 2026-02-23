@@ -13,13 +13,21 @@ import {
   type ModuleConfig
 } from '~/types/module'
 import type { QueryVisualization } from '~/types/query-visualization'
+import {
+  extractVariables,
+  parseVariableDefinitions,
+  type VariableDefinition,
+  type VariableOption
+} from '~~/shared/utils/query-variables'
 
 const route = useRoute()
+const router = useRouter()
 const dashboardId = computed(() => String(route.params.id || ''))
 const dashboardAsyncKey = computed(() => `admin-dashboard-edit-${dashboardId.value}`)
 
 const { getById, update } = useDashboard()
 const { list, create, update: updateModule, remove, updateLayout } = useModules()
+const { getById: getQueryById, preview: previewQuery } = useQueries()
 const toast = useAppToast()
 const GRID_COLUMNS = 12
 const DEFAULT_MODULE_WIDTH = 6
@@ -41,6 +49,260 @@ const textModuleDefaults = {
   }
 } as const
 
+const toTitleLabel = (name: string) =>
+  name
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+
+const getRouteQueryValue = (name: string) => {
+  const value = route.query[name]
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : ''
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (typeof value === 'number') {
+    return String(value)
+  }
+  return ''
+}
+
+const setDashboardVariableValues = (next: Record<string, string>) => {
+  for (const key of Object.keys(dashboardVariableValues)) {
+    if (!(key in next)) {
+      delete dashboardVariableValues[key]
+    }
+  }
+
+  for (const [key, value] of Object.entries(next)) {
+    dashboardVariableValues[key] = value
+  }
+}
+
+const areStringMapsEqual = (left: Record<string, string>, right: Record<string, string>) => {
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) {
+    return false
+  }
+  for (const key of leftKeys) {
+    if (!(key in right)) {
+      return false
+    }
+    if (left[key] !== right[key]) {
+      return false
+    }
+  }
+  return true
+}
+
+const mapQueryListOptions = (
+  rows: Record<string, unknown>[],
+  valueColumn: string,
+  labelColumn: string
+) => {
+  const options: VariableOption[] = []
+  const seen = new Set<string>()
+
+  for (const row of rows) {
+    const valueRaw = row[valueColumn]
+    if (valueRaw === undefined || valueRaw === null) {
+      continue
+    }
+
+    const value = String(valueRaw)
+    if (seen.has(value)) {
+      continue
+    }
+
+    const labelRaw = row[labelColumn]
+    const label = labelRaw === undefined || labelRaw === null ? value : String(labelRaw)
+    options.push({ value, label })
+    seen.add(value)
+  }
+
+  return options
+}
+
+const applyDashboardVariables = async () => {
+  const currentQuery: Record<string, string> = {}
+  const nextQuery: Record<string, string> = {}
+
+  for (const [key, value] of Object.entries(route.query)) {
+    if (Array.isArray(value)) {
+      if (typeof value[0] === 'string') {
+        currentQuery[key] = value[0]
+        nextQuery[key] = value[0]
+      }
+      continue
+    }
+    if (typeof value === 'string') {
+      currentQuery[key] = value
+      nextQuery[key] = value
+      continue
+    }
+    if (typeof value === 'number') {
+      currentQuery[key] = String(value)
+      nextQuery[key] = String(value)
+    }
+  }
+
+  for (const variable of dashboardVariables.value) {
+    const value = dashboardVariableValues[variable.definition.name] ?? ''
+    if (!value) {
+      delete nextQuery[variable.definition.name]
+      continue
+    }
+    nextQuery[variable.definition.name] = value
+  }
+
+  if (areStringMapsEqual(currentQuery, nextQuery)) {
+    return
+  }
+
+  await router.replace({
+    path: route.path,
+    query: nextQuery
+  })
+}
+
+const syncDashboardVariables = async () => {
+  if (!process.client) {
+    return
+  }
+
+  dashboardVariablesLoading.value = true
+  variableError.value = ''
+
+  try {
+    const queryIds = Array.from(
+      new Set(
+        modules.value
+          .map((module) => module.queryVisualizationQueryId)
+          .filter((value): value is string => Boolean(value && value.trim()))
+      )
+    )
+
+    if (!queryIds.length) {
+      dashboardVariables.value = []
+      dashboardVariableOptions.value = {}
+      setDashboardVariableValues({})
+      return
+    }
+
+    const loadedQueries = await Promise.all(queryIds.map((queryId) => getQueryById(queryId)))
+    const controlsByName = new Map<string, DashboardVariableControl>()
+    const loadedOptions: Record<string, VariableOption[]> = {}
+
+    for (const query of loadedQueries) {
+      const configuredDefinitions = parseVariableDefinitions(query.parameters ?? {})
+      const definitions =
+        configuredDefinitions.length > 0
+          ? configuredDefinitions
+          : extractVariables(query.queryText).map(
+              (name): VariableDefinition => ({
+                name,
+                type: 'text',
+                required: false
+              })
+            )
+
+      for (const definition of definitions) {
+        if (controlsByName.has(definition.name)) {
+          continue
+        }
+
+        const inputType =
+          definition.type === 'number'
+            ? 'number'
+            : definition.type === 'select' || definition.type === 'query_list'
+              ? 'select'
+              : 'text'
+
+        controlsByName.set(definition.name, {
+          definition,
+          label: definition.label?.trim() || toTitleLabel(definition.name),
+          inputType
+        })
+
+        if (definition.type === 'select') {
+          loadedOptions[definition.name] = definition.options ?? []
+          continue
+        }
+
+        if (definition.type !== 'query_list' || !definition.sourceQueryId) {
+          continue
+        }
+
+        const sourceResult = await previewQuery(definition.sourceQueryId, { limit: 100 })
+        const fallbackColumn = sourceResult.columns[0]
+        const valueColumn = definition.valueColumn || fallbackColumn || ''
+        const labelColumn = definition.labelColumn || valueColumn
+        if (!valueColumn) {
+          loadedOptions[definition.name] = []
+          continue
+        }
+
+        loadedOptions[definition.name] = mapQueryListOptions(
+          sourceResult.rows,
+          valueColumn,
+          labelColumn
+        )
+      }
+    }
+
+    const controls = Array.from(controlsByName.values())
+    dashboardVariables.value = controls
+    dashboardVariableOptions.value = loadedOptions
+
+    const nextValues: Record<string, string> = {}
+    let shouldApplyDefaults = false
+    for (const control of controls) {
+      const name = control.definition.name
+      const routeValue = getRouteQueryValue(name)
+      if (routeValue) {
+        nextValues[name] = routeValue
+        continue
+      }
+
+      if (control.definition.defaultValue !== undefined && control.definition.defaultValue !== null) {
+        nextValues[name] = String(control.definition.defaultValue)
+        if (!getRouteQueryValue(name)) {
+          shouldApplyDefaults = true
+        }
+        continue
+      }
+
+      const options = loadedOptions[name] ?? []
+      if (control.definition.required && options.length) {
+        nextValues[name] = options[0].value
+        shouldApplyDefaults = true
+        continue
+      }
+
+      nextValues[name] = ''
+    }
+
+    setDashboardVariableValues(nextValues)
+
+    if (shouldApplyDefaults) {
+      await applyDashboardVariables()
+    }
+  } catch (error) {
+    variableError.value =
+      error instanceof Error ? error.message : 'Failed to load dashboard variables'
+  } finally {
+    dashboardVariablesLoading.value = false
+  }
+}
+
+const onDashboardVariableInput = async (event: Event, variableName: string) => {
+  const target = event.target as HTMLInputElement | HTMLSelectElement | null
+  dashboardVariableValues[variableName] = target?.value ?? ''
+  await applyDashboardVariables()
+}
+
 const { data: dashboard, pending, error, refresh } = await useAsyncData(
   dashboardAsyncKey,
   () => getById(dashboardId.value),
@@ -53,6 +315,7 @@ const modules = ref<ModuleConfig[]>([])
 const modulesPending = ref(false)
 const modulesError = ref('')
 const moduleActionError = ref('')
+const variableError = ref('')
 const moduleActionId = ref<string | null>(null)
 const layoutDirty = ref(false)
 const savingLayout = ref(false)
@@ -64,6 +327,17 @@ const confirmDeleteOpen = ref(false)
 const pendingDeleteModuleId = ref<string | null>(null)
 const canvasWidthMode = ref<'fixed' | 'full'>('fixed')
 const overlapNoticeShown = ref(false)
+
+type DashboardVariableControl = {
+  definition: VariableDefinition
+  label: string
+  inputType: 'text' | 'number' | 'select'
+}
+
+const dashboardVariables = ref<DashboardVariableControl[]>([])
+const dashboardVariableOptions = ref<Record<string, VariableOption[]>>({})
+const dashboardVariableValues = reactive<Record<string, string>>({})
+const dashboardVariablesLoading = ref(false)
 
 const form = reactive({
   name: '',
@@ -92,6 +366,7 @@ const loadModules = async () => {
         'Cards were separated locally. Save layout to persist.'
       )
     }
+
   } catch (error) {
     modulesError.value = error instanceof Error ? error.message : 'Failed to load modules'
   } finally {
@@ -562,6 +837,17 @@ watchEffect(() => {
   form.description = dashboard.value.description ?? ''
 })
 
+watch(
+  () =>
+    modules.value
+      .map((module) => `${module.id}:${module.queryVisualizationQueryId ?? ''}`)
+      .join('|'),
+  () => {
+    syncDashboardVariables()
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
   for (const timer of autoSaveTimers.values()) {
     clearTimeout(timer)
@@ -630,6 +916,7 @@ watch(dashboardId, () => {
 
       <p v-if="modulesPending" class="text-sm text-gray-500">Loading modules...</p>
       <p v-else-if="modulesError" class="text-sm text-red-600">{{ modulesError }}</p>
+      <p v-if="variableError" class="text-sm text-red-600">{{ variableError }}</p>
 
       <div
         v-else
@@ -639,16 +926,56 @@ watch(dashboardId, () => {
             : 'grid gap-4'
         "
       >
-        <DashboardEditor
-          :modules="modules"
-          :selected-module-id="selectedModuleId"
-          @select="selectedModuleId = $event"
-          @patch="patchModuleLocal"
-          @update-module="patchModuleContentLocal"
-          @delete="openDeleteModuleConfirm"
-          @duplicate="duplicateModule"
-          @edit-query="editModuleQuery"
-        />
+        <div class="space-y-2">
+          <div
+            v-if="dashboardVariables.length || dashboardVariablesLoading"
+            class="rounded border border-gray-200 bg-white px-2 py-1 shadow-sm"
+          >
+            <p v-if="dashboardVariablesLoading" class="text-xs text-gray-500">Loading variable options...</p>
+            <div v-else-if="dashboardVariables.length" class="flex flex-wrap items-center gap-2">
+              <label
+                v-for="variable in dashboardVariables"
+                :key="`inline-variable-${variable.definition.name}`"
+                class="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+              >
+                <span class="font-medium">{{ variable.label }}:</span>
+                <select
+                  v-if="variable.inputType === 'select'"
+                  :value="dashboardVariableValues[variable.definition.name] ?? ''"
+                  class="h-7 min-w-36 rounded border border-gray-300 bg-white px-2 text-xs"
+                  @change="onDashboardVariableInput($event, variable.definition.name)"
+                >
+                  <option value="">All</option>
+                  <option
+                    v-for="option in dashboardVariableOptions[variable.definition.name] ?? []"
+                    :key="`${variable.definition.name}:${option.value}`"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+                <input
+                  v-else
+                  :value="dashboardVariableValues[variable.definition.name] ?? ''"
+                  :type="variable.inputType"
+                  class="h-7 min-w-36 rounded border border-gray-300 bg-white px-2 text-xs"
+                  @change="onDashboardVariableInput($event, variable.definition.name)"
+                />
+              </label>
+            </div>
+          </div>
+
+          <DashboardEditor
+            :modules="modules"
+            :selected-module-id="selectedModuleId"
+            @select="selectedModuleId = $event"
+            @patch="patchModuleLocal"
+            @update-module="patchModuleContentLocal"
+            @delete="openDeleteModuleConfirm"
+            @duplicate="duplicateModule"
+            @edit-query="editModuleQuery"
+          />
+        </div>
 
         <ModuleConfigPanel
           v-if="showSideConfigPanel"

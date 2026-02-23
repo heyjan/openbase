@@ -6,7 +6,7 @@
 - `server/`: API routes and backend utilities (`server/api/**`, `server/utils/**`, `server/plugins/**`).
 - `db/`: PostgreSQL schema (`db/schema.sql`) plus local SQLite artifacts used for data-source exploration.
 - `public/`: static assets.
-- `documentation/`: canonical location for all specs and technical docs (`documentation/spec.md`, feature/security specs).
+- `documentation/`: canonical location for all specs and technical docs
 
 Use feature-local organization where possible (for example, dashboard logic stays under `app/components/dashboard` and matching routes under `server/api/admin/dashboards`).
 

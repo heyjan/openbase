@@ -11,6 +11,7 @@ import HeaderModule from '~/components/modules/HeaderModule.vue'
 import KpiCard from '~/components/modules/KpiCard.vue'
 import OutlierTable from '~/components/modules/OutlierTable.vue'
 import PieChart from '~/components/modules/PieChart.vue'
+import ScatterChart from '~/components/modules/ScatterChart.vue'
 import SubheaderModule from '~/components/modules/SubheaderModule.vue'
 import TimeSeriesChart from '~/components/modules/TimeSeriesChart.vue'
 import { useModuleData } from '~/composables/useModuleData'
@@ -29,6 +30,7 @@ const componentMap = {
   time_series_chart: TimeSeriesChart,
   line_chart: TimeSeriesChart,
   bar_chart: BarChart,
+  scatter_chart: ScatterChart,
   pie_chart: PieChart,
   outlier_table: OutlierTable,
   kpi_card: KpiCard,
@@ -41,11 +43,35 @@ const componentMap = {
 
 const component = computed(() => componentMap[props.module.type] ?? KpiCard)
 const isTextModule = computed(() => isTextModuleType(props.module.type))
+const route = useRoute()
+const router = useRouter()
+
+type VariableOption = {
+  label: string
+  value: string
+}
+
+type VariableControl = {
+  name: string
+  label: string
+  options: VariableOption[]
+}
+
+const variableControls = ref<VariableControl[]>([])
+const loadingVariableControls = ref(false)
+const isPublicDashboardRoute = computed(() => route.path.startsWith('/d/'))
+const publicSlug = computed(() =>
+  typeof route.params.slug === 'string' ? route.params.slug : ''
+)
+const shareToken = computed(() =>
+  typeof route.query.token === 'string' ? route.query.token : ''
+)
 
 const defaultTitles: Record<ModuleConfig['type'], string> = {
   time_series_chart: 'Time Series',
   line_chart: 'Line Chart',
   bar_chart: 'Bar Chart',
+  scatter_chart: 'Scatter Chart',
   pie_chart: 'Pie Chart',
   outlier_table: 'Outliers',
   kpi_card: 'KPI',
@@ -60,6 +86,99 @@ const title = computed(() => {
   const moduleTitle = props.module.title?.trim()
   return moduleTitle || defaultTitles[props.module.type]
 })
+
+const toRouteQueryStringMap = () => {
+  const next: Record<string, string> = {}
+  for (const [key, value] of Object.entries(route.query)) {
+    if (Array.isArray(value)) {
+      if (typeof value[0] === 'string') {
+        next[key] = value[0]
+      }
+      continue
+    }
+    if (typeof value === 'string') {
+      next[key] = value
+      continue
+    }
+    if (typeof value === 'number') {
+      next[key] = String(value)
+    }
+  }
+  return next
+}
+
+const getRouteQueryValue = (name: string) => {
+  const value = route.query[name]
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : ''
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (typeof value === 'number') {
+    return String(value)
+  }
+  return ''
+}
+
+const loadVariableControls = async () => {
+  if (!isPublicDashboardRoute.value) {
+    variableControls.value = []
+    return
+  }
+
+  const slug = publicSlug.value
+  const token = shareToken.value
+  if (!slug || !token) {
+    variableControls.value = []
+    return
+  }
+
+  loadingVariableControls.value = true
+  try {
+    const response = await $fetch<{ variables: VariableControl[] }>(
+      `/api/dashboards/${slug}/modules/${props.module.id}/variables`,
+      {
+        query: { token }
+      }
+    )
+    variableControls.value = response.variables ?? []
+  } catch {
+    variableControls.value = []
+  } finally {
+    loadingVariableControls.value = false
+  }
+}
+
+const onVariableChange = async (event: Event, variableName: string) => {
+  const target = event.target as HTMLSelectElement | null
+  const value = target?.value ?? ''
+  const nextQuery = toRouteQueryStringMap()
+  const currentValue = nextQuery[variableName] ?? ''
+
+  if (value) {
+    nextQuery[variableName] = value
+  } else {
+    delete nextQuery[variableName]
+  }
+
+  if (currentValue === (nextQuery[variableName] ?? '')) {
+    return
+  }
+
+  await router.replace({
+    path: route.path,
+    query: nextQuery
+  })
+}
+
+watch(
+  [() => props.module.id, () => route.path, publicSlug, shareToken],
+  () => {
+    loadVariableControls()
+  },
+  { immediate: true }
+)
 
 const moduleRef = toRef(props, 'module')
 const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
@@ -79,14 +198,45 @@ const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <Badge v-if="canFetch">live</Badge>
-        <button
-          v-if="canFetch"
-          class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:border-gray-300"
-          @click="refresh"
+        <template v-if="isPublicDashboardRoute && variableControls.length">
+          <label
+            v-for="control in variableControls"
+            :key="`${module.id}-${control.name}`"
+            class="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+          >
+            <span class="font-medium">{{ control.label }}:</span>
+            <select
+              :value="getRouteQueryValue(control.name)"
+              class="h-7 min-w-32 rounded border border-gray-300 bg-white px-2 text-xs"
+              @change="onVariableChange($event, control.name)"
+            >
+              <option value="">All</option>
+              <option
+                v-for="option in control.options"
+                :key="`${control.name}-${option.value}`"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+        </template>
+        <template v-else-if="!isPublicDashboardRoute">
+          <Badge v-if="canFetch">live</Badge>
+          <button
+            v-if="canFetch"
+            class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:border-gray-300"
+            @click="refresh"
+          >
+            Refresh
+          </button>
+        </template>
+        <span
+          v-else-if="isPublicDashboardRoute && loadingVariableControls"
+          class="text-xs text-gray-400"
         >
-          Refresh
-        </button>
+          ...
+        </span>
       </div>
     </div>
 
