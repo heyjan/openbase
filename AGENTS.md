@@ -6,7 +6,7 @@
 - `server/`: API routes and backend utilities (`server/api/**`, `server/utils/**`, `server/plugins/**`).
 - `db/`: PostgreSQL schema (`db/schema.sql`) plus local SQLite artifacts used for data-source exploration.
 - `public/`: static assets.
-- `spec.md`: product and behavior reference.
+- `documentation/`: canonical location for all specs and technical docs (`documentation/spec.md`, feature/security specs).
 
 Use feature-local organization where possible (for example, dashboard logic stays under `app/components/dashboard` and matching routes under `server/api/admin/dashboards`).
 
@@ -42,7 +42,7 @@ Current history is minimal (`Initial commit`), so use clear imperative commits g
 
 PRs should include:
 - What changed and why.
-- Linked issue/spec reference (`spec.md` section when relevant).
+- Linked issue/spec reference from `documentation/` (for example, `documentation/spec.md` section when relevant).
 - Verification steps run.
 - UI screenshots/GIFs for frontend changes.
 - Notes for schema/env changes (`db/schema.sql`, `DATABASE_URL`).

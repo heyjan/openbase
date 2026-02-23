@@ -1,13 +1,10 @@
 export default defineNuxtRouteMiddleware(async (to) => {
-  if (!process.client) {
-    return
-  }
-
   if (to.path.startsWith('/api')) {
     return
   }
 
-  const { required } = await $fetch<{ required: boolean }>('/api/setup/status')
+  const fetchFn = process.server ? useRequestFetch() : $fetch
+  const { required } = await fetchFn<{ required: boolean }>('/api/setup/status')
 
   if (required && !to.path.startsWith('/setup')) {
     return navigateTo('/setup')
