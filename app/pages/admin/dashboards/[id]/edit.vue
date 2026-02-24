@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Settings } from 'lucide-vue-next'
-import Breadcrumbs from '~/components/ui/Breadcrumbs.vue'
+import { Link2, Settings } from 'lucide-vue-next'
 import CanvasToolbar from '~/components/dashboard/CanvasToolbar.vue'
 import DashboardEditor from '~/components/dashboard/DashboardEditor.vue'
+import DashboardFilterBar from '~/components/dashboard/DashboardFilterBar.vue'
 import DashboardMetadataModal from '~/components/dashboard/DashboardMetadataModal.vue'
 import ModuleConfigPanel from '~/components/dashboard/ModuleConfigPanel.vue'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
@@ -12,6 +12,8 @@ import {
   isTextModuleType,
   type ModuleConfig
 } from '~/types/module'
+import type { CanvasWidthMode, DashboardGridConfig } from '~/types/dashboard'
+import type { QueryVariable } from '~/types/query-variable'
 import type { QueryVisualization } from '~/types/query-visualization'
 import {
   extractVariables,
@@ -21,7 +23,7 @@ import {
 } from '~~/shared/utils/query-variables'
 
 const route = useRoute()
-const router = useRouter()
+const { setTopBarBreadcrumbs } = useTopBarBreadcrumbs()
 const dashboardId = computed(() => String(route.params.id || ''))
 const dashboardAsyncKey = computed(() => `admin-dashboard-edit-${dashboardId.value}`)
 
@@ -35,6 +37,7 @@ const DEFAULT_MODULE_HEIGHT = 5
 const HEADER_MODULE_WIDTH = 12
 const HEADER_MODULE_HEIGHT = 1
 const MODULE_AUTOSAVE_DEBOUNCE_MS = 350
+const LAYOUT_AUTOSAVE_DEBOUNCE_MS = 700
 
 const textModuleDefaults = {
   header: {
@@ -53,49 +56,6 @@ const toTitleLabel = (name: string) =>
   name
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase())
-
-const getRouteQueryValue = (name: string) => {
-  const value = route.query[name]
-  if (Array.isArray(value)) {
-    return typeof value[0] === 'string' ? value[0] : ''
-  }
-  if (typeof value === 'string') {
-    return value
-  }
-  if (typeof value === 'number') {
-    return String(value)
-  }
-  return ''
-}
-
-const setDashboardVariableValues = (next: Record<string, string>) => {
-  for (const key of Object.keys(dashboardVariableValues)) {
-    if (!(key in next)) {
-      delete dashboardVariableValues[key]
-    }
-  }
-
-  for (const [key, value] of Object.entries(next)) {
-    dashboardVariableValues[key] = value
-  }
-}
-
-const areStringMapsEqual = (left: Record<string, string>, right: Record<string, string>) => {
-  const leftKeys = Object.keys(left)
-  const rightKeys = Object.keys(right)
-  if (leftKeys.length !== rightKeys.length) {
-    return false
-  }
-  for (const key of leftKeys) {
-    if (!(key in right)) {
-      return false
-    }
-    if (left[key] !== right[key]) {
-      return false
-    }
-  }
-  return true
-}
 
 const mapQueryListOptions = (
   rows: Record<string, unknown>[],
@@ -125,48 +85,6 @@ const mapQueryListOptions = (
   return options
 }
 
-const applyDashboardVariables = async () => {
-  const currentQuery: Record<string, string> = {}
-  const nextQuery: Record<string, string> = {}
-
-  for (const [key, value] of Object.entries(route.query)) {
-    if (Array.isArray(value)) {
-      if (typeof value[0] === 'string') {
-        currentQuery[key] = value[0]
-        nextQuery[key] = value[0]
-      }
-      continue
-    }
-    if (typeof value === 'string') {
-      currentQuery[key] = value
-      nextQuery[key] = value
-      continue
-    }
-    if (typeof value === 'number') {
-      currentQuery[key] = String(value)
-      nextQuery[key] = String(value)
-    }
-  }
-
-  for (const variable of dashboardVariables.value) {
-    const value = dashboardVariableValues[variable.definition.name] ?? ''
-    if (!value) {
-      delete nextQuery[variable.definition.name]
-      continue
-    }
-    nextQuery[variable.definition.name] = value
-  }
-
-  if (areStringMapsEqual(currentQuery, nextQuery)) {
-    return
-  }
-
-  await router.replace({
-    path: route.path,
-    query: nextQuery
-  })
-}
-
 const syncDashboardVariables = async () => {
   if (!process.client) {
     return
@@ -186,14 +104,12 @@ const syncDashboardVariables = async () => {
 
     if (!queryIds.length) {
       dashboardVariables.value = []
-      dashboardVariableOptions.value = {}
-      setDashboardVariableValues({})
+      resetToDefaults()
       return
     }
 
     const loadedQueries = await Promise.all(queryIds.map((queryId) => getQueryById(queryId)))
-    const controlsByName = new Map<string, DashboardVariableControl>()
-    const loadedOptions: Record<string, VariableOption[]> = {}
+    const controlsByName = new Map<string, QueryVariable>()
 
     for (const query of loadedQueries) {
       const configuredDefinitions = parseVariableDefinitions(query.parameters ?? {})
@@ -213,7 +129,7 @@ const syncDashboardVariables = async () => {
           continue
         }
 
-        const inputType =
+        const inputType: QueryVariable['inputType'] =
           definition.type === 'number'
             ? 'number'
             : definition.type === 'select' || definition.type === 'query_list'
@@ -221,13 +137,21 @@ const syncDashboardVariables = async () => {
               : 'text'
 
         controlsByName.set(definition.name, {
-          definition,
+          name: definition.name,
           label: definition.label?.trim() || toTitleLabel(definition.name),
-          inputType
+          inputType,
+          options: [],
+          defaultValue:
+            definition.defaultValue === undefined || definition.defaultValue === null
+              ? undefined
+              : String(definition.defaultValue)
         })
 
         if (definition.type === 'select') {
-          loadedOptions[definition.name] = definition.options ?? []
+          const control = controlsByName.get(definition.name)
+          if (control) {
+            control.options = definition.options ?? []
+          }
           continue
         }
 
@@ -240,55 +164,18 @@ const syncDashboardVariables = async () => {
         const valueColumn = definition.valueColumn || fallbackColumn || ''
         const labelColumn = definition.labelColumn || valueColumn
         if (!valueColumn) {
-          loadedOptions[definition.name] = []
           continue
         }
 
-        loadedOptions[definition.name] = mapQueryListOptions(
-          sourceResult.rows,
-          valueColumn,
-          labelColumn
-        )
-      }
-    }
-
-    const controls = Array.from(controlsByName.values())
-    dashboardVariables.value = controls
-    dashboardVariableOptions.value = loadedOptions
-
-    const nextValues: Record<string, string> = {}
-    let shouldApplyDefaults = false
-    for (const control of controls) {
-      const name = control.definition.name
-      const routeValue = getRouteQueryValue(name)
-      if (routeValue) {
-        nextValues[name] = routeValue
-        continue
-      }
-
-      if (control.definition.defaultValue !== undefined && control.definition.defaultValue !== null) {
-        nextValues[name] = String(control.definition.defaultValue)
-        if (!getRouteQueryValue(name)) {
-          shouldApplyDefaults = true
+        const control = controlsByName.get(definition.name)
+        if (control) {
+          control.options = mapQueryListOptions(sourceResult.rows, valueColumn, labelColumn)
         }
-        continue
       }
-
-      const options = loadedOptions[name] ?? []
-      if (control.definition.required && options.length) {
-        nextValues[name] = options[0].value
-        shouldApplyDefaults = true
-        continue
-      }
-
-      nextValues[name] = ''
     }
 
-    setDashboardVariableValues(nextValues)
-
-    if (shouldApplyDefaults) {
-      await applyDashboardVariables()
-    }
+    dashboardVariables.value = Array.from(controlsByName.values())
+    resetToDefaults()
   } catch (error) {
     variableError.value =
       error instanceof Error ? error.message : 'Failed to load dashboard variables'
@@ -297,10 +184,8 @@ const syncDashboardVariables = async () => {
   }
 }
 
-const onDashboardVariableInput = async (event: Event, variableName: string) => {
-  const target = event.target as HTMLInputElement | HTMLSelectElement | null
-  dashboardVariableValues[variableName] = target?.value ?? ''
-  await applyDashboardVariables()
+const onDashboardVariableInput = (payload: { name: string; value: string }) => {
+  updateDashboardVariableValue(payload.name, payload.value)
 }
 
 const { data: dashboard, pending, error, refresh } = await useAsyncData(
@@ -319,25 +204,51 @@ const variableError = ref('')
 const moduleActionId = ref<string | null>(null)
 const layoutDirty = ref(false)
 const savingLayout = ref(false)
+const layoutAutoSaveTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const selectedModuleId = ref<string | null>(null)
 const metadataModalOpen = ref(false)
 const metadataSaving = ref(false)
 const metadataError = ref('')
 const confirmDeleteOpen = ref(false)
 const pendingDeleteModuleId = ref<string | null>(null)
-const canvasWidthMode = ref<'fixed' | 'full'>('fixed')
+const canvasWidthMode = ref<CanvasWidthMode>('fixed')
+const canvasWidthSaving = ref(false)
 const overlapNoticeShown = ref(false)
 
-type DashboardVariableControl = {
-  definition: VariableDefinition
-  label: string
-  inputType: 'text' | 'number' | 'select'
-}
-
-const dashboardVariables = ref<DashboardVariableControl[]>([])
-const dashboardVariableOptions = ref<Record<string, VariableOption[]>>({})
-const dashboardVariableValues = reactive<Record<string, string>>({})
+const dashboardVariables = ref<QueryVariable[]>([])
 const dashboardVariablesLoading = ref(false)
+const routeQuery = computed<Record<string, string>>(() => {
+  const next: Record<string, string> = {}
+  for (const [key, value] of Object.entries(route.query)) {
+    if (Array.isArray(value)) {
+      if (typeof value[0] === 'string') {
+        next[key] = value[0]
+      }
+      continue
+    }
+    if (typeof value === 'string') {
+      next[key] = value
+      continue
+    }
+    if (typeof value === 'number') {
+      next[key] = String(value)
+    }
+  }
+  return next
+})
+const {
+  currentValues: dashboardVariableValues,
+  updateValue: updateDashboardVariableValue,
+  resetToDefaults
+} = useVariableSelectors({
+  mode: 'admin',
+  variables: dashboardVariables,
+  routeQuery
+})
+const adminDashboardVariableValues = useState<Record<string, string>>(
+  'admin-dashboard-variable-values',
+  () => ({})
+)
 
 const form = reactive({
   name: '',
@@ -363,8 +274,11 @@ const loadModules = async () => {
       overlapNoticeShown.value = true
       toast.info(
         'Detected overlapping modules',
-        'Cards were separated locally. Save layout to persist.'
+        'Cards were separated locally. Saving updated layout.'
       )
+    }
+    if (changed) {
+      queueLayoutAutosave()
     }
 
   } catch (error) {
@@ -577,6 +491,54 @@ const addHeaderModule = async () => addTextModule('header')
 
 const addSubheaderModule = async () => addTextModule('subheader')
 
+const getCurrentLayoutPayload = () =>
+  modules.value.map((module) => ({
+    id: module.id,
+    gridX: module.gridX,
+    gridY: module.gridY,
+    gridW: module.gridW,
+    gridH: module.gridH
+  }))
+
+const persistLayout = async (showToast: boolean) => {
+  if (!layoutDirty.value || savingLayout.value) {
+    return
+  }
+
+  savingLayout.value = true
+  moduleActionError.value = ''
+
+  try {
+    const persisted = await updateLayout(dashboardId.value, getCurrentLayoutPayload())
+    modules.value = persisted
+    layoutDirty.value = false
+
+    if (!selectedModuleId.value || !modules.value.some((module) => module.id === selectedModuleId.value)) {
+      selectedModuleId.value = modules.value[0]?.id ?? null
+    }
+
+    if (showToast) {
+      toast.success('Layout saved')
+    }
+  } catch (error) {
+    moduleActionError.value = error instanceof Error ? error.message : 'Failed to save layout'
+    toast.error('Failed to save layout', moduleActionError.value)
+  } finally {
+    savingLayout.value = false
+  }
+}
+
+const queueLayoutAutosave = () => {
+  if (layoutAutoSaveTimer.value) {
+    clearTimeout(layoutAutoSaveTimer.value)
+  }
+
+  layoutAutoSaveTimer.value = setTimeout(() => {
+    layoutAutoSaveTimer.value = null
+    persistLayout(false)
+  }, LAYOUT_AUTOSAVE_DEBOUNCE_MS)
+}
+
 const patchModuleLocal = (payload: { id: string; changes: Partial<ModuleConfig> }) => {
   const module = modules.value.find((item) => item.id === payload.id)
   if (!module) {
@@ -585,6 +547,7 @@ const patchModuleLocal = (payload: { id: string; changes: Partial<ModuleConfig> 
 
   Object.assign(module, payload.changes)
   layoutDirty.value = true
+  queueLayoutAutosave()
 }
 
 const saveModule = async (payload: ModuleConfig) => {
@@ -765,33 +728,12 @@ const editModuleQuery = async (moduleId: string) => {
 }
 
 const saveCurrentLayout = async () => {
-  if (!layoutDirty.value) {
-    return
+  if (layoutAutoSaveTimer.value) {
+    clearTimeout(layoutAutoSaveTimer.value)
+    layoutAutoSaveTimer.value = null
   }
 
-  savingLayout.value = true
-  moduleActionError.value = ''
-
-  try {
-    await updateLayout(
-      dashboardId.value,
-      modules.value.map((module) => ({
-        id: module.id,
-        gridX: module.gridX,
-        gridY: module.gridY,
-        gridW: module.gridW,
-        gridH: module.gridH
-      }))
-    )
-
-    await loadModules()
-    toast.success('Layout saved')
-  } catch (error) {
-    moduleActionError.value = error instanceof Error ? error.message : 'Failed to save layout'
-    toast.error('Failed to save layout', moduleActionError.value)
-  } finally {
-    savingLayout.value = false
-  }
+  await persistLayout(true)
 }
 
 const saveMetadata = async (payload: { name: string; slug: string; description: string }) => {
@@ -823,9 +765,42 @@ const goToNewQuery = async () => {
   await navigateTo('/admin/queries/new')
 }
 
-const toggleCanvasWidth = () => {
-  canvasWidthMode.value = canvasWidthMode.value === 'fixed' ? 'full' : 'fixed'
+const resolveCanvasWidthMode = (gridConfig?: DashboardGridConfig) =>
+  gridConfig?.canvasWidthMode === 'full' ? 'full' : 'fixed'
+
+const toggleCanvasWidth = async () => {
+  if (!dashboard.value || canvasWidthSaving.value) {
+    return
+  }
+
+  const previousMode = canvasWidthMode.value
+  const nextMode: CanvasWidthMode = previousMode === 'fixed' ? 'full' : 'fixed'
+  canvasWidthMode.value = nextMode
+  canvasWidthSaving.value = true
+
+  try {
+    const updated = await update(dashboardId.value, {
+      gridConfig: {
+        ...(dashboard.value.gridConfig ?? {}),
+        canvasWidthMode: nextMode
+      }
+    })
+
+    dashboard.value = updated
+  } catch (error) {
+    canvasWidthMode.value = previousMode
+    const message =
+      error instanceof Error ? error.message : 'Failed to update canvas width'
+    toast.error('Failed to update canvas width', message)
+  } finally {
+    canvasWidthSaving.value = false
+  }
 }
+
+setTopBarBreadcrumbs([
+  { label: 'Dashboards', to: '/admin' },
+  { label: 'Edit' }
+])
 
 watchEffect(() => {
   if (!dashboard.value) {
@@ -835,6 +810,7 @@ watchEffect(() => {
   form.name = dashboard.value.name
   form.slug = dashboard.value.slug
   form.description = dashboard.value.description ?? ''
+  canvasWidthMode.value = resolveCanvasWidthMode(dashboard.value.gridConfig)
 })
 
 watch(
@@ -844,8 +820,15 @@ watch(
       .join('|'),
   () => {
     syncDashboardVariables()
+  }
+)
+
+watch(
+  dashboardVariableValues,
+  (nextValues) => {
+    adminDashboardVariableValues.value = { ...nextValues }
   },
-  { immediate: true }
+  { deep: true, immediate: true }
 )
 
 onBeforeUnmount(() => {
@@ -853,24 +836,28 @@ onBeforeUnmount(() => {
     clearTimeout(timer)
   }
   autoSaveTimers.clear()
+  if (layoutAutoSaveTimer.value) {
+    clearTimeout(layoutAutoSaveTimer.value)
+    layoutAutoSaveTimer.value = null
+  }
+  adminDashboardVariableValues.value = {}
 })
 
 await loadModules()
 watch(dashboardId, () => {
+  if (layoutAutoSaveTimer.value) {
+    clearTimeout(layoutAutoSaveTimer.value)
+    layoutAutoSaveTimer.value = null
+  }
+  layoutDirty.value = false
+  adminDashboardVariableValues.value = {}
   loadModules()
 })
 </script>
 
 <template>
   <section class="mx-auto px-6 py-10" :class="canvasWidthMode === 'fixed' ? 'max-w-[1240px]' : 'max-w-none'">
-    <Breadcrumbs
-      :items="[
-        { label: 'Dashboards', to: '/admin' },
-        { label: 'Edit' }
-      ]"
-    />
-
-    <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <div class="flex items-center gap-2">
           <h1 class="text-2xl font-semibold text-gray-900">Edit Dashboard</h1>
@@ -888,10 +875,12 @@ watch(dashboardId, () => {
       </div>
 
       <NuxtLink
-        class="text-sm text-gray-700 hover:text-gray-900"
+        class="inline-flex items-center rounded border border-gray-200 p-2 text-gray-700 hover:border-gray-300"
         :to="`/admin/dashboards/${dashboardId}/share`"
+        title="Share links"
+        aria-label="Share links"
       >
-        Manage share links →
+        <Link2 class="h-4 w-4" />
       </NuxtLink>
     </div>
 
@@ -927,43 +916,14 @@ watch(dashboardId, () => {
         "
       >
         <div class="space-y-2">
-          <div
-            v-if="dashboardVariables.length || dashboardVariablesLoading"
-            class="rounded border border-gray-200 bg-white px-2 py-1 shadow-sm"
-          >
-            <p v-if="dashboardVariablesLoading" class="text-xs text-gray-500">Loading variable options...</p>
-            <div v-else-if="dashboardVariables.length" class="flex flex-wrap items-center gap-2">
-              <label
-                v-for="variable in dashboardVariables"
-                :key="`inline-variable-${variable.definition.name}`"
-                class="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
-              >
-                <span class="font-medium">{{ variable.label }}:</span>
-                <select
-                  v-if="variable.inputType === 'select'"
-                  :value="dashboardVariableValues[variable.definition.name] ?? ''"
-                  class="h-7 min-w-36 rounded border border-gray-300 bg-white px-2 text-xs"
-                  @change="onDashboardVariableInput($event, variable.definition.name)"
-                >
-                  <option value="">All</option>
-                  <option
-                    v-for="option in dashboardVariableOptions[variable.definition.name] ?? []"
-                    :key="`${variable.definition.name}:${option.value}`"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </option>
-                </select>
-                <input
-                  v-else
-                  :value="dashboardVariableValues[variable.definition.name] ?? ''"
-                  :type="variable.inputType"
-                  class="h-7 min-w-36 rounded border border-gray-300 bg-white px-2 text-xs"
-                  @change="onDashboardVariableInput($event, variable.definition.name)"
-                />
-              </label>
-            </div>
-          </div>
+          <ClientOnly>
+            <DashboardFilterBar
+              mode="admin"
+              :variables="dashboardVariables"
+              :values="dashboardVariableValues"
+              @change="onDashboardVariableInput"
+            />
+          </ClientOnly>
 
           <DashboardEditor
             :modules="modules"

@@ -10,7 +10,6 @@ const props = defineProps<{
 }>()
 
 const rows = computed(() => props.moduleData?.rows ?? [])
-const columns = computed(() => props.moduleData?.columns ?? [])
 
 const toNumber = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -125,15 +124,12 @@ const chartOption = computed<EChartsOption>(() => ({
 </script>
 
 <template>
-  <div>
+  <div class="h-full">
     <p v-if="!hasData" class="text-sm text-gray-500">
       No pie chart data available yet.
     </p>
-    <template v-else>
-      <EChart :option="chartOption" height="280px" />
-      <p class="mt-3 text-xs text-gray-500">
-        Using {{ categoryField || 'category' }} / {{ valueField || 'value' }} from {{ columns.length }} columns.
-      </p>
-    </template>
+    <div v-else class="h-full min-h-[220px]">
+      <EChart :option="chartOption" height="100%" />
+    </div>
   </div>
 </template>

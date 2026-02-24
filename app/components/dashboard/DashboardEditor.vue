@@ -2,6 +2,13 @@
 import { h, render } from 'vue'
 import type { GridStack, GridStackNode, GridStackWidget, RenderFcn } from 'gridstack'
 import {
+  DASHBOARD_GRID_COLUMNS,
+  DASHBOARD_GRID_GAP,
+  DASHBOARD_GRID_MIN_HEIGHT,
+  DASHBOARD_GRID_MIN_ROWS,
+  DASHBOARD_GRID_ROW_HEIGHT
+} from '~/constants/dashboard-grid'
+import {
   getModuleMinGridHeight,
   getModuleMinGridWidth,
   type ModuleConfig
@@ -16,7 +23,7 @@ const props = withDefaults(
   }>(),
   {
     selectedModuleId: null,
-    rowHeight: 96
+    rowHeight: DASHBOARD_GRID_ROW_HEIGHT
   }
 )
 
@@ -35,10 +42,22 @@ let grid: GridStack | null = null
 let gridFactory: typeof import('gridstack').GridStack | null = null
 let previousRenderCB: RenderFcn | undefined
 let syncingFromProps = false
+let resizeEventFrame: number | null = null
 const widgetMounts = new Map<string, HTMLElement>()
 
-const dotSpacingX = computed(() => 'calc((100% - 88px) / 12 + 8px)')
-const dotSpacingY = computed(() => `${props.rowHeight + 8}px`)
+const dotSpacingX = computed(
+  () =>
+    `calc((100% - ${(DASHBOARD_GRID_COLUMNS - 1) * DASHBOARD_GRID_GAP}px) / ${DASHBOARD_GRID_COLUMNS} + ${DASHBOARD_GRID_GAP}px)`
+)
+const dotSpacingY = computed(() => `${props.rowHeight + DASHBOARD_GRID_GAP}px`)
+const gridBackgroundImage = computed(
+  () =>
+    'linear-gradient(to right, rgba(156, 163, 175, 0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(156, 163, 175, 0.4) 1px, transparent 1px)'
+)
+const gridBackgroundSize = computed(() => `${dotSpacingX.value} ${dotSpacingY.value}`)
+const gridBackgroundPosition = computed(
+  () => `${Math.floor(DASHBOARD_GRID_GAP / 2)}px ${Math.floor(DASHBOARD_GRID_GAP / 2)}px`
+)
 const moduleLayoutKey = computed(() =>
   props.modules
     .map(
@@ -48,6 +67,22 @@ const moduleLayoutKey = computed(() =>
     .join('|')
 )
 const moduleById = computed(() => new Map(props.modules.map((module) => [module.id, module])))
+
+const broadcastGridResize = () => {
+  if (!process.client || resizeEventFrame !== null) {
+    return
+  }
+
+  resizeEventFrame = window.requestAnimationFrame(() => {
+    resizeEventFrame = null
+    window.dispatchEvent(new CustomEvent('dashboard-grid-resize'))
+    window.dispatchEvent(new Event('resize'))
+  })
+}
+
+const onGridInteractionStop = () => {
+  broadcastGridResize()
+}
 
 const buildWidget = (module: ModuleConfig): GridStackWidget => ({
   id: module.id,
@@ -133,6 +168,7 @@ const syncGridFromProps = () => {
   }
 
   renderMountedWidgets()
+  broadcastGridResize()
 }
 
 const onGridChange = (_event: Event, items: GridStackNode[]) => {
@@ -169,6 +205,10 @@ const onGridChange = (_event: Event, items: GridStackNode[]) => {
     }
 
     emit('patch', { id, changes: next })
+  }
+
+  if (items.length > 0) {
+    broadcastGridResize()
   }
 }
 
@@ -227,24 +267,26 @@ const initGrid = async () => {
 
     grid = gridFactory.init(
       {
-        column: 12,
+        column: DASHBOARD_GRID_COLUMNS,
         float: true,
-        margin: 8,
+        margin: DASHBOARD_GRID_GAP,
         cellHeight: props.rowHeight,
-        minRow: 1,
+        minRow: DASHBOARD_GRID_MIN_ROWS,
         alwaysShowResizeHandle: true,
         draggable: {
           handle: '.module-drag-handle',
           cancel: 'input,textarea,button,select,[contenteditable]'
         },
         resizable: {
-          handles: 'n,ne,e,se,s,sw,w,nw'
+          handles: 'se'
         }
       },
       gridEl.value
     )
 
     grid.on('change', onGridChange)
+    grid.on('dragstop', onGridInteractionStop)
+    grid.on('resizestop', onGridInteractionStop)
     grid.on('removed', onGridRemoved)
     syncGridFromProps()
   } catch (error) {
@@ -269,6 +311,8 @@ watch(
 onBeforeUnmount(() => {
   if (grid) {
     grid.off('change', onGridChange)
+    grid.off('dragstop', onGridInteractionStop)
+    grid.off('resizestop', onGridInteractionStop)
     grid.off('removed', onGridRemoved)
     grid.destroy(false)
     grid = null
@@ -279,12 +323,18 @@ onBeforeUnmount(() => {
   if (gridFactory) {
     gridFactory.renderCB = previousRenderCB
   }
+
+  if (process.client && resizeEventFrame !== null) {
+    window.cancelAnimationFrame(resizeEventFrame)
+    resizeEventFrame = null
+  }
 })
 
 watch(
   () => props.rowHeight,
   (height) => {
     grid?.cellHeight(height)
+    broadcastGridResize()
   }
 )
 
@@ -332,13 +382,15 @@ watch(
         <p class="text-xs text-gray-500">{{ modules.length }} modules</p>
       </div>
 
-      <div class="max-h-[78vh] overflow-y-auto rounded border border-gray-200 bg-gray-50 p-3">
+      <div class="rounded border border-gray-200 bg-gray-50 p-3">
         <div
           ref="gridEl"
-          class="grid-stack min-h-[640px]"
+          class="grid-stack"
           :style="{
-            backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
-            backgroundSize: `${dotSpacingX} ${dotSpacingY}`
+            minHeight: `${DASHBOARD_GRID_MIN_HEIGHT}px`,
+            backgroundImage: gridBackgroundImage,
+            backgroundSize: gridBackgroundSize,
+            backgroundPosition: gridBackgroundPosition
           }"
         ></div>
       </div>
@@ -354,16 +406,22 @@ watch(
 
 <style scoped>
 :deep(.grid-stack-item .ui-resizable-handle) {
-  width: 12px;
-  height: 12px;
-  border-radius: 9999px;
-  border: 1px solid #9ca3af;
-  background: #ffffff;
-  opacity: 0.9;
+  border: 0;
+  background: transparent;
 }
 
-:deep(.grid-stack-item .ui-resizable-handle::before),
-:deep(.grid-stack-item .ui-resizable-handle::after) {
-  display: none;
+:deep(.grid-stack-item .ui-resizable-se) {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid #9ca3af;
+  background: #ffffff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+:deep(.grid-stack-item:hover .ui-resizable-se),
+:deep(.grid-stack-item.ui-resizable-resizing .ui-resizable-se) {
+  opacity: 0.95;
 }
 </style>
