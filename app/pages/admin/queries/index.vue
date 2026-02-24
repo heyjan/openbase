@@ -55,7 +55,7 @@ onMounted(loadQueries)
       <template #actions>
         <NuxtLink
           to="/admin/queries/new"
-          class="inline-flex items-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+          class="inline-flex items-center gap-2 rounded bg-brand-primary px-3 py-2 text-sm font-medium text-white"
         >
           <Plus class="h-4 w-4" />
           New query

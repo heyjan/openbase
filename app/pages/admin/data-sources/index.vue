@@ -191,7 +191,7 @@ onMounted(loadSources)
 
       <div class="md:col-span-2">
         <button
-          class="inline-flex items-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+          class="inline-flex items-center gap-2 rounded bg-brand-primary px-3 py-2 text-sm font-medium text-white"
           :disabled="creating"
           type="submit"
         >

@@ -136,7 +136,7 @@ const submit = () => {
 
       <button
         type="submit"
-        class="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white"
+        class="rounded bg-brand-primary px-3 py-1.5 text-sm font-medium text-white"
       >
         Submit
       </button>

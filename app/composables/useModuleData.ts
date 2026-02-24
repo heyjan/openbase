@@ -41,6 +41,16 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
   const token = computed(() =>
     typeof route.query.token === 'string' ? route.query.token : ''
   )
+  const adminDashboardVariableValues = useState<Record<string, string>>(
+    'admin-dashboard-variable-values',
+    () => ({})
+  )
+  const adminDashboardVariableValuesKey = computed(() =>
+    Object.entries(adminDashboardVariableValues.value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => `${key}:${value}`)
+      .join('|')
+  )
   const savedQueryId = computed(() => getSavedQueryId(moduleRef.value))
   const isPublicDashboardRoute = computed(() =>
     route.path.startsWith('/d/') && !!publicSlug.value
@@ -79,17 +89,27 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
 
   const queryParams = computed<Record<string, unknown>>(() => {
     const params: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(route.query)) {
-      if (value === undefined || value === null) {
-        continue
-      }
-      params[key] = value
-    }
+
     if (isPublicDashboardRoute.value) {
+      for (const [key, value] of Object.entries(route.query)) {
+        if (value === undefined || value === null) {
+          continue
+        }
+        params[key] = value
+      }
       params.token = token.value
-    } else {
-      delete params.token
+      return params
     }
+
+    if (isAdminDashboardEditRoute.value) {
+      for (const [key, value] of Object.entries(adminDashboardVariableValues.value)) {
+        if (!value) {
+          continue
+        }
+        params[key] = value
+      }
+    }
+
     return params
   })
 
@@ -144,6 +164,7 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
       () => publicSlug.value,
       () => dashboardId.value,
       () => token.value,
+      () => adminDashboardVariableValuesKey.value,
       () => route.path,
       () => route.fullPath
     ],

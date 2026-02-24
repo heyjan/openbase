@@ -13,6 +13,31 @@ const parseTags = (value: unknown) => {
   return value.map((tag) => tag.trim()).filter(Boolean)
 }
 
+const parseGridConfig = (value: unknown) => {
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (!value || typeof value !== 'object') {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid grid config' })
+  }
+
+  const record = value as Record<string, unknown>
+  const gridConfig: NonNullable<DashboardInput['gridConfig']> = {}
+
+  if (record.canvasWidthMode !== undefined) {
+    if (record.canvasWidthMode !== 'fixed' && record.canvasWidthMode !== 'full') {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'canvasWidthMode must be fixed or full'
+      })
+    }
+    gridConfig.canvasWidthMode = record.canvasWidthMode
+  }
+
+  return gridConfig
+}
+
 export const parseDashboardInput = (value: unknown): DashboardInput => {
   if (!value || typeof value !== 'object') {
     throw createError({ statusCode: 400, statusMessage: 'Invalid payload' })
@@ -40,7 +65,8 @@ export const parseDashboardInput = (value: unknown): DashboardInput => {
     name,
     slug,
     description,
-    tags: parseTags(record.tags)
+    tags: parseTags(record.tags),
+    gridConfig: parseGridConfig(record.gridConfig)
   }
 }
 
@@ -82,6 +108,11 @@ export const parseDashboardUpdate = (value: unknown): DashboardUpdate => {
   const tags = parseTags(record.tags)
   if (tags !== undefined) {
     updates.tags = tags
+  }
+
+  const gridConfig = parseGridConfig(record.gridConfig)
+  if (gridConfig !== undefined) {
+    updates.gridConfig = gridConfig
   }
 
   return updates

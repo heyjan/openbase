@@ -75,7 +75,7 @@ const submit = async () => {
       <p v-if="formError" class="text-sm text-red-600">{{ formError }}</p>
 
       <button
-        class="inline-flex items-center rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+        class="inline-flex items-center rounded bg-brand-primary px-3 py-2 text-sm font-medium text-white"
         :disabled="submitting"
         type="submit"
       >

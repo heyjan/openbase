@@ -342,7 +342,7 @@ onMounted(loadTemplates)
               class="rounded px-3 py-1 text-xs font-semibold"
               :class="
                 textConfigDraft.fontSize === size
-                  ? 'bg-gray-900 text-white'
+                  ? 'bg-brand-primary text-white'
                   : 'text-gray-700 hover:bg-gray-100'
               "
               @click="textConfigDraft.fontSize = size"
@@ -441,7 +441,7 @@ onMounted(loadTemplates)
 
       <div class="flex flex-wrap items-center gap-2">
         <button
-          class="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          class="rounded bg-brand-primary px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           :disabled="saving"
           @click="save"
         >

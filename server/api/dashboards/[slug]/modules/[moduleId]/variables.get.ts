@@ -1,5 +1,5 @@
 import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3'
-import { getDashboardBySlug, listModules } from '~~/server/utils/dashboard-store'
+import { listModules } from '~~/server/utils/dashboard-store'
 import { getSavedQueryById } from '~~/server/utils/query-store'
 import { runSavedQueryById } from '~~/server/utils/query-runner'
 import {
@@ -7,10 +7,13 @@ import {
   parseVariableDefinitions,
   type VariableOption
 } from '~~/shared/utils/query-variables'
+import { requireSharedDashboardAccess } from '~~/server/utils/share-access'
 
 type PublicVariableControl = {
   name: string
   label: string
+  inputType: 'text' | 'number' | 'select'
+  defaultValue?: string
   options: VariableOption[]
 }
 
@@ -63,10 +66,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Missing share token' })
   }
 
-  const dashboard = await getDashboardBySlug(slug)
-  if (dashboard.shareToken !== token) {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid share token' })
-  }
+  const { dashboard } = await requireSharedDashboardAccess(slug, token)
 
   const modules = await listModules(dashboard.id)
   const module = modules.find((item) => item.id === moduleId)
@@ -93,7 +93,26 @@ export default defineEventHandler(async (event) => {
       variables.push({
         name: definition.name,
         label: definition.label?.trim() || toTitleLabel(definition.name),
+        inputType: 'select',
+        defaultValue:
+          definition.defaultValue === undefined || definition.defaultValue === null
+            ? undefined
+            : String(definition.defaultValue),
         options: definition.options ?? []
+      })
+      continue
+    }
+
+    if (definition.type === 'number' || definition.type === 'text' || !definition.type) {
+      variables.push({
+        name: definition.name,
+        label: definition.label?.trim() || toTitleLabel(definition.name),
+        inputType: definition.type === 'number' ? 'number' : 'text',
+        defaultValue:
+          definition.defaultValue === undefined || definition.defaultValue === null
+            ? undefined
+            : String(definition.defaultValue),
+        options: []
       })
       continue
     }
@@ -118,12 +137,22 @@ export default defineEventHandler(async (event) => {
       variables.push({
         name: definition.name,
         label: definition.label?.trim() || toTitleLabel(definition.name),
+        inputType: 'select',
+        defaultValue:
+          definition.defaultValue === undefined || definition.defaultValue === null
+            ? undefined
+            : String(definition.defaultValue),
         options: mapQueryListOptions(sourceResult.rows, valueColumn, labelColumn)
       })
     } catch {
       variables.push({
         name: definition.name,
         label: definition.label?.trim() || toTitleLabel(definition.name),
+        inputType: 'select',
+        defaultValue:
+          definition.defaultValue === undefined || definition.defaultValue === null
+            ? undefined
+            : String(definition.defaultValue),
         options: []
       })
     }

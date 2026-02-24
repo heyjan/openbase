@@ -165,7 +165,7 @@ const submit = async () => {
       </div>
 
       <button
-        class="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        class="rounded bg-brand-primary px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         :disabled="submitting"
         type="submit"
       >

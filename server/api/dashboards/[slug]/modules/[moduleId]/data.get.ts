@@ -1,6 +1,7 @@
 import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3'
-import { getDashboardBySlug, listModules } from '~~/server/utils/dashboard-store'
+import { listModules } from '~~/server/utils/dashboard-store'
 import { runSavedQueryById } from '~~/server/utils/query-runner'
+import { requireSharedDashboardAccess } from '~~/server/utils/share-access'
 
 const parseFilters = (query: Record<string, unknown>) => {
   const filters: Record<string, unknown> = {}
@@ -63,10 +64,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Missing share token' })
   }
 
-  const dashboard = await getDashboardBySlug(slug)
-  if (dashboard.shareToken !== token) {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid share token' })
-  }
+  const { dashboard } = await requireSharedDashboardAccess(slug, token)
 
   const modules = await listModules(dashboard.id)
   const module = modules.find((item) => item.id === moduleId)

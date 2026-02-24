@@ -1,20 +1,28 @@
 <script setup lang="ts">
 import { ArrowLeft } from 'lucide-vue-next'
-import Breadcrumbs from '~/components/ui/Breadcrumbs.vue'
 import type { BreadcrumbItem } from '~/components/ui/Breadcrumbs.vue'
 
-defineProps<{
+const props = defineProps<{
   title: string
   description?: string
   breadcrumbs?: BreadcrumbItem[]
   backTo?: string
   backLabel?: string
 }>()
+
+const { setTopBarBreadcrumbs } = useTopBarBreadcrumbs()
+
+watch(
+  () => props.breadcrumbs,
+  (value) => {
+    setTopBarBreadcrumbs(value ?? [])
+  },
+  { immediate: true, deep: true }
+)
 </script>
 
 <template>
   <header class="space-y-4">
-    <Breadcrumbs v-if="breadcrumbs" :items="breadcrumbs" />
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="space-y-1">
         <div class="flex flex-wrap items-center gap-3">

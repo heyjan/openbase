@@ -1,4 +1,5 @@
 import type { Dashboard, DashboardInput, DashboardUpdate } from '~/types/dashboard'
+import type { ModuleConfig } from '~/types/module'
 
 export const useDashboard = () => {
   const apiFetch = process.server ? useRequestFetch() : $fetch
@@ -26,13 +27,8 @@ export const useDashboard = () => {
       method: 'DELETE'
     })
 
-  const rotateToken = (id: string) =>
-    apiFetch<Dashboard>(`/api/admin/dashboards/${id}/rotate-token`, {
-      method: 'POST'
-    })
-
   const getPublic = (slug: string, token: string) =>
-    apiFetch<{ dashboard: Dashboard; modules: unknown[] }>(
+    apiFetch<{ dashboard: Dashboard; modules: ModuleConfig[] }>(
       `/api/dashboards/${slug}`,
       {
         query: { token }
@@ -45,7 +41,6 @@ export const useDashboard = () => {
     create,
     update,
     remove,
-    rotateToken,
     getPublic
   }
 }

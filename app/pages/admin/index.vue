@@ -5,8 +5,7 @@ import {
   Link2,
   Plus,
   RefreshCw,
-  Search,
-  Shield
+  Search
 } from 'lucide-vue-next'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
@@ -15,7 +14,7 @@ import type { Dashboard } from '~/types/dashboard'
 const { list, remove } = useDashboard()
 const toast = useAppToast()
 
-const { data: dashboards, pending, error, refresh } = useAsyncData(
+const { data: dashboards, pending, error, refresh, status } = useAsyncData(
   'admin-dashboards',
   list,
   { server: false }
@@ -73,13 +72,6 @@ const deleteDashboard = async () => {
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
-          to="/admin/admins"
-        >
-          <Shield class="h-4 w-4" />
-          Manage admins
-        </NuxtLink>
-        <NuxtLink
-          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
           to="/admin/queries"
         >
           <Search class="h-4 w-4" />
@@ -101,13 +93,13 @@ const deleteDashboard = async () => {
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
-          to="/admin/share-links"
+          to="/admin/settings#shared-links"
         >
           <Link2 class="h-4 w-4" />
           Share links
         </NuxtLink>
         <NuxtLink
-          class="inline-flex items-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+          class="inline-flex items-center gap-2 rounded bg-brand-primary px-3 py-2 text-sm font-medium text-white"
           to="/admin/dashboards/new"
         >
           <Plus class="h-4 w-4" />
@@ -117,7 +109,9 @@ const deleteDashboard = async () => {
     </PageHeader>
 
     <div class="mt-6 space-y-4">
-      <p v-if="pending" class="text-sm text-gray-500">Loading dashboards…</p>
+      <p v-if="status === 'idle' || pending" class="text-sm text-gray-500">
+        Loading dashboards…
+      </p>
       <p v-else-if="error" class="text-sm text-red-600">
         {{ error?.message || 'Failed to load dashboards.' }}
       </p>
@@ -149,10 +143,12 @@ const deleteDashboard = async () => {
                 Edit
               </NuxtLink>
               <NuxtLink
-                class="rounded border border-gray-200 px-3 py-1.5 text-gray-700 hover:border-gray-300"
+                class="inline-flex items-center rounded border border-gray-200 p-2 text-gray-700 hover:border-gray-300"
                 :to="`/admin/dashboards/${dashboard.id}/share`"
+                title="Share links"
+                aria-label="Share links"
               >
-                Share
+                <Link2 class="h-4 w-4" />
               </NuxtLink>
               <button
                 class="rounded border border-red-200 px-3 py-1.5 text-red-700 hover:border-red-300"

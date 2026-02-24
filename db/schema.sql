@@ -27,18 +27,40 @@ CREATE TABLE IF NOT EXISTS admin_magic_links (
   used_at    TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  key         VARCHAR(100) UNIQUE NOT NULL,
+  value       JSONB NOT NULL,
+  updated_at  TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS dashboards (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name          VARCHAR(255) NOT NULL,
   slug          VARCHAR(255) UNIQUE NOT NULL,
   description   TEXT,
   tags          TEXT[],
-  share_token   VARCHAR(64) UNIQUE NOT NULL,
+  share_token   VARCHAR(64) UNIQUE,
   is_active     BOOLEAN DEFAULT true,
   grid_config   JSONB,
   created_at    TIMESTAMPTZ DEFAULT now(),
   updated_at    TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS share_links (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  dashboard_id   UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+  token          VARCHAR(64) UNIQUE NOT NULL,
+  label          VARCHAR(255),
+  is_active      BOOLEAN NOT NULL DEFAULT true,
+  view_count     INTEGER NOT NULL DEFAULT 0,
+  last_viewed_at TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_share_links_dashboard_id ON share_links(dashboard_id);
+CREATE INDEX IF NOT EXISTS idx_share_links_active_dashboard ON share_links(is_active, dashboard_id);
 
 CREATE TABLE IF NOT EXISTS modules (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -145,11 +167,63 @@ CREATE TABLE IF NOT EXISTS annotations (
 CREATE TABLE IF NOT EXISTS access_log (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dashboard_id UUID REFERENCES dashboards(id) ON DELETE CASCADE,
+  share_link_id UUID REFERENCES share_links(id) ON DELETE SET NULL,
   share_token  VARCHAR(64),
   accessed_at  TIMESTAMPTZ DEFAULT now(),
   ip_address   INET,
   user_agent   TEXT
 );
+
+ALTER TABLE dashboards
+ALTER COLUMN share_token DROP NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'access_log'
+      AND column_name = 'share_link_id'
+  ) THEN
+    ALTER TABLE access_log
+    ADD COLUMN share_link_id UUID REFERENCES share_links(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+INSERT INTO share_links (dashboard_id, token, is_active, created_at, updated_at)
+SELECT d.id, d.share_token, true, d.created_at, d.updated_at
+FROM dashboards d
+WHERE d.share_token IS NOT NULL
+ON CONFLICT (token) DO NOTHING;
+
+UPDATE access_log a
+SET share_link_id = sl.id
+FROM share_links sl
+WHERE a.share_link_id IS NULL
+  AND a.dashboard_id = sl.dashboard_id
+  AND a.share_token = sl.token;
+
+WITH share_stats AS (
+  SELECT
+    sl.id AS share_link_id,
+    COUNT(a.id)::INTEGER AS view_count,
+    MAX(a.accessed_at) AS last_viewed_at
+  FROM share_links sl
+  LEFT JOIN access_log a
+    ON a.dashboard_id = sl.dashboard_id
+   AND (
+     a.share_link_id = sl.id
+     OR (a.share_link_id IS NULL AND a.share_token = sl.token)
+   )
+  GROUP BY sl.id
+)
+UPDATE share_links sl
+SET
+  view_count = share_stats.view_count,
+  last_viewed_at = share_stats.last_viewed_at
+FROM share_stats
+WHERE sl.id = share_stats.share_link_id;
 
 CREATE TABLE IF NOT EXISTS amazon_forecast_snapshots (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

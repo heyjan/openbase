@@ -10,6 +10,11 @@
 
 Use feature-local organization where possible (for example, dashboard logic stays under `app/components/dashboard` and matching routes under `server/api/admin/dashboards`).
 
+## UI Notice
+- Breadcrumb navigation is rendered in the global top bar (left side), not inside page content.
+- Set breadcrumbs via `PageHeader` `breadcrumbs` prop (or `useTopBarBreadcrumbs()` for pages not using `PageHeader`).
+- Do not add explanatory/helper copy in frontend forms, modals, or empty states unless explicitly requested in the task/spec. Default to concise labels and actions only.
+
 ## Build, Test, and Development Commands
 - `npm install`: install dependencies.
 - `npm run dev`: run Nuxt dev server (default `http://localhost:3000`).

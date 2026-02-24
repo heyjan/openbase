@@ -55,7 +55,7 @@ const submit = async () => {
       </label>
 
       <button
-        class="inline-flex items-center rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+        class="inline-flex items-center rounded bg-brand-primary px-3 py-2 text-sm font-medium text-white"
         type="submit"
         :disabled="submitting"
       >

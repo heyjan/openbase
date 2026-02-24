@@ -62,7 +62,7 @@ const confirm = () => {
             :class="
               confirmTone === 'danger'
                 ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-gray-900 hover:bg-black'
+                : 'bg-brand-primary hover:bg-brand-primary/90'
             "
             :disabled="pending"
             @click="confirm"

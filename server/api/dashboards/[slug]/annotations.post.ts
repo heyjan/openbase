@@ -6,7 +6,7 @@ import {
   readBody
 } from 'h3'
 import { query } from '~~/server/utils/db'
-import { getDashboardBySlug } from '~~/server/utils/dashboard-store'
+import { requireSharedDashboardAccess } from '~~/server/utils/share-access'
 
 type AnnotationRow = {
   id: string
@@ -61,10 +61,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Missing share token' })
   }
 
-  const dashboard = await getDashboardBySlug(slug)
-  if (dashboard.shareToken !== token) {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid share token' })
-  }
+  const { dashboard } = await requireSharedDashboardAccess(slug, token)
 
   const body = (await readBody(event)) as Body
   const note = typeof body.note === 'string' ? body.note.trim() : ''

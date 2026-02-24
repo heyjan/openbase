@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto'
 import { createError } from 'h3'
 import { getDb, query } from './db'
 import type { Dashboard, DashboardInput, DashboardUpdate } from '~/types/dashboard'
@@ -17,7 +16,8 @@ type DashboardRow = {
   slug: string
   description: string | null
   tags: string[] | null
-  share_token: string
+  grid_config: Record<string, unknown> | null
+  share_token: string | null
   created_at: string
   updated_at: string
 }
@@ -36,7 +36,20 @@ type ModuleRow = {
   grid_h: number
 }
 
-const generateToken = () => randomUUID().replace(/-/g, '')
+const parseDashboardGridConfig = (value: unknown): Dashboard['gridConfig'] | undefined => {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+
+  const record = value as Record<string, unknown>
+  const gridConfig: NonNullable<Dashboard['gridConfig']> = {}
+
+  if (record.canvasWidthMode === 'fixed' || record.canvasWidthMode === 'full') {
+    gridConfig.canvasWidthMode = record.canvasWidthMode
+  }
+
+  return Object.keys(gridConfig).length ? gridConfig : undefined
+}
 
 const mapDashboard = (row: DashboardRow): Dashboard => ({
   id: row.id,
@@ -44,7 +57,8 @@ const mapDashboard = (row: DashboardRow): Dashboard => ({
   slug: row.slug,
   description: row.description ?? undefined,
   tags: row.tags ?? [],
-  shareToken: row.share_token,
+  gridConfig: parseDashboardGridConfig(row.grid_config),
+  shareToken: row.share_token ?? undefined,
   createdAt: row.created_at,
   updatedAt: row.updated_at
 })
@@ -84,7 +98,7 @@ const toConflictError = (error: unknown) => {
 
 export const listDashboards = async (): Promise<Dashboard[]> => {
   const result = await query<DashboardRow>(
-    `SELECT id, name, slug, description, tags, share_token, created_at, updated_at
+    `SELECT id, name, slug, description, tags, grid_config, share_token, created_at, updated_at
      FROM dashboards
      ORDER BY updated_at DESC`
   )
@@ -93,7 +107,7 @@ export const listDashboards = async (): Promise<Dashboard[]> => {
 
 export const getDashboardById = async (id: string): Promise<Dashboard> => {
   const result = await query<DashboardRow>(
-    `SELECT id, name, slug, description, tags, share_token, created_at, updated_at
+    `SELECT id, name, slug, description, tags, grid_config, share_token, created_at, updated_at
      FROM dashboards
      WHERE id = $1`,
     [id]
@@ -107,7 +121,7 @@ export const getDashboardById = async (id: string): Promise<Dashboard> => {
 
 export const getDashboardBySlug = async (slug: string): Promise<Dashboard> => {
   const result = await query<DashboardRow>(
-    `SELECT id, name, slug, description, tags, share_token, created_at, updated_at
+    `SELECT id, name, slug, description, tags, grid_config, share_token, created_at, updated_at
      FROM dashboards
      WHERE slug = $1 AND is_active = true`,
     [slug]
@@ -125,10 +139,16 @@ export const createDashboard = async (input: DashboardInput): Promise<Dashboard>
   try {
     await client.query('BEGIN')
     const created = await client.query<DashboardRow>(
-      `INSERT INTO dashboards (name, slug, description, tags, share_token)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, name, slug, description, tags, share_token, created_at, updated_at`,
-      [input.name, input.slug, input.description ?? null, input.tags ?? [], generateToken()]
+      `INSERT INTO dashboards (name, slug, description, tags, grid_config)
+       VALUES ($1, $2, $3, $4, $5::jsonb)
+       RETURNING id, name, slug, description, tags, grid_config, share_token, created_at, updated_at`,
+      [
+        input.name,
+        input.slug,
+        input.description ?? null,
+        input.tags ?? [],
+        JSON.stringify(input.gridConfig ?? { canvasWidthMode: 'fixed' })
+      ]
     )
     const dashboard = created.rows[0]
 
@@ -168,6 +188,10 @@ export const updateDashboard = (
     fields.push(`tags = $${index++}`)
     values.push(updates.tags)
   }
+  if (updates.gridConfig !== undefined) {
+    fields.push(`grid_config = $${index++}::jsonb`)
+    values.push(JSON.stringify(updates.gridConfig))
+  }
 
   if (!fields.length) {
     return getDashboardById(id)
@@ -178,7 +202,7 @@ export const updateDashboard = (
     `UPDATE dashboards
      SET ${fields.join(', ')}, updated_at = now()
      WHERE id = $${index}
-     RETURNING id, name, slug, description, tags, share_token, created_at, updated_at`,
+     RETURNING id, name, slug, description, tags, grid_config, share_token, created_at, updated_at`,
     values
   )
     .then((result) => {
@@ -237,21 +261,6 @@ export const deleteDashboard = async (id: string) => {
   } finally {
     client.release()
   }
-}
-
-export const rotateDashboardToken = async (id: string): Promise<Dashboard> => {
-  const result = await query<DashboardRow>(
-    `UPDATE dashboards
-     SET share_token = $1, updated_at = now()
-     WHERE id = $2
-     RETURNING id, name, slug, description, tags, share_token, created_at, updated_at`,
-    [generateToken(), id]
-  )
-  const row = result.rows[0]
-  if (!row) {
-    throw createError({ statusCode: 404, statusMessage: 'Dashboard not found' })
-  }
-  return mapDashboard(row)
 }
 
 export const listModules = async (dashboardId: string): Promise<ModuleConfig[]> => {
