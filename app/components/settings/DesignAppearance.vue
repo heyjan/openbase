@@ -4,9 +4,11 @@ import type { DesignSettings } from '~~/shared/design-settings'
 import {
   DEFAULT_DESIGN_SETTINGS,
   DESIGN_FONT_FAMILIES,
+  DESIGN_FONT_SIZE_PRESETS,
+  FONT_SIZE_PRESET_PX,
   coerceDesignSettings,
   isDesignFontFamily,
-  isFontSizePx,
+  isDesignFontSizePreset,
   isHexColor,
   normalizeHexColor
 } from '~~/shared/design-settings'
@@ -54,7 +56,7 @@ const previewBackgroundColor = computed(() =>
 
 const previewStyles = computed<Record<string, string>>(() => ({
   '--preview-font-family': fontFamilyCssValue(form.font_family),
-  '--preview-font-size': `${form.font_size_px}px`,
+  '--preview-font-size': `${FONT_SIZE_PRESET_PX[form.font_size_preset]}px`,
   '--preview-color-primary': previewPrimaryColor.value,
   '--preview-color-secondary': previewSecondaryColor.value,
   '--preview-background-color': previewBackgroundColor.value
@@ -102,8 +104,8 @@ const save = async () => {
     return
   }
 
-  if (!isFontSizePx(form.font_size_px)) {
-    errorMessage.value = 'Font size must be an integer between 12 and 18.'
+  if (!isDesignFontSizePreset(form.font_size_preset)) {
+    errorMessage.value = 'Choose a font size preset.'
     return
   }
 
@@ -122,7 +124,7 @@ const save = async () => {
       method: 'POST',
       body: {
         font_family: form.font_family,
-        font_size_px: form.font_size_px,
+        font_size_preset: form.font_size_preset,
         color_primary: colorPrimary,
         color_secondary: colorSecondary,
         background_color: backgroundColor
@@ -171,17 +173,24 @@ onMounted(load)
           </select>
         </label>
 
-        <label class="block text-sm font-medium text-gray-700">
-          Font size (base): {{ form.font_size_px }}px
-          <input
-            v-model.number="form.font_size_px"
-            type="range"
-            min="12"
-            max="18"
-            step="1"
-            class="mt-2 w-full"
-          />
-        </label>
+        <div class="block text-sm font-medium text-gray-700">
+          Font size
+          <div class="mt-1 flex">
+            <button
+              v-for="preset in DESIGN_FONT_SIZE_PRESETS"
+              :key="preset"
+              type="button"
+              class="flex-1 border px-3 py-2 text-sm font-medium transition-colors first:rounded-l last:rounded-r"
+              :class="form.font_size_preset === preset
+                ? 'border-brand-primary bg-brand-primary text-white'
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'"
+              @click="form.font_size_preset = preset"
+            >
+              {{ preset }}
+              <span class="ml-1 text-xs opacity-70">{{ FONT_SIZE_PRESET_PX[preset] }}px</span>
+            </button>
+          </div>
+        </div>
 
         <div class="block text-sm font-medium text-gray-700">
           Primary color

@@ -179,13 +179,13 @@ const { exporting, exportPdf } = useExportPdf({
 <template>
   <section
     class="mx-auto px-6 py-10"
-    :class="canvasWidthMode === 'fixed' ? 'max-w-[1240px]' : 'max-w-none'"
+    :style="{ maxWidth: canvasWidthMode === 'fixed' ? '1240px' : 'none' }"
   >
-    <p v-if="tokenMissing" class="text-sm text-red-600">Missing share token.</p>
-    <p v-else-if="pending" class="text-sm text-gray-500">Loading dashboard...</p>
-    <p v-else-if="error" class="text-sm text-red-600">
+    <div v-if="tokenMissing" class="text-sm text-red-600">Missing share token.</div>
+    <div v-else-if="pending" class="text-sm text-gray-500">Loading dashboard...</div>
+    <div v-else-if="error" class="text-sm text-red-600">
       {{ error?.message || 'Unable to load dashboard.' }}
-    </p>
+    </div>
 
     <div v-else>
       <div class="flex flex-wrap items-center justify-between gap-3">

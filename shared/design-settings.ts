@@ -6,9 +6,18 @@ export const DESIGN_FONT_FAMILIES = [
 
 export type DesignFontFamily = (typeof DESIGN_FONT_FAMILIES)[number]
 
+export const DESIGN_FONT_SIZE_PRESETS = ['M', 'L', 'XL'] as const
+export type DesignFontSizePreset = (typeof DESIGN_FONT_SIZE_PRESETS)[number]
+
+export const FONT_SIZE_PRESET_PX: Record<DesignFontSizePreset, number> = {
+  M: 13,
+  L: 15,
+  XL: 17
+}
+
 export type DesignSettings = {
   font_family: DesignFontFamily
-  font_size_px: number
+  font_size_preset: DesignFontSizePreset
   color_primary: string
   color_secondary: string
   background_color: string
@@ -16,7 +25,7 @@ export type DesignSettings = {
 
 export const DEFAULT_DESIGN_SETTINGS: DesignSettings = {
   font_family: 'Inter',
-  font_size_px: 14,
+  font_size_preset: 'M',
   color_primary: '#1a1a1a',
   color_secondary: '#d97556',
   background_color: '#f2f2f2'
@@ -30,11 +39,11 @@ export const isDesignFontFamily = (
   typeof value === 'string' &&
   DESIGN_FONT_FAMILIES.includes(value as DesignFontFamily)
 
-export const isFontSizePx = (value: unknown): value is number =>
-  typeof value === 'number' &&
-  Number.isInteger(value) &&
-  value >= 12 &&
-  value <= 18
+export const isDesignFontSizePreset = (
+  value: unknown
+): value is DesignFontSizePreset =>
+  typeof value === 'string' &&
+  DESIGN_FONT_SIZE_PRESETS.includes(value as DesignFontSizePreset)
 
 export const isHexColor = (value: unknown): value is string =>
   typeof value === 'string' && HEX_COLOR_REGEX.test(value)
@@ -62,9 +71,9 @@ export const coerceDesignSettings = (value: unknown): DesignSettings => {
     font_family: isDesignFontFamily(source.font_family)
       ? source.font_family
       : DEFAULT_DESIGN_SETTINGS.font_family,
-    font_size_px: isFontSizePx(source.font_size_px)
-      ? source.font_size_px
-      : DEFAULT_DESIGN_SETTINGS.font_size_px,
+    font_size_preset: isDesignFontSizePreset(source.font_size_preset)
+      ? source.font_size_preset
+      : DEFAULT_DESIGN_SETTINGS.font_size_preset,
     color_primary: isHexColor(source.color_primary)
       ? normalizeHexColor(source.color_primary)
       : DEFAULT_DESIGN_SETTINGS.color_primary,

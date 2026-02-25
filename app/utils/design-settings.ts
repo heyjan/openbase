@@ -2,6 +2,7 @@ import type {
   DesignFontFamily,
   DesignSettings
 } from '~~/shared/design-settings'
+import { FONT_SIZE_PRESET_PX } from '~~/shared/design-settings'
 
 const GOOGLE_FONT_HREFS: Record<DesignFontFamily, string> = {
   Inter:
@@ -68,7 +69,7 @@ export const applyDesignSettingsToDocument = (settings: DesignSettings) => {
   )
   document.documentElement.style.setProperty(
     '--font-size-base',
-    `${settings.font_size_px}px`
+    `${FONT_SIZE_PRESET_PX[settings.font_size_preset]}px`
   )
 
   ensureFontStylesheet(settings.font_family)

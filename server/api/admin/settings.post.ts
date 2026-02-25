@@ -1,7 +1,7 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import {
   isDesignFontFamily,
-  isFontSizePx,
+  isDesignFontSizePreset,
   isHexColor,
   normalizeHexColor
 } from '~~/shared/design-settings'
@@ -9,7 +9,7 @@ import { saveDesignSettings } from '~~/server/utils/app-settings-store'
 
 type Body = {
   font_family?: unknown
-  font_size_px?: unknown
+  font_size_preset?: unknown
   color_primary?: unknown
   color_secondary?: unknown
   background_color?: unknown
@@ -25,10 +25,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  if (!isFontSizePx(body.font_size_px)) {
+  if (!isDesignFontSizePreset(body.font_size_preset)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'font_size_px must be an integer between 12 and 18'
+      statusMessage: 'font_size_preset must be one of: M, L, XL'
     })
   }
 
@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
 
   await saveDesignSettings({
     font_family: body.font_family,
-    font_size_px: body.font_size_px,
+    font_size_preset: body.font_size_preset,
     color_primary: normalizeHexColor(body.color_primary),
     color_secondary: normalizeHexColor(body.color_secondary),
     background_color: normalizeHexColor(body.background_color)

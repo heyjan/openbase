@@ -51,7 +51,7 @@ const tableColumns = computed(() =>
 </script>
 
 <template>
-  <div>
+  <div class="flex h-full flex-col">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <UInput
         v-model="search"
@@ -67,7 +67,7 @@ const tableColumns = computed(() =>
       No data available.
     </p>
 
-    <div v-else class="mt-3">
+    <div v-else class="mt-3 min-h-0 flex-1 overflow-auto">
       <Table :rows="filteredRows" :columns="tableColumns" empty-label="No matching rows." />
     </div>
   </div>

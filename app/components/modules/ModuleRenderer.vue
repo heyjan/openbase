@@ -107,7 +107,7 @@ const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
     <p v-else-if="error" class="mt-4 text-sm text-red-600">
       {{ error }}
     </p>
-    <div v-else class="mt-4 min-h-0 flex-1">
+    <div v-else class="mt-4 min-h-0 flex-1 overflow-hidden">
       <component
         :is="component"
         class="h-full"
