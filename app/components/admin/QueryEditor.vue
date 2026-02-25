@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Save, Play, BarChart3 } from 'lucide-vue-next'
 import QueryPreviewResult from '~/components/admin/QueryPreviewResult.vue'
 import type { DataSource } from '~/types/data-source'
 import type { SavedQueryPreviewResult } from '~/types/query'
@@ -610,27 +611,30 @@ watch(
         variant="solid"
         size="sm"
         :disabled="saving"
+        :title="saving ? 'Saving...' : 'Save query'"
         @click="emit('save')"
       >
-        {{ saving ? 'Saving...' : 'Save query' }}
+        <Save class="h-4 w-4" />
       </UButton>
       <UButton
         color="neutral"
         variant="outline"
         size="sm"
         :disabled="previewing || saving || !canPreview"
+        :title="previewing ? 'Running...' : 'Run preview'"
         @click="emit('preview')"
       >
-        {{ previewing ? 'Running...' : 'Run preview' }}
+        <Play class="h-4 w-4" />
       </UButton>
       <UButton
         color="neutral"
         variant="ghost"
         size="sm"
         :disabled="!previewResult"
+        :title="visualizationMenuOpen ? 'Hide visualizations' : 'Visualizations'"
         @click="toggleVisualizationMenu"
       >
-        {{ visualizationMenuOpen ? 'Hide visualizations' : 'Visualizations' }}
+        <BarChart3 class="h-4 w-4" />
       </UButton>
       <input
         v-if="previewResult"

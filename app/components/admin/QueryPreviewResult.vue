@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Table2, TrendingUp, AreaChart, BarChart3, PieChart, ScatterChart } from 'lucide-vue-next'
 import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import Table from '~/components/ui/Table.vue'
@@ -10,6 +11,7 @@ type VisualizationOption = {
   id: QueryPreviewVisualization
   label: string
   description: string
+  icon: ReturnType<typeof defineComponent>
 }
 
 const props = defineProps<{
@@ -26,32 +28,38 @@ const visualizationOptions: VisualizationOption[] = [
   {
     id: 'table',
     label: 'Table',
-    description: 'Raw rows and columns'
+    description: 'Raw rows and columns',
+    icon: Table2
   },
   {
     id: 'line',
-    label: 'Line',
-    description: 'Trend over category axis'
+    label: 'Line Chart',
+    description: 'Trend over category axis',
+    icon: TrendingUp
   },
   {
     id: 'area',
-    label: 'Area',
-    description: 'Line chart with filled area'
+    label: 'Area Chart',
+    description: 'Line chart with filled area',
+    icon: AreaChart
   },
   {
     id: 'bar',
-    label: 'Bar',
-    description: 'Compare values by category'
+    label: 'Bar Chart',
+    description: 'Compare values by category',
+    icon: BarChart3
   },
   {
     id: 'pie',
-    label: 'Pie',
-    description: 'Distribution by category'
+    label: 'Pie Chart',
+    description: 'Distribution by category',
+    icon: PieChart
   },
   {
     id: 'scatter',
     label: 'Scatter',
-    description: 'Relationship between numeric fields'
+    description: 'Relationship between numeric fields',
+    icon: ScatterChart
   }
 ]
 
@@ -389,12 +397,13 @@ const chartOption = computed<EChartsOption>(() => {
             :variant="visualization === option.id ? 'solid' : 'ghost'"
             size="xs"
             class="justify-start text-left"
+            :title="option.description"
             @click="emit('update:visualization', option.id)"
           >
-            <span class="text-xs font-medium">{{ option.label }}</span>
-            <span class="block text-[11px]" :class="visualization === option.id ? 'text-gray-200' : 'text-gray-500'">
-              {{ option.description }}
-            </span>
+            <div class="flex items-center gap-2">
+              <component :is="option.icon" class="h-4 w-4 shrink-0" />
+              <span class="text-xs font-medium">{{ option.label }}</span>
+            </div>
           </UButton>
         </div>
       </aside>
