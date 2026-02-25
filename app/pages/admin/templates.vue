@@ -149,7 +149,7 @@ onMounted(loadTemplates)
 </script>
 
 <template>
-  <section class="mx-auto max-w-6xl px-6 py-10">
+  <section class="px-6 py-10">
     <PageHeader
       title="Module Templates"
       description="Save reusable module configurations and apply them when creating new modules."

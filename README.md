@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.svg" alt="Openbase Logo" width="120" />
+</p>
+
 # Openbase
 
 **Status:** Alpha — this project is under active development and may change without notice.

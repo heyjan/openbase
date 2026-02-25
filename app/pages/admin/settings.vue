@@ -6,7 +6,7 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 </script>
 
 <template>
-  <section class="mx-auto max-w-6xl px-6 py-10">
+  <section class="px-6 py-10">
     <PageHeader
       title="Settings"
       description="Manage admin access and application appearance."

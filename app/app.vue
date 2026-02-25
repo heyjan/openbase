@@ -102,8 +102,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="shouldShowTopBar" class="h-12 border-b border-gray-200 bg-white">
-    <div class="mx-auto flex h-full max-w-7xl items-center justify-between gap-4 px-4">
-      <div class="min-w-0">
+    <div class="flex h-full items-center justify-between gap-4 px-6">
+      <div class="flex min-w-0 items-center gap-10">
+        <NuxtLink to="/" class="flex shrink-0 items-center">
+          <img src="/logo.svg" alt="Openbase" class="h-13 w-13" />
+        </NuxtLink>
         <ClientOnly>
           <Breadcrumbs
             v-if="topBarBreadcrumbs.length"

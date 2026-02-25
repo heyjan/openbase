@@ -98,7 +98,7 @@ onMounted(loadTables)
 </script>
 
 <template>
-  <section class="mx-auto max-w-6xl px-6 py-10">
+  <section class="px-6 py-10">
     <PageHeader
       title="Data Browser"
       description="Inspect data from this source."
