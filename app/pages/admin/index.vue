@@ -93,7 +93,7 @@ const deleteDashboard = async () => {
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
-          to="/admin/settings#shared-links"
+          to="/admin/settings/shared-links"
         >
           <Link2 class="h-4 w-4" />
           Share links

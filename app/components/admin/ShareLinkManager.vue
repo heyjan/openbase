@@ -9,9 +9,11 @@ const props = withDefaults(
     showTitle?: boolean
     allowDelete?: boolean
     showSearch?: boolean
+    wrapInCard?: boolean
   }>(),
   {
-    showTitle: true
+    showTitle: true,
+    wrapInCard: true
   }
 )
 
@@ -277,7 +279,10 @@ onMounted(loadLinks)
 </script>
 
 <template>
-  <section class="rounded border border-gray-200 bg-white p-4 shadow-sm">
+  <component
+    :is="wrapInCard ? 'section' : 'div'"
+    :class="wrapInCard ? 'rounded border border-gray-200 bg-white p-4 shadow-sm' : ''"
+  >
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 v-if="showTitle" class="text-base font-semibold text-gray-900">
@@ -439,5 +444,5 @@ onMounted(loadLinks)
       :pending="deletingSelected"
       @confirm="deleteSelectedLinks"
     />
-  </section>
+  </component>
 </template>

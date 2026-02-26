@@ -38,7 +38,7 @@ const toggleMenu = () => {
 
 const openSettings = async () => {
   closeMenu()
-  await navigateTo('/admin/settings')
+  await navigateTo('/admin/settings/admins')
 }
 
 const logout = async () => {

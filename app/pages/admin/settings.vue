@@ -1,15 +1,35 @@
 <script setup lang="ts">
-import DesignAppearance from '~/components/settings/DesignAppearance.vue'
-import ManageAdmins from '~/components/settings/ManageAdmins.vue'
-import ShareLinkManager from '~/components/admin/ShareLinkManager.vue'
+import { Link2, Palette, Users } from 'lucide-vue-next'
+import SettingsNavCard from '~/components/ui/SettingsNavCard.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
+
+const route = useRoute()
+
+const navigationItems = [
+  {
+    label: 'Admins',
+    to: '/admin/settings/admins',
+    icon: Users
+  },
+  {
+    label: 'Appearance',
+    to: '/admin/settings/appearance',
+    icon: Palette
+  },
+  {
+    label: 'Shared Links',
+    to: '/admin/settings/shared-links',
+    icon: Link2
+  }
+]
+
+const isActive = (to: string) => route.path === to
 </script>
 
 <template>
   <section class="px-6 py-10">
     <PageHeader
       title="Settings"
-      description="Manage admin access and application appearance."
       :breadcrumbs="[
         { label: 'Dashboards', to: '/admin' },
         { label: 'Settings' }
@@ -18,59 +38,23 @@ import PageHeader from '~/components/ui/PageHeader.vue'
       back-label="Back to dashboards"
     />
 
-    <div class="mt-6 grid gap-3 md:grid-cols-2">
-      <a
-        href="#admins"
-        class="rounded border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm hover:border-gray-300"
-      >
-        Manage Admins
-      </a>
-      <a
-        href="#appearance"
-        class="rounded border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm hover:border-gray-300"
-      >
-        Design / Appearance
-      </a>
-      <a
-        href="#shared-links"
-        class="rounded border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm hover:border-gray-300"
-      >
-        Shared Links
-      </a>
+    <div class="mt-6 flex flex-col gap-6 lg:flex-row">
+      <aside class="w-full shrink-0 lg:w-[180px]">
+        <nav class="grid grid-cols-2 gap-3 sm:w-[180px]">
+          <SettingsNavCard
+            v-for="item in navigationItems"
+            :key="item.to"
+            :to="item.to"
+            :label="item.label"
+            :icon="item.icon"
+            :active="isActive(item.to)"
+          />
+        </nav>
+      </aside>
+
+      <div class="min-w-0 flex-1">
+        <NuxtPage />
+      </div>
     </div>
-
-    <section id="admins" class="mt-6 rounded border border-gray-200 bg-white p-6 shadow-sm">
-      <h2 class="text-lg font-semibold text-gray-900">Manage Admins</h2>
-      <p class="mt-1 text-sm text-gray-600">Manage additional admin accounts.</p>
-      <div class="mt-6">
-        <ManageAdmins />
-      </div>
-    </section>
-
-    <section
-      id="appearance"
-      class="mt-6 rounded border border-gray-200 bg-white p-6 shadow-sm"
-    >
-      <h2 class="text-lg font-semibold text-gray-900">Design / Appearance</h2>
-      <p class="mt-1 text-sm text-gray-600">
-        Configure brand colors and typography used across admin and shared pages.
-      </p>
-      <div class="mt-6">
-        <DesignAppearance />
-      </div>
-    </section>
-
-    <section
-      id="shared-links"
-      class="mt-6 rounded border border-gray-200 bg-white p-6 shadow-sm"
-    >
-      <h2 class="text-lg font-semibold text-gray-900">Shared Links</h2>
-      <p class="mt-1 text-sm text-gray-600">
-        Review, search, and delete active shared links across dashboards.
-      </p>
-      <div class="mt-6">
-        <ShareLinkManager />
-      </div>
-    </section>
   </section>
 </template>

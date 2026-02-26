@@ -1,6 +1,19 @@
 <script setup lang="ts">
-import { Save, Play, BarChart3 } from 'lucide-vue-next'
+import type { Component } from 'vue'
+import {
+  Save,
+  Play,
+  SlidersHorizontal,
+  Table2,
+  TrendingUp,
+  AreaChart,
+  BarChart3,
+  PieChart,
+  ScatterChart
+} from 'lucide-vue-next'
 import QueryPreviewResult from '~/components/admin/QueryPreviewResult.vue'
+import SettingsNavCard from '~/components/ui/SettingsNavCard.vue'
+import Table from '~/components/ui/Table.vue'
 import type { DataSource } from '~/types/data-source'
 import type { SavedQueryPreviewResult } from '~/types/query'
 import {
@@ -29,6 +42,12 @@ type SavedQueryOption = {
   name: string
 }
 
+type VisualizationOption = {
+  id: QueryPreviewVisualization
+  label: string
+  icon: Component
+}
+
 const props = defineProps<{
   value: QueryEditorValue
   dataSources: DataSource[]
@@ -54,9 +73,9 @@ const emit = defineEmits<{
 
 const { preview } = useQueries()
 
-const visualizationMenuOpen = ref(false)
 const selectedVisualization = ref<QueryPreviewVisualization>('table')
 const visualizationDraftName = ref('')
+const variablePanelOpen = ref(false)
 
 const sourceQueryColumns = reactive<Record<string, string[]>>({})
 const sourceQueryErrors = reactive<Record<string, string>>({})
@@ -71,6 +90,43 @@ const visualizationLabel: Record<QueryPreviewVisualization, string> = {
   pie: 'Pie Chart',
   scatter: 'Scatter Chart'
 }
+
+const visualizationOptions: VisualizationOption[] = [
+  {
+    id: 'table',
+    label: 'Table',
+    icon: Table2
+  },
+  {
+    id: 'line',
+    label: 'Line',
+    icon: TrendingUp
+  },
+  {
+    id: 'area',
+    label: 'Area',
+    icon: AreaChart
+  },
+  {
+    id: 'bar',
+    label: 'Bar',
+    icon: BarChart3
+  },
+  {
+    id: 'pie',
+    label: 'Pie',
+    icon: PieChart
+  },
+  {
+    id: 'scatter',
+    label: 'Scatter',
+    icon: ScatterChart
+  }
+]
+
+const visualizationSelectionDisabled = computed(
+  () => !props.previewResult || !props.canPreview || props.previewing === true
+)
 
 const variableTypeOptions: Array<{ value: VariableType; label: string }> = [
   { value: 'text', label: 'Text' },
@@ -308,11 +364,11 @@ const onTextInput = (event: Event, key: keyof QueryEditorValue) => {
   updateValue(key, target?.value ?? '')
 }
 
-const toggleVisualizationMenu = () => {
-  if (!props.previewResult) {
+const onSelectVisualization = (visualization: QueryPreviewVisualization) => {
+  if (visualizationSelectionDisabled.value) {
     return
   }
-  visualizationMenuOpen.value = !visualizationMenuOpen.value
+  selectedVisualization.value = visualization
 }
 
 const saveVisualization = () => {
@@ -330,11 +386,20 @@ watch(
   () => props.previewResult,
   (result) => {
     if (!result) {
-      visualizationMenuOpen.value = false
       selectedVisualization.value = 'table'
       visualizationDraftName.value = ''
     }
   }
+)
+
+watch(
+  detectedVariables,
+  (variables) => {
+    if (!variables.length) {
+      variablePanelOpen.value = false
+    }
+  },
+  { immediate: true }
 )
 
 watch(
@@ -417,16 +482,6 @@ watch(
     </div>
 
     <label class="mt-4 block text-sm font-medium text-gray-700">
-      Description
-      <input
-        :value="value.description"
-        type="text"
-        class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-        @input="onTextInput($event, 'description')"
-      />
-    </label>
-
-    <label class="mt-4 block text-sm font-medium text-gray-700">
       Query text
       <textarea
         :value="value.queryText"
@@ -436,235 +491,273 @@ watch(
       />
     </label>
 
-    <div
-      v-if="detectedVariables.length"
-      class="mt-4 rounded border border-gray-200 bg-gray-50 p-3"
-    >
-      <p class="text-sm font-medium text-gray-700">Variable configuration</p>
-      <p class="mt-1 text-xs text-gray-500">
-        Define variable type and source query for dashboard dropdown filters.
-      </p>
-
-      <div class="mt-3 space-y-3">
-        <div
-          v-for="definition in variableDefinitions"
-          :key="`definition-${definition.name}`"
-          class="rounded border border-gray-200 bg-white p-3"
-        >
-          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-              Variable
-              <input
-                :value="definition.name"
-                type="text"
-                disabled
-                class="mt-1 w-full rounded border border-gray-200 bg-gray-100 px-3 py-2 text-sm normal-case tracking-normal text-gray-600"
-              />
-            </label>
-
-            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-              Label
-              <input
-                :value="definition.label ?? ''"
-                type="text"
-                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
-                @input="onVariableTextInput($event, definition.name, 'label')"
-              />
-            </label>
-
-            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-              Type
-              <select
-                :value="definition.type ?? 'text'"
-                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
-                @change="onVariableTypeChange($event, definition.name)"
-              >
-                <option
-                  v-for="option in variableTypeOptions"
-                  :key="`${definition.name}-type-${option.value}`"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-
-            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-              Default value
-              <input
-                :value="definition.defaultValue === undefined || definition.defaultValue === null ? '' : String(definition.defaultValue)"
-                type="text"
-                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
-                @input="onVariableTextInput($event, definition.name, 'defaultValue')"
-              />
-            </label>
-          </div>
-
-          <label class="mt-3 inline-flex items-center gap-2 text-xs font-medium text-gray-700">
-            <input
-              :checked="definition.required === true"
-              type="checkbox"
-              class="h-4 w-4 rounded border border-gray-300"
-              @change="onVariableRequiredChange($event, definition.name)"
-            />
-            Require a value
-          </label>
-
-          <div
-            v-if="definition.type === 'query_list'"
-            class="mt-3 grid gap-3 md:grid-cols-3"
+    <div class="mt-4 flex flex-col gap-4 lg:flex-row">
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <UButton
+            color="neutral"
+            variant="solid"
+            size="sm"
+            :disabled="saving"
+            :title="saving ? 'Saving...' : 'Save query'"
+            @click="emit('save')"
           >
-            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-              Source query
-              <select
-                :value="definition.sourceQueryId ?? ''"
-                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
-                @change="onVariableTextInput($event, definition.name, 'sourceQueryId')"
-              >
-                <option value="">Select query</option>
-                <option
-                  v-for="query in sourceQueryOptions"
-                  :key="`source-${definition.name}-${query.id}`"
-                  :value="query.id"
-                >
-                  {{ query.name }}
-                </option>
-              </select>
-            </label>
+            <Save class="h-4 w-4" />
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="outline"
+            size="sm"
+            :disabled="previewing || saving || !canPreview"
+            :title="previewing ? 'Running...' : 'Run preview'"
+            @click="emit('preview')"
+          >
+            <Play class="h-4 w-4" />
+          </UButton>
+          <UButton
+            v-if="detectedVariables.length"
+            color="neutral"
+            :variant="variablePanelOpen ? 'solid' : 'ghost'"
+            size="sm"
+            :title="variablePanelOpen ? 'Hide variables' : 'Variables'"
+            @click="variablePanelOpen = !variablePanelOpen"
+          >
+            <SlidersHorizontal class="h-4 w-4" />
+          </UButton>
+          <input
+            v-if="previewResult"
+            v-model="visualizationDraftName"
+            type="text"
+            class="min-w-52 rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+            placeholder="Visualization name"
+          />
+          <UButton
+            v-if="previewResult"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            @click="saveVisualization"
+          >
+            Save visualization
+          </UButton>
+          <p v-if="!canPreview" class="text-xs text-gray-500">
+            Name, data source, and query text are required to run preview.
+          </p>
+        </div>
 
-            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-              Value column
-              <select
-                :value="definition.valueColumn ?? ''"
-                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
-                @change="onVariableTextInput($event, definition.name, 'valueColumn')"
-              >
-                <option value="">Select column</option>
-                <option
-                  v-for="column in sourceQueryColumns[definition.name] ?? []"
-                  :key="`value-column-${definition.name}-${column}`"
-                  :value="column"
-                >
-                  {{ column }}
-                </option>
-              </select>
-            </label>
+        <p v-if="errorMessage" class="mt-3 text-sm text-red-600">{{ errorMessage }}</p>
 
-            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-              Label column
-              <select
-                :value="definition.labelColumn ?? ''"
-                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
-                @change="onVariableTextInput($event, definition.name, 'labelColumn')"
-              >
-                <option value="">Use value column</option>
-                <option
-                  v-for="column in sourceQueryColumns[definition.name] ?? []"
-                  :key="`label-column-${definition.name}-${column}`"
-                  :value="column"
-                >
-                  {{ column }}
-                </option>
-              </select>
-            </label>
-
-            <p
-              v-if="loadingSourceColumns[definition.name]"
-              class="md:col-span-3 text-xs text-gray-500"
-            >
-              Loading source query columns...
+        <div class="mt-4 flex flex-col gap-4 lg:flex-row">
+          <aside class="w-full shrink-0 lg:w-[180px]">
+            <div class="grid grid-cols-2 gap-3 sm:w-[180px]">
+              <SettingsNavCard
+                v-for="option in visualizationOptions"
+                :key="option.id"
+                :label="option.label"
+                :icon="option.icon"
+                :active="selectedVisualization === option.id"
+                :disabled="visualizationSelectionDisabled"
+                @click="onSelectVisualization(option.id)"
+              />
+            </div>
+            <p v-if="visualizationSelectionDisabled" class="mt-3 text-xs text-gray-500">
+              Run preview to enable visualization methods.
             </p>
-            <p
-              v-else-if="sourceQueryErrors[definition.name]"
-              class="md:col-span-3 text-xs text-red-600"
-            >
-              {{ sourceQueryErrors[definition.name] }}
-            </p>
+          </aside>
+
+          <div class="min-w-0 flex-1">
+            <QueryPreviewResult
+              v-if="previewResult"
+              :result="previewResult"
+              :show-visualization-menu="false"
+              :visualization="selectedVisualization"
+              @update:visualization="selectedVisualization = $event"
+            />
+            <div v-else class="mt-4 rounded border border-gray-100 bg-gray-50 p-3">
+              <div class="flex items-center justify-between text-xs text-gray-500">
+                <p>Rows: 0 | Columns: 0</p>
+                <p class="uppercase tracking-wide text-gray-400">Table</p>
+              </div>
+              <div class="mt-3 rounded border border-gray-200 bg-white">
+                <Table :rows="[]" :columns="[]" empty-label="Run preview to load table results." />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <p class="mt-4 text-sm font-medium text-gray-700">Preview variables</p>
-      <p class="mt-1 text-xs text-gray-500">
-        Provide values for detected variables before running preview.
-      </p>
-      <div class="mt-3 grid gap-3 md:grid-cols-2">
-        <label
-          v-for="variable in detectedVariables"
-          :key="`preview-${variable}`"
-          class="block text-xs font-medium uppercase tracking-wide text-gray-600"
-        >
-          {{ variable }}
-          <input
-            :value="String((previewParameters ?? {})[variable] ?? '')"
-            type="text"
-            class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
-            @input="onPreviewParameterInput($event, variable)"
-          />
-        </label>
+      <div
+        class="shrink-0 overflow-hidden transition-all duration-200 ease-out"
+        :class="variablePanelOpen && detectedVariables.length
+          ? 'w-full lg:w-[360px] opacity-100'
+          : 'w-0 opacity-0 pointer-events-none'"
+      >
+        <aside class="rounded border border-gray-200 bg-gray-50 p-3">
+          <p class="text-sm font-medium text-gray-700">Variable configuration</p>
+          <p class="mt-1 text-xs text-gray-500">
+            Define variable type and source query for dashboard dropdown filters.
+          </p>
+
+          <div class="mt-3 space-y-3">
+            <div
+              v-for="definition in variableDefinitions"
+              :key="`definition-${definition.name}`"
+              class="rounded border border-gray-200 bg-white p-3"
+            >
+              <div class="grid gap-3">
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Variable
+                  <input
+                    :value="definition.name"
+                    type="text"
+                    disabled
+                    class="mt-1 w-full rounded border border-gray-200 bg-gray-100 px-3 py-2 text-sm normal-case tracking-normal text-gray-600"
+                  />
+                </label>
+
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Label
+                  <input
+                    :value="definition.label ?? ''"
+                    type="text"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @input="onVariableTextInput($event, definition.name, 'label')"
+                  />
+                </label>
+
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Type
+                  <select
+                    :value="definition.type ?? 'text'"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @change="onVariableTypeChange($event, definition.name)"
+                  >
+                    <option
+                      v-for="option in variableTypeOptions"
+                      :key="`${definition.name}-type-${option.value}`"
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Default value
+                  <input
+                    :value="definition.defaultValue === undefined || definition.defaultValue === null ? '' : String(definition.defaultValue)"
+                    type="text"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @input="onVariableTextInput($event, definition.name, 'defaultValue')"
+                  />
+                </label>
+              </div>
+
+              <label class="mt-3 inline-flex items-center gap-2 text-xs font-medium text-gray-700">
+                <input
+                  :checked="definition.required === true"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border border-gray-300"
+                  @change="onVariableRequiredChange($event, definition.name)"
+                />
+                Require a value
+              </label>
+
+              <div
+                v-if="definition.type === 'query_list'"
+                class="mt-3 grid gap-3"
+              >
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Source query
+                  <select
+                    :value="definition.sourceQueryId ?? ''"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @change="onVariableTextInput($event, definition.name, 'sourceQueryId')"
+                  >
+                    <option value="">Select query</option>
+                    <option
+                      v-for="query in sourceQueryOptions"
+                      :key="`source-${definition.name}-${query.id}`"
+                      :value="query.id"
+                    >
+                      {{ query.name }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Value column
+                  <select
+                    :value="definition.valueColumn ?? ''"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @change="onVariableTextInput($event, definition.name, 'valueColumn')"
+                  >
+                    <option value="">Select column</option>
+                    <option
+                      v-for="column in sourceQueryColumns[definition.name] ?? []"
+                      :key="`value-column-${definition.name}-${column}`"
+                      :value="column"
+                    >
+                      {{ column }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Label column
+                  <select
+                    :value="definition.labelColumn ?? ''"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @change="onVariableTextInput($event, definition.name, 'labelColumn')"
+                  >
+                    <option value="">Use value column</option>
+                    <option
+                      v-for="column in sourceQueryColumns[definition.name] ?? []"
+                      :key="`label-column-${definition.name}-${column}`"
+                      :value="column"
+                    >
+                      {{ column }}
+                    </option>
+                  </select>
+                </label>
+
+                <p
+                  v-if="loadingSourceColumns[definition.name]"
+                  class="text-xs text-gray-500"
+                >
+                  Loading source query columns...
+                </p>
+                <p
+                  v-else-if="sourceQueryErrors[definition.name]"
+                  class="text-xs text-red-600"
+                >
+                  {{ sourceQueryErrors[definition.name] }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <p class="mt-4 text-sm font-medium text-gray-700">Preview variables</p>
+          <p class="mt-1 text-xs text-gray-500">
+            Provide values for detected variables before running preview.
+          </p>
+          <div class="mt-3 grid gap-3">
+            <label
+              v-for="variable in detectedVariables"
+              :key="`preview-${variable}`"
+              class="block text-xs font-medium uppercase tracking-wide text-gray-600"
+            >
+              {{ variable }}
+              <input
+                :value="String((previewParameters ?? {})[variable] ?? '')"
+                type="text"
+                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                @input="onPreviewParameterInput($event, variable)"
+              />
+            </label>
+          </div>
+        </aside>
       </div>
     </div>
-
-    <div class="mt-4 flex flex-wrap items-center gap-2">
-      <UButton
-        color="neutral"
-        variant="solid"
-        size="sm"
-        :disabled="saving"
-        :title="saving ? 'Saving...' : 'Save query'"
-        @click="emit('save')"
-      >
-        <Save class="h-4 w-4" />
-      </UButton>
-      <UButton
-        color="neutral"
-        variant="outline"
-        size="sm"
-        :disabled="previewing || saving || !canPreview"
-        :title="previewing ? 'Running...' : 'Run preview'"
-        @click="emit('preview')"
-      >
-        <Play class="h-4 w-4" />
-      </UButton>
-      <UButton
-        color="neutral"
-        variant="ghost"
-        size="sm"
-        :disabled="!previewResult"
-        :title="visualizationMenuOpen ? 'Hide visualizations' : 'Visualizations'"
-        @click="toggleVisualizationMenu"
-      >
-        <BarChart3 class="h-4 w-4" />
-      </UButton>
-      <input
-        v-if="previewResult"
-        v-model="visualizationDraftName"
-        type="text"
-        class="min-w-52 rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-        placeholder="Visualization name"
-      />
-      <UButton
-        v-if="previewResult"
-        color="neutral"
-        variant="outline"
-        size="sm"
-        @click="saveVisualization"
-      >
-        Save visualization
-      </UButton>
-      <p v-if="!canPreview" class="text-xs text-gray-500">
-        Name, data source, and query text are required to run preview.
-      </p>
-    </div>
-
-    <p v-if="errorMessage" class="mt-3 text-sm text-red-600">{{ errorMessage }}</p>
-
-    <QueryPreviewResult
-      v-if="previewResult"
-      :result="previewResult"
-      :show-visualization-menu="visualizationMenuOpen"
-      :visualization="selectedVisualization"
-      @update:visualization="selectedVisualization = $event"
-    />
   </section>
 </template>
