@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logo.svg" alt="Openbase Logo" width="120" />
+  <img src="public/brain-icon-7087186-512.png" alt="Openbase Logo" width="120" />
 </p>
 
 # Openbase

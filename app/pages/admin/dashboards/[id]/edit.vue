@@ -23,9 +23,12 @@ import {
 } from '~~/shared/utils/query-variables'
 
 const route = useRoute()
-const { setTopBarBreadcrumbs } = useTopBarBreadcrumbs()
 const dashboardId = computed(() => String(route.params.id || ''))
 const dashboardAsyncKey = computed(() => `admin-dashboard-edit-${dashboardId.value}`)
+const breadcrumbs = [
+  { label: 'Dashboards', to: '/admin' },
+  { label: 'Edit' }
+]
 
 const { getById, update } = useDashboard()
 const { list, create, update: updateModule, remove, updateLayout } = useModules()
@@ -797,11 +800,6 @@ const toggleCanvasWidth = async () => {
   }
 }
 
-setTopBarBreadcrumbs([
-  { label: 'Dashboards', to: '/admin' },
-  { label: 'Edit' }
-])
-
 watchEffect(() => {
   if (!dashboard.value) {
     return
@@ -856,9 +854,10 @@ watch(dashboardId, () => {
 </script>
 
 <template>
-  <section class="mx-auto px-6 py-10" :class="canvasWidthMode === 'fixed' ? 'max-w-[1240px]' : 'max-w-none'">
+  <section class="mx-auto px-6 py-5" :class="canvasWidthMode === 'fixed' ? 'max-w-[1240px]' : 'max-w-none'">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
+        <Breadcrumbs :items="breadcrumbs" />
         <div class="flex items-center gap-2">
           <h1 class="text-2xl font-semibold text-gray-900">Edit Dashboard</h1>
           <button

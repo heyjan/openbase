@@ -23,6 +23,12 @@ logs
 .env.*
 !.env.example
 
+# Playwright
+e2e/
+playwright-report/
+blob-report/
+test-results/
+
 # Project-specific
 .github/
 mcp.json

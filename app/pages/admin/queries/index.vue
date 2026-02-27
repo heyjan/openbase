@@ -41,7 +41,7 @@ onMounted(loadQueries)
 </script>
 
 <template>
-  <section class="px-6 py-10">
+  <section class="px-6 py-5">
     <PageHeader
       title="Saved Queries"
       description="Reusable queries that power dashboard modules."

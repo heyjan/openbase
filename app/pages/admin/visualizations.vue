@@ -45,7 +45,7 @@ onMounted(loadVisualizations)
 </script>
 
 <template>
-  <section class="px-6 py-10">
+  <section class="px-6 py-5">
     <PageHeader
       title="Query Visualizations"
       description="Saved visualization presets linked to queries."

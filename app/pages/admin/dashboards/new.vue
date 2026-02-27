@@ -30,7 +30,7 @@ const submit = async () => {
 </script>
 
 <template>
-  <section class="mx-auto max-w-3xl px-6 py-10">
+  <section class="mx-auto max-w-3xl px-6 py-5">
     <PageHeader
       title="New Dashboard"
       description="Create a dashboard for sharing."

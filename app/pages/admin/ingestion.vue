@@ -93,7 +93,7 @@ onMounted(loadStatus)
 </script>
 
 <template>
-  <section class="px-6 py-10">
+  <section class="px-6 py-5">
     <PageHeader
       title="Ingestion Status"
       description="Monitor pipeline health, recent runs, and trigger manual updates."

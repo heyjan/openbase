@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
     <div class="flex h-full items-center justify-between gap-4 px-6">
       <div class="flex min-w-0 items-center gap-10">
         <NuxtLink to="/" class="flex shrink-0 items-center">
-          <img src="/logo.svg" alt="Openbase" class="h-12 w-12" />
+          <img src="/brain-icon-7087186-512.png" alt="Openbase" class="h-12 w-12" />
         </NuxtLink>
       </div>
       <div ref="menuRef" class="relative">

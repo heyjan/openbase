@@ -35,10 +35,33 @@ Set `DATABASE_URL` for non-Docker local runs (see `README.md`).
 No dedicated ESLint/Prettier config is committed; consistency with existing code is required.
 
 ## Testing Guidelines
-There is no dedicated automated test suite configured yet. For now:
+
+### E2E Tests (Playwright)
+End-to-end tests live in `e2e/` and use [Playwright](https://playwright.dev/) with Chromium.
+
+**Setup (once, inside the devcontainer or toolbox):**
+```bash
+npm run playwright:install   # downloads Chromium + system deps
+```
+
+**Running tests:**
+```bash
+npm run test:e2e             # headless run
+npm run test:e2e:headed      # opens a visible browser
+npm run test:e2e:ui          # interactive Playwright UI
+```
+
+The Playwright config (`playwright.config.ts`) auto-starts the Nuxt dev server when not in CI. Set `BASE_URL` to override the target (default `http://localhost:3000`).
+
+**Writing tests:**
+- Place test files in `e2e/` with `*.spec.ts` naming.
+- Group related tests with `test.describe()`.
+- Keep tests independent — each test should not depend on state from another.
+
+### General
 - Run `npm run build` before every PR.
 - Manually verify critical flows: setup, admin auth, dashboard editing/sharing, and data-source browsing.
-- For new tests, prefer `*.test.ts` naming and colocate by feature (for example, `server/**/__tests__`).
+- For unit tests (future), prefer `*.test.ts` naming and colocate by feature (for example, `server/**/__tests__`).
 
 ## Commit & Pull Request Guidelines
 Current history is minimal (`Initial commit`), so use clear imperative commits going forward.

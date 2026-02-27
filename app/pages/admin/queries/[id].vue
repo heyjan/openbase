@@ -302,7 +302,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="px-6 py-10">
+  <section class="px-6 py-5">
     <PageHeader
       :title="isNew ? 'New Query' : 'Edit Query'"
       description="Configure reusable queries and preview results."
