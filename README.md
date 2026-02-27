@@ -13,15 +13,17 @@ It started from frustration with Metabase limitations, and evolved into a flexib
 
 ## Release Plan
 
-Target for **Release v0.1**: **March 1, 2026**.
+Current milestone: **v0.1 stabilization** (**March 2026**).
 
-### v0.1 scope (in progress)
+### Recently completed
 
-- Configurable text blocks on dashboards: **Header** and **Subheader** modules.
-- **PDF export** for public shared dashboards (`/d/[slug]?token=...`).
-- **Resizable dashboard canvas** with GridStack-based drag/resize editing.
+- Editor RBAC with separate editor auth/session handling.
+- Controlled PostgreSQL write flows via admin-managed writable tables.
+- MySQL and DuckDB data source support (read-only adapters), alongside PostgreSQL/SQLite/MongoDB.
+- Security hardening (input sanitization, security headers, request rate limiting, audit logging).
+- Optional encryption at rest for data source connection settings.
 
-### Next planned feature (post-v0.1)
+### Next planned feature
 
 - **AI Chat-assisted dashboarding**:
   - User provides a natural-language request.

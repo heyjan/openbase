@@ -29,6 +29,14 @@ playwright-report/
 blob-report/
 test-results/
 
+# Local DB artifacts (SQLite/DuckDB dev data)
+db/*.db
+db/*.db-*
+db/*.sqlite
+db/*.sqlite-*
+db/*.sqlite3
+db/*.sqlite3-*
+
 # Project-specific
 .github/
 mcp.json
