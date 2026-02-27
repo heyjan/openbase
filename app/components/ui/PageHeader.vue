@@ -9,16 +9,6 @@ const props = defineProps<{
   backTo?: string
   backLabel?: string
 }>()
-
-const { setTopBarBreadcrumbs } = useTopBarBreadcrumbs()
-
-watch(
-  () => props.breadcrumbs,
-  (value) => {
-    setTopBarBreadcrumbs(value ?? [])
-  },
-  { immediate: true, deep: true }
-)
 </script>
 
 <template>
@@ -26,6 +16,10 @@ watch(
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="space-y-1">
         <div class="flex flex-wrap items-center gap-3">
+          <Breadcrumbs
+            v-if="props.breadcrumbs?.length"
+            :items="props.breadcrumbs"
+          />
           <NuxtLink
             v-if="backTo"
             :to="backTo"

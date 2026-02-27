@@ -1,5 +1,8 @@
 import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3'
 import { getDataSourceById } from '~~/server/utils/data-source-store'
+import { getDuckDbRows } from '~~/server/utils/data-source-adapters/duckdb'
+import { getMySqlRows } from '~~/server/utils/data-source-adapters/mysql'
+import { getPostgresRows } from '~~/server/utils/data-source-adapters/postgresql'
 import { getMongoRows } from '~~/server/utils/mongodb-connector'
 import { getSqliteRows } from '~~/server/utils/sqlite-connector'
 
@@ -20,6 +23,15 @@ export default defineEventHandler(async (event) => {
   if (dataSource.type === 'sqlite') {
     const filepath = String(dataSource.connection.filepath || '')
     return getSqliteRows(filepath, table, safeLimit)
+  }
+  if (dataSource.type === 'duckdb') {
+    return getDuckDbRows(dataSource.connection, table, safeLimit)
+  }
+  if (dataSource.type === 'postgresql' || dataSource.type === 'postgres') {
+    return getPostgresRows(dataSource.connection, table, safeLimit)
+  }
+  if (dataSource.type === 'mysql') {
+    return getMySqlRows(dataSource.connection, table, safeLimit)
   }
   if (dataSource.type === 'mongodb') {
     const uri = String(dataSource.connection.uri || '')

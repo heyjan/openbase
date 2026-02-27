@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Settings } from 'lucide-vue-next'
-import Breadcrumbs from '~/components/ui/Breadcrumbs.vue'
 import ToastViewport from '~/components/ui/ToastViewport.vue'
 
 const loggingOut = ref(false)
@@ -8,10 +7,9 @@ const menuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 const toast = useAppToast()
 const route = useRoute()
-const { topBarBreadcrumbs } = useTopBarBreadcrumbs()
 
 const hiddenTopBarPaths = new Set(['/login', '/admin/login'])
-const hiddenTopBarPrefixes = ['/setup', '/d']
+const hiddenTopBarPrefixes = ['/setup', '/d', '/editor']
 
 const shouldShowTopBar = computed(() => {
   const path = route.path
@@ -105,14 +103,8 @@ onBeforeUnmount(() => {
     <div class="flex h-full items-center justify-between gap-4 px-6">
       <div class="flex min-w-0 items-center gap-10">
         <NuxtLink to="/" class="flex shrink-0 items-center">
-          <img src="/logo.svg" alt="Openbase" class="h-13 w-13" />
+          <img src="/logo.svg" alt="Openbase" class="h-12 w-12" />
         </NuxtLink>
-        <ClientOnly>
-          <Breadcrumbs
-            v-if="topBarBreadcrumbs.length"
-            :items="topBarBreadcrumbs"
-          />
-        </ClientOnly>
       </div>
       <div ref="menuRef" class="relative">
         <button

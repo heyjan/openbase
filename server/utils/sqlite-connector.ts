@@ -1,12 +1,14 @@
 import Database from 'better-sqlite3'
 import fs from 'fs'
 import { createError } from 'h3'
+import { resolveDataFilePath } from './data-path'
 
 const openDatabase = (filepath: string) => {
-  if (!fs.existsSync(filepath)) {
+  const resolvedPath = resolveDataFilePath(filepath)
+  if (!fs.existsSync(resolvedPath)) {
     throw createError({ statusCode: 404, statusMessage: 'SQLite file not found' })
   }
-  return new Database(filepath, { readonly: true, fileMustExist: true })
+  return new Database(resolvedPath, { readonly: true, fileMustExist: true })
 }
 
 export const listSqliteTables = (filepath: string) => {

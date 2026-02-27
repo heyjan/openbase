@@ -1,10 +1,12 @@
 import {
   createError,
   defineEventHandler,
+  getRequestIP,
   readBody,
   setCookie
 } from 'h3'
 import bcrypt from 'bcryptjs'
+import { createAuditEntry } from '~~/server/utils/audit-store'
 import {
   createSession,
   getAdminByEmail,
@@ -47,6 +49,19 @@ export default defineEventHandler(async (event) => {
     path: '/',
     expires: expiresAt
   })
+
+  try {
+    await createAuditEntry({
+      actorId: admin.id,
+      actorType: 'admin',
+      action: 'auth.login',
+      resource: 'admin_session',
+      details: { email: admin.email },
+      ipAddress: getRequestIP(event, { xForwardedFor: true }) ?? null
+    })
+  } catch {
+    // Audit logging failures should not block auth.
+  }
 
   return {
     admin: {

@@ -80,7 +80,7 @@ const deleteSource = async () => {
     await remove(dataSourceId.value)
     confirmDeleteOpen.value = false
     toast.success('Data source deleted')
-    await navigateTo('/admin/data-sources')
+    await navigateTo('/admin/settings/data-sources')
   } catch (err) {
     deleteError.value =
       err instanceof Error ? err.message : 'Failed to delete data source'
@@ -98,16 +98,17 @@ onMounted(loadTables)
 </script>
 
 <template>
-  <section class="px-6 py-10">
+  <section class="px-6 py-5">
     <PageHeader
       title="Data Browser"
       description="Inspect data from this source."
       :breadcrumbs="[
         { label: 'Dashboards', to: '/admin' },
-        { label: 'Data Sources', to: '/admin/data-sources' },
+        { label: 'Settings', to: '/admin/settings' },
+        { label: 'Data Sources', to: '/admin/settings/data-sources' },
         { label: 'Browse' }
       ]"
-      back-to="/admin/data-sources"
+      back-to="/admin/settings/data-sources"
       back-label="Back to data sources"
     >
       <template #actions>
@@ -133,8 +134,20 @@ onMounted(loadTables)
       <div class="rounded border border-gray-200 bg-white p-4 shadow-sm">
         <h2 class="text-lg font-semibold">{{ source?.name }}</h2>
         <p class="text-xs text-gray-500">{{ source?.type }}</p>
-        <p v-if="source?.type === 'sqlite'" class="text-xs text-gray-500">
+        <p
+          v-if="source?.type === 'sqlite' || source?.type === 'duckdb'"
+          class="text-xs text-gray-500"
+        >
           {{ source?.connection?.filepath }}
+        </p>
+        <p
+          v-else-if="source?.type === 'postgresql' || source?.type === 'postgres'"
+          class="text-xs text-gray-500"
+        >
+          {{ source?.connection?.connectionString }}
+        </p>
+        <p v-else-if="source?.type === 'mysql'" class="text-xs text-gray-500">
+          {{ source?.connection?.uri }}
         </p>
         <p v-else-if="source?.type === 'mongodb'" class="text-xs text-gray-500">
           Database: {{ source?.connection?.database }}

@@ -1,6 +1,8 @@
 import { createError } from 'h3'
 import { query } from './db'
 import { runPostgresQuery } from './data-source-adapters/postgresql'
+import { runMySqlQuery } from './data-source-adapters/mysql'
+import { runDuckDbQuery } from './data-source-adapters/duckdb'
 import { runRestQuery } from './data-source-adapters/rest-api'
 import { runMongoQuery } from './mongodb-connector'
 import { runSqliteQuery } from './sqlite-connector'
@@ -124,6 +126,26 @@ export const runQuery = async (input: {
   if (input.dataSourceType === 'postgresql' || input.dataSourceType === 'postgres') {
     const prepared = prepareSqlQuery(input.queryText, runtimeParameters, input.queryParameters)
     return runPostgresQuery(
+      input.connection,
+      prepared.queryText,
+      prepared.parameters,
+      limit
+    )
+  }
+
+  if (input.dataSourceType === 'mysql') {
+    const prepared = prepareSqlQuery(input.queryText, runtimeParameters, input.queryParameters)
+    return runMySqlQuery(
+      input.connection,
+      prepared.queryText,
+      prepared.parameters,
+      limit
+    )
+  }
+
+  if (input.dataSourceType === 'duckdb') {
+    const prepared = prepareSqlQuery(input.queryText, runtimeParameters, input.queryParameters)
+    return runDuckDbQuery(
       input.connection,
       prepared.queryText,
       prepared.parameters,

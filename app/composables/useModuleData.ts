@@ -55,6 +55,9 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
   const isPublicDashboardRoute = computed(() =>
     route.path.startsWith('/d/') && !!publicSlug.value
   )
+  const isEditorDashboardRoute = computed(() =>
+    route.path.startsWith('/editor/dashboards/') && !!publicSlug.value
+  )
   const isAdminDashboardEditRoute = computed(() =>
     route.path.startsWith('/admin/dashboards/') &&
     route.path.endsWith('/edit') &&
@@ -71,6 +74,9 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
     if (isPublicDashboardRoute.value) {
       return !!token.value
     }
+    if (isEditorDashboardRoute.value) {
+      return true
+    }
     if (isAdminDashboardEditRoute.value) {
       return true
     }
@@ -80,6 +86,9 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
   const endpoint = computed(() => {
     if (isPublicDashboardRoute.value) {
       return `/api/dashboards/${publicSlug.value}/modules/${moduleRef.value.id}/data`
+    }
+    if (isEditorDashboardRoute.value) {
+      return `/api/editor/dashboards/${publicSlug.value}/modules/${moduleRef.value.id}/data`
     }
     if (isAdminDashboardEditRoute.value) {
       return `/api/admin/dashboards/${dashboardId.value}/modules/${moduleRef.value.id}/data`
@@ -98,6 +107,16 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
         params[key] = value
       }
       params.token = token.value
+      return params
+    }
+
+    if (isEditorDashboardRoute.value) {
+      for (const [key, value] of Object.entries(route.query)) {
+        if (value === undefined || value === null) {
+          continue
+        }
+        params[key] = value
+      }
       return params
     }
 

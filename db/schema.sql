@@ -83,10 +83,86 @@ CREATE TABLE IF NOT EXISTS data_sources (
   name          VARCHAR(255) NOT NULL,
   type          VARCHAR(50) NOT NULL,
   connection    JSONB NOT NULL,
+  connection_encrypted BOOLEAN NOT NULL DEFAULT false,
   is_active     BOOLEAN DEFAULT true,
   last_sync_at  TIMESTAMPTZ,
   created_at    TIMESTAMPTZ DEFAULT now()
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'data_sources'
+      AND column_name = 'connection_encrypted'
+  ) THEN
+    ALTER TABLE data_sources
+    ADD COLUMN connection_encrypted BOOLEAN NOT NULL DEFAULT false;
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS editor_users (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name          VARCHAR(255) NOT NULL,
+  is_active     BOOLEAN DEFAULT true,
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  last_login_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS editor_sessions (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  editor_user_id  UUID REFERENCES editor_users(id) ON DELETE CASCADE,
+  session_token   VARCHAR(128) UNIQUE NOT NULL,
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  expires_at      TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS writable_tables (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  data_source_id  UUID NOT NULL REFERENCES data_sources(id) ON DELETE CASCADE,
+  table_name      VARCHAR(255) NOT NULL,
+  allowed_columns TEXT[],
+  allow_insert    BOOLEAN DEFAULT true,
+  allow_update    BOOLEAN DEFAULT true,
+  description     TEXT,
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  updated_at      TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(data_source_id, table_name)
+);
+
+CREATE TABLE IF NOT EXISTS editor_table_permissions (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  editor_user_id    UUID NOT NULL REFERENCES editor_users(id) ON DELETE CASCADE,
+  writable_table_id UUID NOT NULL REFERENCES writable_tables(id) ON DELETE CASCADE,
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(editor_user_id, writable_table_id)
+);
+
+CREATE TABLE IF NOT EXISTS editor_dashboard_access (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  editor_user_id  UUID NOT NULL REFERENCES editor_users(id) ON DELETE CASCADE,
+  dashboard_id    UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(editor_user_id, dashboard_id)
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_id   UUID,
+  actor_type VARCHAR(20) NOT NULL,
+  action     VARCHAR(100) NOT NULL,
+  resource   VARCHAR(255),
+  details    JSONB,
+  ip_address INET,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS saved_queries (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),

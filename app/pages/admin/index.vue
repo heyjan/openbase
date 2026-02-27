@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import {
-  Database,
   LayoutDashboard,
   Link2,
   Plus,
   RefreshCw,
-  Search
+  Search,
+  Table2,
+  Users
 } from 'lucide-vue-next'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
@@ -56,20 +57,13 @@ const deleteDashboard = async () => {
 </script>
 
 <template>
-  <section class="px-6 py-10">
+  <section class="px-6 py-5">
     <PageHeader
       title="Admin"
       description="Manage dashboards and share links."
       :breadcrumbs="[{ label: 'Dashboards' }]"
     >
       <template #actions>
-        <NuxtLink
-          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
-          to="/admin/data-sources"
-        >
-          <Database class="h-4 w-4" />
-          Data sources
-        </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
           to="/admin/queries"
@@ -97,6 +91,20 @@ const deleteDashboard = async () => {
         >
           <Link2 class="h-4 w-4" />
           Share links
+        </NuxtLink>
+        <NuxtLink
+          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
+          to="/admin/editors"
+        >
+          <Users class="h-4 w-4" />
+          Editors
+        </NuxtLink>
+        <NuxtLink
+          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
+          to="/admin/writable-tables"
+        >
+          <Table2 class="h-4 w-4" />
+          Writable tables
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded bg-brand-primary px-3 py-2 text-sm font-medium text-white"

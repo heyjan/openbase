@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link2, Palette, Users } from 'lucide-vue-next'
+import { Database, Link2, Palette, Users } from 'lucide-vue-next'
 import SettingsNavCard from '~/components/ui/SettingsNavCard.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 
@@ -17,6 +17,11 @@ const navigationItems = [
     icon: Palette
   },
   {
+    label: 'Data Sources',
+    to: '/admin/settings/data-sources',
+    icon: Database
+  },
+  {
     label: 'Shared Links',
     to: '/admin/settings/shared-links',
     icon: Link2
@@ -27,7 +32,7 @@ const isActive = (to: string) => route.path === to
 </script>
 
 <template>
-  <section class="px-6 py-10">
+  <section class="px-6 py-5">
     <PageHeader
       title="Settings"
       :breadcrumbs="[
