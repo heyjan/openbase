@@ -1,0 +1,909 @@
+<script setup lang="ts">
+import { GripVertical, RotateCcw, Trash2 } from 'lucide-vue-next'
+import type { ConditionalFormatRule, QueryPreviewVisualization, VizSeriesOption } from '~/types/viz-options'
+import {
+  getCategoryColumns,
+  getNumericColumns,
+  parseConditionalFormattingRules,
+  resolveTableColumnOrder,
+  resolveTableVisibleColumns,
+  toNumber
+} from '~/composables/useVizConfig'
+
+const props = withDefaults(
+  defineProps<{
+    vizType: QueryPreviewVisualization
+    columns: string[]
+    rows: Record<string, unknown>[]
+    modelValue: Record<string, unknown>
+    customOptionsCount?: number
+    isModified?: boolean
+  }>(),
+  {
+    customOptionsCount: 0,
+    isModified: false
+  }
+)
+
+const emit = defineEmits<{
+  (event: 'update:modelValue', value: Record<string, unknown>): void
+  (event: 'reset'): void
+}>()
+
+const isOpen = ref(false)
+const draggingColumn = ref('')
+const SELECT_NONE_VALUE = '__none__'
+
+const numericColumns = computed(() => getNumericColumns(props.rows, props.columns))
+const categoryColumns = computed(() => getCategoryColumns(props.columns, numericColumns.value))
+
+const sharedTitle = computed(() =>
+  typeof props.modelValue.titleOverride === 'string' ? props.modelValue.titleOverride : ''
+)
+
+const emitNext = (next: Record<string, unknown>) => {
+  emit('update:modelValue', {
+    ...next
+  })
+}
+
+const updateConfig = (patch: Record<string, unknown>) => {
+  emitNext({
+    ...props.modelValue,
+    ...patch
+  })
+}
+
+const updateString = (key: string, value: unknown) => {
+  updateConfig({
+    [key]: typeof value === 'string' ? value : String(value ?? '')
+  })
+}
+
+const updateOptionalNumber = (key: string, value: unknown) => {
+  const text = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  if (!text) {
+    const next = { ...props.modelValue }
+    delete next[key]
+    emitNext(next)
+    return
+  }
+
+  const parsed = Number(text)
+  if (!Number.isFinite(parsed)) {
+    return
+  }
+
+  updateConfig({
+    [key]: parsed
+  })
+}
+
+const updateInteger = (key: string, value: unknown, fallback: number) => {
+  const text = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  const parsed = Number(text)
+
+  updateConfig({
+    [key]: Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback
+  })
+}
+
+const updateBoolean = (key: string, value: boolean) => {
+  updateConfig({ [key]: value })
+}
+
+const sliderToNumber = (value: number | number[] | undefined, fallback: number) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (Array.isArray(value) && typeof value[0] === 'number' && Number.isFinite(value[0])) {
+    return value[0]
+  }
+
+  return fallback
+}
+
+const readBoolean = (key: string, fallback: boolean) => {
+  const value = props.modelValue[key]
+  return typeof value === 'boolean' ? value : fallback
+}
+
+const readNumber = (key: string, fallback: number) => {
+  const value = props.modelValue[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+const readString = (key: string, fallback = '') => {
+  const value = props.modelValue[key]
+  return typeof value === 'string' ? value : fallback
+}
+
+const readOptionalNumericText = (key: string) => {
+  const value = props.modelValue[key]
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
+}
+
+const toSelectValue = (value: unknown) => {
+  return typeof value === 'string' && value.trim() ? value : SELECT_NONE_VALUE
+}
+
+const fromSelectValue = (value: unknown) => {
+  if (typeof value !== 'string' || value === SELECT_NONE_VALUE || !value.trim()) {
+    return undefined
+  }
+  return value
+}
+
+const orderedColumns = computed(() =>
+  resolveTableColumnOrder(props.columns, props.modelValue)
+)
+
+const visibleColumns = computed(() =>
+  resolveTableVisibleColumns(orderedColumns.value, props.modelValue)
+)
+
+const moveColumn = (column: string, direction: -1 | 1) => {
+  const order = [...orderedColumns.value]
+  const index = order.indexOf(column)
+
+  if (index < 0) {
+    return
+  }
+
+  const nextIndex = index + direction
+  if (nextIndex < 0 || nextIndex >= order.length) {
+    return
+  }
+
+  const [moved] = order.splice(index, 1)
+  order.splice(nextIndex, 0, moved)
+
+  updateConfig({
+    columnOrder: order
+  })
+}
+
+const onColumnDragStart = (column: string, event: DragEvent) => {
+  draggingColumn.value = column
+  event.dataTransfer?.setData('text/plain', column)
+  event.dataTransfer?.setDragImage((event.target as HTMLElement) ?? document.body, 8, 8)
+}
+
+const onColumnDrop = (target: string, event: DragEvent) => {
+  event.preventDefault()
+
+  const source =
+    draggingColumn.value || event.dataTransfer?.getData('text/plain') || ''
+
+  draggingColumn.value = ''
+
+  if (!source || source === target) {
+    return
+  }
+
+  const order = [...orderedColumns.value]
+  const sourceIndex = order.indexOf(source)
+  const targetIndex = order.indexOf(target)
+
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return
+  }
+
+  const [moved] = order.splice(sourceIndex, 1)
+  order.splice(targetIndex, 0, moved)
+
+  updateConfig({
+    columnOrder: order
+  })
+}
+
+const toggleVisibleColumn = (column: string, checked: boolean) => {
+  const set = new Set(visibleColumns.value)
+  if (checked) {
+    set.add(column)
+  } else {
+    set.delete(column)
+  }
+
+  updateConfig({
+    visibleColumns: orderedColumns.value.filter((entry) => set.has(entry))
+  })
+}
+
+const currentSeries = computed<VizSeriesOption[]>(() => {
+  const raw = props.modelValue.series
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return null
+      }
+      const record = entry as Record<string, unknown>
+      const field = typeof record.field === 'string' ? record.field.trim() : ''
+      if (!field) {
+        return null
+      }
+      return {
+        field,
+        label: typeof record.label === 'string' && record.label.trim() ? record.label.trim() : field,
+        color:
+          typeof record.color === 'string' && record.color.trim()
+            ? record.color.trim()
+            : '#2563eb'
+      }
+    })
+    .filter((entry): entry is VizSeriesOption => entry !== null)
+})
+
+const seriesCandidateFields = computed(() => {
+  if (props.vizType === 'pie' || props.vizType === 'scatter' || props.vizType === 'table') {
+    return []
+  }
+
+  const xField = readString('xField')
+  const candidates = numericColumns.value.filter((column) => column !== xField)
+  return candidates.length ? candidates : numericColumns.value
+})
+
+const toggleSeriesField = (field: string, checked: boolean) => {
+  const byField = new Map(currentSeries.value.map((entry) => [entry.field, entry]))
+
+  if (checked) {
+    if (!byField.has(field)) {
+      byField.set(field, {
+        field,
+        label: field,
+        color: '#2563eb'
+      })
+    }
+  } else {
+    byField.delete(field)
+  }
+
+  updateConfig({
+    series: seriesCandidateFields.value
+      .filter((candidate) => byField.has(candidate))
+      .map((candidate, index) => {
+        const existing = byField.get(candidate)
+        return {
+          field: candidate,
+          label: existing?.label ?? candidate,
+          color: existing?.color ?? ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed'][index % 6]
+        }
+      })
+  })
+}
+
+const updateSeries = (index: number, patch: Partial<VizSeriesOption>) => {
+  const next = [...currentSeries.value]
+  const current = next[index]
+  if (!current) {
+    return
+  }
+
+  next[index] = {
+    ...current,
+    ...patch
+  }
+
+  updateConfig({
+    series: next
+  })
+}
+
+const conditionalRules = computed(() =>
+  parseConditionalFormattingRules(props.modelValue.conditionalFormatting)
+)
+
+const ruleOperators: Array<{ label: string; value: ConditionalFormatRule['operator'] }> = [
+  { label: '>', value: 'gt' },
+  { label: '>=', value: 'gte' },
+  { label: '<', value: 'lt' },
+  { label: '<=', value: 'lte' },
+  { label: '=', value: 'eq' },
+  { label: '!=', value: 'neq' },
+  { label: 'Between', value: 'between' },
+  { label: 'Contains', value: 'contains' }
+]
+
+const ruleStyles: Array<{ label: string; value: ConditionalFormatRule['style'] }> = [
+  { label: 'Background', value: 'background' },
+  { label: 'Text', value: 'text' },
+  { label: 'Bar', value: 'bar' }
+]
+
+const addRule = () => {
+  const column = props.columns[0] ?? ''
+  if (!column) {
+    return
+  }
+
+  updateConfig({
+    conditionalFormatting: [
+      ...conditionalRules.value,
+      {
+        column,
+        operator: 'gt',
+        value: 0,
+        style: 'background',
+        color: '#fca5a5'
+      } satisfies ConditionalFormatRule
+    ]
+  })
+}
+
+const removeRule = (index: number) => {
+  updateConfig({
+    conditionalFormatting: conditionalRules.value.filter((_, ruleIndex) => ruleIndex !== index)
+  })
+}
+
+const normalizeRuleValue = (column: string, rawValue: unknown, operator: ConditionalFormatRule['operator']) => {
+  if (operator === 'contains') {
+    return typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
+  }
+
+  const numeric = toNumber(rawValue)
+  if (numeric !== null && numericColumns.value.includes(column)) {
+    return numeric
+  }
+
+  return typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
+}
+
+const updateRule = (index: number, patch: Partial<ConditionalFormatRule>) => {
+  const next = [...conditionalRules.value]
+  const current = next[index]
+  if (!current) {
+    return
+  }
+
+  const merged = {
+    ...current,
+    ...patch
+  }
+
+  merged.value = normalizeRuleValue(merged.column, merged.value, merged.operator)
+
+  if (merged.operator !== 'between') {
+    delete merged.valueTo
+  }
+
+  next[index] = merged
+
+  updateConfig({
+    conditionalFormatting: next
+  })
+}
+
+watch(
+  () => props.vizType,
+  () => {
+    isOpen.value = false
+  }
+)
+</script>
+
+<template>
+  <section class="rounded border border-gray-200 bg-white">
+    <div class="flex items-center justify-between gap-3 border-b border-gray-200 px-3 py-2">
+      <button
+        class="inline-flex items-center gap-2 text-sm font-medium text-gray-800"
+        type="button"
+        @click="isOpen = !isOpen"
+      >
+        <span>{{ isOpen ? 'Hide options' : 'Show options' }}</span>
+      </button>
+
+      <div class="flex items-center gap-2 text-xs text-gray-500">
+        <span v-if="!isOpen">{{ customOptionsCount }} custom options</span>
+        <UButton
+          v-if="isModified"
+          color="neutral"
+          variant="ghost"
+          size="xs"
+          @click="emit('reset')"
+        >
+          <RotateCcw class="h-3.5 w-3.5" />
+        </UButton>
+      </div>
+    </div>
+
+    <div v-if="isOpen" class="space-y-4 p-3">
+      <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+        Title override
+        <UInput
+          class="mt-1"
+          :model-value="sharedTitle"
+          @update:model-value="updateString('titleOverride', $event)"
+        />
+      </label>
+
+      <template v-if="vizType === 'table'">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Visible columns</p>
+            <div class="mt-2 grid gap-1">
+              <label
+                v-for="column in orderedColumns"
+                :key="`visible-${column}`"
+                class="inline-flex items-center gap-2 text-sm text-gray-700"
+              >
+                <input
+                  :checked="visibleColumns.includes(column)"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border border-gray-300"
+                  @change="toggleVisibleColumn(column, ($event.target as HTMLInputElement).checked)"
+                >
+                <span>{{ column }}</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Column order</p>
+            <ul class="mt-2 space-y-1">
+              <li
+                v-for="column in orderedColumns"
+                :key="`order-${column}`"
+                draggable="true"
+                class="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm"
+                @dragstart="onColumnDragStart(column, $event)"
+                @dragover.prevent
+                @drop="onColumnDrop(column, $event)"
+              >
+                <span class="inline-flex items-center gap-2">
+                  <GripVertical class="h-3.5 w-3.5 text-gray-400" />
+                  {{ column }}
+                </span>
+                <span class="inline-flex items-center gap-1">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    @click="moveColumn(column, -1)"
+                  >↑</UButton>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    @click="moveColumn(column, 1)"
+                  >↓</UButton>
+                </span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-4">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Sort column
+            <USelect
+              class="mt-1"
+              :items="[
+                { label: 'None', value: SELECT_NONE_VALUE },
+                ...orderedColumns.map((column) => ({ label: column, value: column }))
+              ]"
+              :model-value="toSelectValue(readString('sortColumn'))"
+              @update:model-value="updateConfig({ sortColumn: fromSelectValue($event) })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Sort direction
+            <USelect
+              class="mt-1"
+              :items="[
+                { label: 'Ascending', value: 'asc' },
+                { label: 'Descending', value: 'desc' }
+              ]"
+              :model-value="readString('sortDirection', 'asc')"
+              @update:model-value="updateConfig({ sortDirection: $event === 'desc' ? 'desc' : 'asc' })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Row limit
+            <UInput
+              class="mt-1"
+              type="number"
+              :model-value="String(readNumber('rowLimit', 500))"
+              @update:model-value="updateInteger('rowLimit', $event, 500)"
+            />
+          </label>
+        </div>
+
+        <div>
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Conditional formatting</p>
+            <UButton color="neutral" variant="outline" size="xs" @click="addRule">Add rule</UButton>
+          </div>
+
+          <div v-if="!conditionalRules.length" class="rounded border border-gray-200 bg-gray-50 px-2 py-2 text-sm text-gray-500">
+            No rules
+          </div>
+
+          <div v-else class="space-y-2">
+            <div
+              v-for="(rule, index) in conditionalRules"
+              :key="`rule-${index}`"
+              class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-7"
+            >
+              <USelect
+                :items="columns.map((column) => ({ label: column, value: column }))"
+                :model-value="rule.column"
+                @update:model-value="updateRule(index, { column: String($event || '') })"
+              />
+
+              <USelect
+                :items="ruleOperators"
+                :model-value="rule.operator"
+                @update:model-value="updateRule(index, { operator: ($event || 'gt') as ConditionalFormatRule['operator'] })"
+              />
+
+              <UInput
+                :model-value="String(rule.value ?? '')"
+                @update:model-value="updateRule(index, { value: $event as string })"
+              />
+
+              <UInput
+                v-if="rule.operator === 'between'"
+                :model-value="String(rule.valueTo ?? '')"
+                @update:model-value="updateRule(index, { valueTo: toNumber($event) ?? undefined })"
+              />
+              <div v-else class="hidden md:block" />
+
+              <USelect
+                :items="ruleStyles"
+                :model-value="rule.style"
+                @update:model-value="updateRule(index, { style: ($event || 'background') as ConditionalFormatRule['style'] })"
+              />
+
+              <input
+                :value="rule.color"
+                type="color"
+                class="h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+                @input="updateRule(index, { color: ($event.target as HTMLInputElement).value })"
+              >
+
+              <div class="flex items-center justify-end gap-2">
+                <input
+                  v-if="rule.style === 'bar'"
+                  :value="rule.colorTo ?? '#ffffff'"
+                  type="color"
+                  class="h-9 w-14 cursor-pointer rounded border border-gray-300 bg-white px-1"
+                  @input="updateRule(index, { colorTo: ($event.target as HTMLInputElement).value })"
+                >
+                <UButton color="error" variant="ghost" size="xs" @click="removeRule(index)">
+                  <Trash2 class="h-4 w-4" />
+                </UButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="vizType === 'line' || vizType === 'area'">
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            X-axis field
+            <USelect
+              class="mt-1"
+              :items="[
+                ...categoryColumns.map((column) => ({ label: column, value: column })),
+                ...numericColumns
+                  .filter((column) => !categoryColumns.includes(column))
+                  .map((column) => ({ label: column, value: column }))
+              ]"
+              :model-value="readString('xField')"
+              @update:model-value="updateConfig({ xField: String($event || '') })"
+            />
+          </label>
+        </div>
+
+        <div>
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Series fields</p>
+          <div class="mt-2 grid gap-1 md:grid-cols-3">
+            <label
+              v-for="field in seriesCandidateFields"
+              :key="`line-series-${field}`"
+              class="inline-flex items-center gap-2 text-sm text-gray-700"
+            >
+              <input
+                :checked="currentSeries.some((entry) => entry.field === field)"
+                type="checkbox"
+                class="h-4 w-4 rounded border border-gray-300"
+                @change="toggleSeriesField(field, ($event.target as HTMLInputElement).checked)"
+              >
+              <span>{{ field }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div v-if="currentSeries.length" class="space-y-2">
+          <div
+            v-for="(series, index) in currentSeries"
+            :key="`line-series-options-${series.field}`"
+            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[1fr_120px]"
+          >
+            <UInput
+              :model-value="series.label ?? series.field"
+              @update:model-value="updateSeries(index, { label: String($event || '') })"
+            />
+            <input
+              :value="series.color ?? '#2563eb'"
+              type="color"
+              class="h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+              @input="updateSeries(index, { color: ($event.target as HTMLInputElement).value })"
+            >
+          </div>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-4">
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Smooth
+            <USwitch :model-value="readBoolean('smooth', true)" @update:model-value="updateBoolean('smooth', $event)" />
+          </label>
+
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Show points
+            <USwitch :model-value="readBoolean('showSymbols', false)" @update:model-value="updateBoolean('showSymbols', $event)" />
+          </label>
+
+          <label
+            v-if="vizType === 'area'"
+            class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+          >
+            Fill area
+            <USwitch :model-value="readBoolean('area', true)" @update:model-value="updateBoolean('area', $event)" />
+          </label>
+
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Show legend
+            <USwitch :model-value="readBoolean('showLegend', true)" @update:model-value="updateBoolean('showLegend', $event)" />
+          </label>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Y-axis min
+            <UInput
+              class="mt-1"
+              type="number"
+              :model-value="readOptionalNumericText('yAxisMin')"
+              @update:model-value="updateOptionalNumber('yAxisMin', $event)"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Y-axis max
+            <UInput
+              class="mt-1"
+              type="number"
+              :model-value="readOptionalNumericText('yAxisMax')"
+              @update:model-value="updateOptionalNumber('yAxisMax', $event)"
+            />
+          </label>
+        </div>
+      </template>
+
+      <template v-else-if="vizType === 'bar'">
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            X-axis field
+            <USelect
+              class="mt-1"
+              :items="[
+                ...categoryColumns.map((column) => ({ label: column, value: column })),
+                ...numericColumns
+                  .filter((column) => !categoryColumns.includes(column))
+                  .map((column) => ({ label: column, value: column }))
+              ]"
+              :model-value="readString('xField')"
+              @update:model-value="updateConfig({ xField: String($event || '') })"
+            />
+          </label>
+        </div>
+
+        <div>
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Series fields</p>
+          <div class="mt-2 grid gap-1 md:grid-cols-3">
+            <label
+              v-for="field in seriesCandidateFields"
+              :key="`bar-series-${field}`"
+              class="inline-flex items-center gap-2 text-sm text-gray-700"
+            >
+              <input
+                :checked="currentSeries.some((entry) => entry.field === field)"
+                type="checkbox"
+                class="h-4 w-4 rounded border border-gray-300"
+                @change="toggleSeriesField(field, ($event.target as HTMLInputElement).checked)"
+              >
+              <span>{{ field }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div v-if="currentSeries.length" class="space-y-2">
+          <div
+            v-for="(series, index) in currentSeries"
+            :key="`bar-series-options-${series.field}`"
+            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[1fr_120px]"
+          >
+            <UInput
+              :model-value="series.label ?? series.field"
+              @update:model-value="updateSeries(index, { label: String($event || '') })"
+            />
+            <input
+              :value="series.color ?? '#2563eb'"
+              type="color"
+              class="h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+              @input="updateSeries(index, { color: ($event.target as HTMLInputElement).value })"
+            >
+          </div>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-4">
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Stacked
+            <USwitch :model-value="readBoolean('stacked', false)" @update:model-value="updateBoolean('stacked', $event)" />
+          </label>
+
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Horizontal
+            <USwitch :model-value="readBoolean('horizontal', false)" @update:model-value="updateBoolean('horizontal', $event)" />
+          </label>
+
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Show legend
+            <USwitch :model-value="readBoolean('showLegend', true)" @update:model-value="updateBoolean('showLegend', $event)" />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Border radius
+            <USlider
+              class="mt-2"
+              :min="0"
+              :max="12"
+              :step="1"
+              :model-value="readNumber('barBorderRadius', 4)"
+              @update:model-value="updateConfig({ barBorderRadius: sliderToNumber($event, 4) })"
+            />
+          </label>
+        </div>
+      </template>
+
+      <template v-else-if="vizType === 'pie'">
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Category field
+            <USelect
+              class="mt-1"
+              :items="columns.map((column) => ({ label: column, value: column }))"
+              :model-value="readString('categoryField')"
+              @update:model-value="updateConfig({ categoryField: String($event || '') })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Value field
+            <USelect
+              class="mt-1"
+              :items="numericColumns.map((column) => ({ label: column, value: column }))"
+              :model-value="readString('valueField')"
+              @update:model-value="updateConfig({ valueField: String($event || '') })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Top N
+            <UInput
+              class="mt-1"
+              type="number"
+              :model-value="String(readNumber('topN', 8))"
+              @update:model-value="updateInteger('topN', $event, 8)"
+            />
+          </label>
+
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Donut
+            <USwitch :model-value="readBoolean('donut', true)" @update:model-value="updateBoolean('donut', $event)" />
+          </label>
+
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Show labels
+            <USwitch :model-value="readBoolean('showLabels', false)" @update:model-value="updateBoolean('showLabels', $event)" />
+          </label>
+
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Show legend
+            <USwitch :model-value="readBoolean('showLegend', true)" @update:model-value="updateBoolean('showLegend', $event)" />
+          </label>
+        </div>
+      </template>
+
+      <template v-else-if="vizType === 'scatter'">
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            X field
+            <USelect
+              class="mt-1"
+              :items="numericColumns.map((column) => ({ label: column, value: column }))"
+              :model-value="readString('xField')"
+              @update:model-value="updateConfig({ xField: String($event || '') })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Y field
+            <USelect
+              class="mt-1"
+              :items="numericColumns.map((column) => ({ label: column, value: column }))"
+              :model-value="readString('yField')"
+              @update:model-value="updateConfig({ yField: String($event || '') })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Size field
+            <USelect
+              class="mt-1"
+              :items="[
+                { label: 'None', value: SELECT_NONE_VALUE },
+                ...numericColumns.map((column) => ({ label: column, value: column }))
+              ]"
+              :model-value="toSelectValue(readString('sizeField'))"
+              @update:model-value="updateConfig({ sizeField: fromSelectValue($event) })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Label field
+            <USelect
+              class="mt-1"
+              :items="[
+                { label: 'None', value: SELECT_NONE_VALUE },
+                ...columns.map((column) => ({ label: column, value: column }))
+              ]"
+              :model-value="toSelectValue(readString('labelField'))"
+              @update:model-value="updateConfig({ labelField: fromSelectValue($event) })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Min bubble size
+            <USlider
+              class="mt-2"
+              :min="4"
+              :max="30"
+              :step="1"
+              :model-value="readNumber('minSymbolSize', 10)"
+              @update:model-value="updateConfig({ minSymbolSize: sliderToNumber($event, 10) })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Max bubble size
+            <USlider
+              class="mt-2"
+              :min="20"
+              :max="80"
+              :step="1"
+              :model-value="readNumber('maxSymbolSize', 42)"
+              @update:model-value="updateConfig({ maxSymbolSize: sliderToNumber($event, 42) })"
+            />
+          </label>
+
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Show labels
+            <USwitch :model-value="readBoolean('showLabels', false)" @update:model-value="updateBoolean('showLabels', $event)" />
+          </label>
+        </div>
+      </template>
+    </div>
+  </section>
+</template>

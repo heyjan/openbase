@@ -104,6 +104,11 @@ const maxSymbolSize = computed(() =>
   readSizeBound(props.module.config.max_symbol_size ?? props.module.config.maxSymbolSize, 42)
 )
 
+const showLabels = computed(() => {
+  const value = props.module.config.show_labels ?? props.module.config.showLabels
+  return typeof value === 'boolean' ? value : false
+})
+
 const symbolRange = computed(() => ({
   min: Math.min(minSymbolSize.value, maxSymbolSize.value),
   max: Math.max(minSymbolSize.value, maxSymbolSize.value)
@@ -203,6 +208,12 @@ const chartOption = computed<EChartsOption>(() => ({
       itemStyle: {
         color: '#2563eb',
         opacity: 0.78
+      },
+      label: {
+        show: showLabels.value,
+        position: 'top',
+        color: '#374151',
+        formatter: (params: { data?: { name?: string } }) => params.data?.name ?? ''
       },
       emphasis: {
         focus: 'series'

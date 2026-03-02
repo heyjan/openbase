@@ -12,10 +12,14 @@ import {
   ScatterChart
 } from 'lucide-vue-next'
 import QueryPreviewResult from '~/components/admin/QueryPreviewResult.vue'
+import VizOptionsPanel from '~/components/admin/VizOptionsPanel.vue'
 import SettingsNavCard from '~/components/ui/SettingsNavCard.vue'
 import Table from '~/components/ui/Table.vue'
 import type { DataSource } from '~/types/data-source'
+import type { QueryVisualization } from '~/types/query-visualization'
 import type { SavedQueryPreviewResult } from '~/types/query'
+import type { QueryPreviewVisualization } from '~/types/viz-options'
+import { useVizConfig } from '~/composables/useVizConfig'
 import {
   extractVariables,
   parseVariableDefinitions,
@@ -30,11 +34,10 @@ type QueryEditorValue = {
   queryText: string
 }
 
-type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie' | 'scatter'
-
 type SaveVisualizationPayload = {
   name: string
   visualization: QueryPreviewVisualization
+  config: Record<string, unknown>
 }
 
 type SavedQueryOption = {
@@ -53,6 +56,7 @@ const props = defineProps<{
   dataSources: DataSource[]
   queryParameters?: Record<string, unknown>
   savedQueries?: SavedQueryOption[]
+  savedVisualizations?: QueryVisualization[]
   currentQueryId?: string
   previewParameters?: Record<string, unknown>
   saving?: boolean
@@ -127,6 +131,73 @@ const visualizationOptions: VisualizationOption[] = [
 const visualizationSelectionDisabled = computed(
   () => !props.previewResult || !props.canPreview || props.previewing === true
 )
+
+const mapModuleTypeToVisualization = (visualization: QueryVisualization) => {
+  if (visualization.moduleType === 'data_table') {
+    return 'table' as const
+  }
+  if (visualization.moduleType === 'line_chart') {
+    return 'line' as const
+  }
+  if (visualization.moduleType === 'time_series_chart') {
+    return visualization.config?.area === false ? ('line' as const) : ('area' as const)
+  }
+  if (visualization.moduleType === 'bar_chart') {
+    return 'bar' as const
+  }
+  if (visualization.moduleType === 'pie_chart') {
+    return 'pie' as const
+  }
+  if (visualization.moduleType === 'scatter_chart') {
+    return 'scatter' as const
+  }
+  return null
+}
+
+const savedVizConfigByType = computed<
+  Partial<Record<QueryPreviewVisualization, Record<string, unknown>>>
+>(() => {
+  const next: Partial<Record<QueryPreviewVisualization, Record<string, unknown>>> = {}
+  for (const visualization of props.savedVisualizations ?? []) {
+    const type = mapModuleTypeToVisualization(visualization)
+    if (!type || next[type]) {
+      continue
+    }
+    next[type] = { ...(visualization.config ?? {}) }
+  }
+  return next
+})
+
+const savedVizNameByType = computed<Partial<Record<QueryPreviewVisualization, string>>>(() => {
+  const next: Partial<Record<QueryPreviewVisualization, string>> = {}
+  for (const visualization of props.savedVisualizations ?? []) {
+    const type = mapModuleTypeToVisualization(visualization)
+    if (!type || next[type]) {
+      continue
+    }
+    next[type] = visualization.name
+  }
+  return next
+})
+
+const previewRows = computed(() => props.previewResult?.rows ?? [])
+const previewColumns = computed(() => props.previewResult?.columns ?? [])
+const queryNameForViz = computed(() => props.value.name.trim() || 'Query')
+
+const {
+  config: vizConfig,
+  isModified: isVizConfigModified,
+  customOptionsCount: vizCustomOptionsCount,
+  setConfig: setVizConfig,
+  resetToDefaults: resetVizConfig,
+  getConfigForType
+} = useVizConfig({
+  visualizationType: selectedVisualization,
+  columns: previewColumns,
+  rows: previewRows,
+  queryName: queryNameForViz,
+  savedConfigByType: savedVizConfigByType
+})
 
 const variableTypeOptions: Array<{ value: VariableType; label: string }> = [
   { value: 'text', label: 'Text' },
@@ -375,10 +446,12 @@ const saveVisualization = () => {
   const queryName = props.value.name.trim() || 'Query'
   const fallbackName = `${queryName} ${visualizationLabel[selectedVisualization.value]}`
   const name = visualizationDraftName.value.trim() || fallbackName
+  const config = getConfigForType(selectedVisualization.value)
   visualizationDraftName.value = name
   emit('save-visualization', {
     name,
-    visualization: selectedVisualization.value
+    visualization: selectedVisualization.value,
+    config
   })
 }
 
@@ -388,6 +461,19 @@ watch(
     if (!result) {
       selectedVisualization.value = 'table'
       visualizationDraftName.value = ''
+    }
+  }
+)
+
+watch(
+  [selectedVisualization, () => props.previewResult],
+  ([visualization, previewResult]) => {
+    if (!previewResult || visualizationDraftName.value.trim()) {
+      return
+    }
+    const savedName = savedVizNameByType.value[visualization]
+    if (savedName) {
+      visualizationDraftName.value = savedName
     }
   }
 )
@@ -566,11 +652,24 @@ watch(
           </aside>
 
           <div class="min-w-0 flex-1">
+            <VizOptionsPanel
+              v-if="previewResult"
+              class="mb-3"
+              :viz-type="selectedVisualization"
+              :columns="previewResult.columns"
+              :rows="previewResult.rows"
+              :model-value="vizConfig"
+              :custom-options-count="vizCustomOptionsCount"
+              :is-modified="isVizConfigModified"
+              @update:model-value="setVizConfig"
+              @reset="resetVizConfig"
+            />
             <QueryPreviewResult
               v-if="previewResult"
               :result="previewResult"
               :show-visualization-menu="false"
               :visualization="selectedVisualization"
+              :viz-config="vizConfig"
               @update:visualization="selectedVisualization = $event"
             />
             <div v-else class="mt-4 rounded border border-gray-100 bg-gray-50 p-3">

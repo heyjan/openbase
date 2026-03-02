@@ -3,7 +3,9 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 import QueryEditor from '~/components/admin/QueryEditor.vue'
 import type { DataSource } from '~/types/data-source'
 import type { ModuleType } from '~/types/module'
+import type { QueryVisualization } from '~/types/query-visualization'
 import type { SavedQueryPreviewResult } from '~/types/query'
+import type { QueryPreviewVisualization } from '~/types/viz-options'
 
 type QueryEditorValue = {
   name: string
@@ -12,15 +14,16 @@ type QueryEditorValue = {
   queryText: string
 }
 
-type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie' | 'scatter'
-
 const route = useRoute()
 const queryId = computed(() => String(route.params.id || ''))
 const isNew = computed(() => queryId.value === 'new')
 
 const { list: listDataSources } = useDataSources()
 const { list: listQueries, getById, create, update, preview } = useQueries()
-const { create: createVisualization } = useQueryVisualizations()
+const {
+  list: listQueryVisualizations,
+  create: createVisualization
+} = useQueryVisualizations()
 const toast = useAppToast()
 
 const loading = ref(false)
@@ -34,6 +37,7 @@ const clientReady = ref(false)
 const queryParameters = ref<Record<string, unknown>>({})
 const previewParameters = ref<Record<string, unknown>>({})
 const savedQueryOptions = ref<Array<{ id: string; name: string }>>([])
+const savedVisualizations = ref<QueryVisualization[]>([])
 
 const dataSources = ref<DataSource[]>([])
 const form = ref<QueryEditorValue>({
@@ -103,11 +107,16 @@ const load = async () => {
       }
       queryParameters.value = {}
       previewParameters.value = {}
+      savedVisualizations.value = []
       lastSavedSignature.value = ''
       return
     }
 
-    const query = await getById(queryId.value)
+    const [query, visualizations] = await Promise.all([
+      getById(queryId.value),
+      listQueryVisualizations({ savedQueryId: queryId.value })
+    ])
+
     form.value = {
       name: query.name,
       dataSourceId: query.dataSourceId,
@@ -116,6 +125,7 @@ const load = async () => {
     }
     queryParameters.value = query.parameters ?? {}
     previewParameters.value = {}
+    savedVisualizations.value = visualizations
     lastSavedSignature.value = getPayloadSignature({
       name: query.name,
       dataSourceId: query.dataSourceId,
@@ -183,42 +193,46 @@ const persistQuery = async () => {
   }
 }
 
-const mapVisualizationToModule = (visualization: QueryPreviewVisualization) => {
+const mapVisualizationToModule = (
+  visualization: QueryPreviewVisualization,
+  config: Record<string, unknown>
+) => {
   if (visualization === 'table') {
     return {
       moduleType: 'data_table' as ModuleType,
-      config: {} as Record<string, unknown>
+      config: { ...config } as Record<string, unknown>
     }
   }
   if (visualization === 'bar') {
     return {
       moduleType: 'bar_chart' as ModuleType,
-      config: {} as Record<string, unknown>
+      config: { ...config } as Record<string, unknown>
     }
   }
   if (visualization === 'pie') {
     return {
       moduleType: 'pie_chart' as ModuleType,
-      config: {} as Record<string, unknown>
+      config: { ...config } as Record<string, unknown>
     }
   }
   if (visualization === 'scatter') {
     return {
       moduleType: 'scatter_chart' as ModuleType,
-      config: {} as Record<string, unknown>
+      config: { ...config } as Record<string, unknown>
     }
   }
   if (visualization === 'area') {
     return {
       moduleType: 'time_series_chart' as ModuleType,
       config: {
-        area: true
+        area: true,
+        ...config
       } as Record<string, unknown>
     }
   }
   return {
     moduleType: 'line_chart' as ModuleType,
-    config: {} as Record<string, unknown>
+    config: { ...config } as Record<string, unknown>
   }
 }
 
@@ -252,6 +266,7 @@ const runPreview = async () => {
 const saveVisualization = async (payload: {
   name: string
   visualization: QueryPreviewVisualization
+  config: Record<string, unknown>
 }) => {
   errorMessage.value = ''
   const name = payload.name.trim()
@@ -265,10 +280,10 @@ const saveVisualization = async (payload: {
     return
   }
 
-  const mapped = mapVisualizationToModule(payload.visualization)
+  const mapped = mapVisualizationToModule(payload.visualization, payload.config ?? {})
 
   try {
-    await createVisualization({
+    const created = await createVisualization({
       savedQueryId,
       name,
       moduleType: mapped.moduleType,
@@ -276,6 +291,10 @@ const saveVisualization = async (payload: {
         ...mapped.config
       }
     })
+    savedVisualizations.value = [
+      created,
+      ...savedVisualizations.value.filter((visualization) => visualization.id !== created.id)
+    ]
     toast.success('Visualization saved')
   } catch (error) {
     errorMessage.value =
@@ -323,6 +342,7 @@ onMounted(async () => {
         :data-sources="dataSources"
         :query-parameters="queryParameters"
         :saved-queries="savedQueryOptions"
+        :saved-visualizations="savedVisualizations"
         :current-query-id="isNew ? '' : queryId"
         :preview-parameters="previewParameters"
         :saving="saving"

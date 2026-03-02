@@ -88,12 +88,28 @@ const pieData = computed(() => {
 
 const hasData = computed(() => pieData.value.length > 0)
 
+const donut = computed(() => {
+  const value = props.module.config.donut
+  return typeof value === 'boolean' ? value : true
+})
+
+const showLabels = computed(() => {
+  const value = props.module.config.show_labels ?? props.module.config.showLabels
+  return typeof value === 'boolean' ? value : false
+})
+
+const showLegend = computed(() => {
+  const value = props.module.config.show_legend ?? props.module.config.showLegend
+  return typeof value === 'boolean' ? value : true
+})
+
 const chartOption = computed<EChartsOption>(() => ({
   tooltip: {
     trigger: 'item',
     formatter: '{b}: {c} ({d}%)'
   },
   legend: {
+    show: showLegend.value,
     bottom: 0,
     type: 'scroll',
     textStyle: { color: '#4b5563' }
@@ -101,13 +117,14 @@ const chartOption = computed<EChartsOption>(() => ({
   series: [
     {
       type: 'pie',
-      radius: ['35%', '68%'],
+      radius: donut.value ? ['35%', '68%'] : ['0%', '72%'],
       center: ['50%', '42%'],
       itemStyle: {
         borderColor: '#ffffff',
         borderWidth: 2
       },
       label: {
+        show: showLabels.value,
         color: '#374151'
       },
       emphasis: {

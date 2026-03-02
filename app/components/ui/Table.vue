@@ -13,10 +13,17 @@ const props = withDefaults(
     rows: TableRow[]
     columns?: ColumnInput[]
     emptyLabel?: string
+    cellStyleResolver?: (input: {
+      row: TableRow
+      columnKey: string
+      value: unknown
+      rowIndex: number
+    }) => Record<string, string> | undefined
   }>(),
   {
     columns: () => [],
-    emptyLabel: 'No rows found.'
+    emptyLabel: 'No rows found.',
+    cellStyleResolver: undefined
   }
 )
 
@@ -58,15 +65,44 @@ const tableColumns = computed(() =>
         () => `${column.label ?? column.key}${indicator}`
       )
     },
-    cell: ({ getValue }: { getValue: () => unknown }) => {
+    cell: ({
+      getValue,
+      row,
+      column
+    }: {
+      getValue: () => unknown
+      row: { original: TableRow; index: number }
+      column: { id: string }
+    }) => {
       const value = getValue()
+      const style = props.cellStyleResolver?.({
+        row: row.original,
+        rowIndex: row.index,
+        columnKey: column.id,
+        value
+      })
+
+      let rendered = ''
       if (value === null || value === undefined) {
-        return ''
+        rendered = ''
+      } else if (typeof value === 'object') {
+        rendered = JSON.stringify(value)
+      } else {
+        rendered = String(value)
       }
-      if (typeof value === 'object') {
-        return JSON.stringify(value)
+
+      if (!style) {
+        return rendered
       }
-      return String(value)
+
+      return h(
+        'span',
+        {
+          class: 'inline-block w-full rounded px-1 py-0.5',
+          style
+        },
+        rendered
+      )
     }
   }))
 )

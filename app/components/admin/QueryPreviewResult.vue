@@ -4,8 +4,18 @@ import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import Table from '~/components/ui/Table.vue'
 import type { SavedQueryPreviewResult } from '~/types/query'
-
-type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie' | 'scatter'
+import type { QueryPreviewVisualization, VizSeriesOption } from '~/types/viz-options'
+import {
+  applyTableSortAndLimit,
+  getCategoryColumns,
+  getColumnNumericExtents,
+  getConditionalCellStyle,
+  getNumericColumns,
+  parseConditionalFormattingRules,
+  resolveTableColumnOrder,
+  resolveTableVisibleColumns,
+  toNumber
+} from '~/composables/useVizConfig'
 
 type VisualizationOption = {
   id: QueryPreviewVisualization
@@ -14,11 +24,17 @@ type VisualizationOption = {
   icon: ReturnType<typeof defineComponent>
 }
 
-const props = defineProps<{
-  result: SavedQueryPreviewResult
-  visualization: QueryPreviewVisualization
-  showVisualizationMenu: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    result: SavedQueryPreviewResult
+    visualization: QueryPreviewVisualization
+    showVisualizationMenu: boolean
+    vizConfig?: Record<string, unknown>
+  }>(),
+  {
+    vizConfig: () => ({})
+  }
+)
 
 const emit = defineEmits<{
   (event: 'update:visualization', value: QueryPreviewVisualization): void
@@ -66,82 +82,152 @@ const visualizationOptions: VisualizationOption[] = [
 const palette = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
 const rows = computed(() => props.result.rows ?? [])
 const columns = computed(() => props.result.columns ?? [])
-const tableRows = computed(() => rows.value)
-const tableColumns = computed(() =>
-  columns.value.map((column) => ({
-    key: column,
-    label: column
-  }))
-)
-
 const activeVisualizationLabel = computed(
   () => visualizationOptions.find((item) => item.id === props.visualization)?.label ?? 'Table'
 )
 
-const toNumber = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value
-  }
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
+const config = computed(() => props.vizConfig ?? {})
 
-const columnIsNumeric = (column: string) => {
-  let sawValue = false
-
-  for (const row of rows.value) {
-    const value = row[column]
-    if (value === null || value === undefined || value === '') {
-      continue
-    }
-
-    sawValue = true
-    if (toNumber(value) === null) {
-      return false
+const readString = (keys: string[], fallback = '') => {
+  for (const key of keys) {
+    const value = config.value[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
     }
   }
-
-  return sawValue
+  return fallback
 }
 
-const numericColumns = computed(() => columns.value.filter((column) => columnIsNumeric(column)))
-const categoryColumns = computed(() => {
-  const dimensions = columns.value.filter((column) => !numericColumns.value.includes(column))
-  return dimensions.length ? dimensions : columns.value
+const readBoolean = (keys: string[], fallback: boolean) => {
+  for (const key of keys) {
+    const value = config.value[key]
+    if (typeof value === 'boolean') {
+      return value
+    }
+  }
+  return fallback
+}
+
+const readNumber = (keys: string[], fallback: number) => {
+  for (const key of keys) {
+    const value = config.value[key]
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+  }
+  return fallback
+}
+
+const readOptionalNumber = (keys: string[]) => {
+  for (const key of keys) {
+    const value = config.value[key]
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+  }
+  return undefined
+}
+
+const numericColumns = computed(() => getNumericColumns(rows.value, columns.value))
+const categoryColumns = computed(() => getCategoryColumns(columns.value, numericColumns.value))
+
+const primaryCategoryColumn = computed(() => {
+  const configured = readString(['xField', 'x_field'])
+  if (configured && columns.value.includes(configured)) {
+    return configured
+  }
+  return categoryColumns.value[0] ?? ''
 })
 
-const primaryCategoryColumn = computed(() => categoryColumns.value[0] ?? '')
-
-const seriesColumns = computed(() => {
-  const withoutCategory = numericColumns.value.filter(
-    (column) => column !== primaryCategoryColumn.value
-  )
-  const selected = withoutCategory.length ? withoutCategory : numericColumns.value
-  return selected.slice(0, 4)
+const fallbackSeriesFields = computed(() => {
+  const withoutCategory = numericColumns.value.filter((column) => column !== primaryCategoryColumn.value)
+  return (withoutCategory.length ? withoutCategory : numericColumns.value).slice(0, 6)
 })
 
-const categories = computed(() => {
-  const useRowIndex =
-    !primaryCategoryColumn.value || numericColumns.value.includes(primaryCategoryColumn.value)
+const parseConfiguredSeries = (allowedFields: string[]) => {
+  const raw = config.value.series
+  if (!Array.isArray(raw)) {
+    return [] as VizSeriesOption[]
+  }
 
-  return rows.value.map((row, index) => {
-    if (useRowIndex) {
+  return raw
+    .map((item, index) => {
+      if (!item || typeof item !== 'object') {
+        return null
+      }
+
+      const record = item as Record<string, unknown>
+      const field = typeof record.field === 'string' ? record.field.trim() : ''
+      if (!field || !allowedFields.includes(field)) {
+        return null
+      }
+
+      const label =
+        typeof record.label === 'string' && record.label.trim() ? record.label.trim() : field
+      const color =
+        typeof record.color === 'string' && record.color.trim()
+          ? record.color.trim()
+          : palette[index % palette.length]
+
+      return {
+        field,
+        label,
+        color
+      } satisfies VizSeriesOption
+    })
+    .filter((item): item is VizSeriesOption => item !== null)
+}
+
+const seriesConfig = computed(() => {
+  const configured = parseConfiguredSeries(numericColumns.value)
+  if (configured.length) {
+    return configured
+  }
+
+  return fallbackSeriesFields.value.map((field, index) => ({
+    field,
+    label: field,
+    color: palette[index % palette.length]
+  }))
+})
+
+const categories = computed(() =>
+  rows.value.map((row, index) => {
+    if (!primaryCategoryColumn.value) {
       return String(index + 1)
     }
     return String(row[primaryCategoryColumn.value] ?? index + 1)
   })
+)
+
+const chartTitle = computed(() => readString(['titleOverride']))
+const showLegend = computed(() => readBoolean(['showLegend', 'show_legend'], true))
+
+const pieCategoryColumn = computed(() => {
+  const configured = readString(['categoryField', 'category_field'])
+  if (configured && columns.value.includes(configured)) {
+    return configured
+  }
+  return categoryColumns.value[0] ?? columns.value[0] ?? ''
 })
 
-const pieCategoryColumn = computed(() => categoryColumns.value[0] ?? columns.value[0] ?? '')
-const pieValueColumn = computed(
-  () =>
+const pieValueColumn = computed(() => {
+  const configured = readString(['valueField', 'value_field'])
+  if (configured && numericColumns.value.includes(configured)) {
+    return configured
+  }
+
+  return (
     numericColumns.value.find((column) => column !== pieCategoryColumn.value) ??
     numericColumns.value[0] ??
     ''
-)
+  )
+})
+
+const pieTopN = computed(() => {
+  const topN = readNumber(['topN', 'top_n'], 8)
+  return topN > 0 ? Math.trunc(topN) : 8
+})
 
 const pieData = computed(() => {
   if (!pieCategoryColumn.value || !pieValueColumn.value) {
@@ -161,26 +247,52 @@ const pieData = computed(() => {
   return Array.from(totals.entries())
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
-    .slice(0, 12)
+    .slice(0, pieTopN.value)
 })
 
-const hasCartesianData = computed(() => rows.value.length > 0 && seriesColumns.value.length > 0)
 const hasPieData = computed(() => pieData.value.length > 0)
+const pieDonut = computed(() => readBoolean(['donut'], true))
+const pieShowLabels = computed(() => readBoolean(['showLabels', 'show_labels'], false))
 
-const scatterXColumn = computed(() => numericColumns.value[0] ?? '')
-const scatterYColumn = computed(
-  () => numericColumns.value.find((column) => column !== scatterXColumn.value) ?? ''
-)
-const scatterSizeColumn = computed(
-  () =>
+const scatterXColumn = computed(() => {
+  const configured = readString(['xField', 'x_field'])
+  if (configured && numericColumns.value.includes(configured)) {
+    return configured
+  }
+  return numericColumns.value[0] ?? ''
+})
+
+const scatterYColumn = computed(() => {
+  const configured = readString(['yField', 'y_field'])
+  if (configured && numericColumns.value.includes(configured)) {
+    return configured
+  }
+  return numericColumns.value.find((column) => column !== scatterXColumn.value) ?? ''
+})
+
+const scatterSizeColumn = computed(() => {
+  const configured = readString(['sizeField', 'size_field'])
+  if (configured && numericColumns.value.includes(configured)) {
+    return configured
+  }
+
+  return (
     numericColumns.value.find(
       (column) => column !== scatterXColumn.value && column !== scatterYColumn.value
     ) ?? scatterYColumn.value
-)
-const scatterLabelColumn = computed(() => categoryColumns.value[0] ?? '')
+  )
+})
+
+const scatterLabelColumn = computed(() => {
+  const configured = readString(['labelField', 'label_field'])
+  if (configured && columns.value.includes(configured)) {
+    return configured
+  }
+  return categoryColumns.value[0] ?? ''
+})
 
 const scatterData = computed(() => {
-  if (!scatterXColumn.value || !scatterYColumn.value || !scatterSizeColumn.value) {
+  if (!scatterXColumn.value || !scatterYColumn.value) {
     return [] as Array<{ value: [number, number, number]; name?: string }>
   }
 
@@ -188,7 +300,10 @@ const scatterData = computed(() => {
     .map((row) => {
       const x = toNumber(row[scatterXColumn.value])
       const y = toNumber(row[scatterYColumn.value])
-      const size = toNumber(row[scatterSizeColumn.value])
+      const size =
+        toNumber(row[scatterSizeColumn.value]) ??
+        toNumber(row[scatterYColumn.value]) ??
+        null
 
       if (x === null || y === null || size === null) {
         return null
@@ -206,7 +321,7 @@ const scatterData = computed(() => {
         name: label || undefined
       }
     })
-    .filter((item): item is { value: [number, number, number]; name?: string } => item !== null)
+    .filter((entry): entry is { value: [number, number, number]; name?: string } => entry !== null)
 })
 
 const scatterSizeExtent = computed(() => {
@@ -220,36 +335,112 @@ const scatterSizeExtent = computed(() => {
   }
 })
 
+const scatterMinSymbolSize = computed(() => readNumber(['minSymbolSize', 'min_symbol_size'], 10))
+const scatterMaxSymbolSize = computed(() => readNumber(['maxSymbolSize', 'max_symbol_size'], 42))
+const scatterShowLabels = computed(() => readBoolean(['showLabels', 'show_labels'], false))
+
 const scaleScatterSymbolSize = (value: unknown) => {
   if (!Array.isArray(value)) {
-    return 10
+    return scatterMinSymbolSize.value
   }
 
   const rawSize = Number(value[2])
   if (!Number.isFinite(rawSize)) {
-    return 10
+    return scatterMinSymbolSize.value
   }
 
   const span = scatterSizeExtent.value.max - scatterSizeExtent.value.min
   if (span <= 0) {
-    return 24
+    return (scatterMinSymbolSize.value + scatterMaxSymbolSize.value) / 2
   }
 
   const ratio = (rawSize - scatterSizeExtent.value.min) / span
   const clamped = Math.max(0, Math.min(1, ratio))
-  return 10 + clamped * 32
+  const min = Math.min(scatterMinSymbolSize.value, scatterMaxSymbolSize.value)
+  const max = Math.max(scatterMinSymbolSize.value, scatterMaxSymbolSize.value)
+
+  return min + clamped * (max - min)
 }
 
 const hasScatterData = computed(() => scatterData.value.length > 0)
 
+const hasCartesianData = computed(() => rows.value.length > 0 && seriesConfig.value.length > 0)
+const smoothLines = computed(() => readBoolean(['smooth'], true))
+const showSymbols = computed(() => readBoolean(['showSymbols', 'show_symbols'], false))
+const showArea = computed(() =>
+  props.visualization === 'area' ? readBoolean(['area'], true) : false
+)
+const yAxisMin = computed(() => readOptionalNumber(['yAxisMin', 'y_axis_min']))
+const yAxisMax = computed(() => readOptionalNumber(['yAxisMax', 'y_axis_max']))
+
+const barHorizontal = computed(() => readBoolean(['horizontal'], false))
+const barStacked = computed(() => readBoolean(['stacked'], false))
+const barBorderRadius = computed(() => {
+  const radius = readNumber(['barBorderRadius', 'bar_border_radius'], 4)
+  if (radius < 0) {
+    return 0
+  }
+  return radius > 12 ? 12 : radius
+})
+
+const tableOrderedColumns = computed(() =>
+  resolveTableColumnOrder(columns.value, config.value)
+)
+
+const tableVisibleColumns = computed(() =>
+  resolveTableVisibleColumns(tableOrderedColumns.value, config.value)
+)
+
+const tableRows = computed(() => applyTableSortAndLimit(rows.value, config.value))
+
+const tableColumns = computed(() =>
+  tableVisibleColumns.value.map((column) => ({
+    key: column,
+    label: column
+  }))
+)
+
+const tableConditionalRules = computed(() =>
+  parseConditionalFormattingRules(config.value.conditionalFormatting)
+)
+
+const tableColumnExtents = computed(() =>
+  getColumnNumericExtents(tableRows.value, tableVisibleColumns.value)
+)
+
+const tableCellStyleResolver = (input: { columnKey: string; value: unknown }) =>
+  getConditionalCellStyle({
+    columnKey: input.columnKey,
+    value: input.value,
+    rules: tableConditionalRules.value,
+    columnExtents: tableColumnExtents.value
+  })
+
+const chartRenderKey = computed(
+  () => `${props.visualization}:${JSON.stringify(config.value)}:${rows.value.length}`
+)
+
 const chartOption = computed<EChartsOption>(() => {
   if (props.visualization === 'pie') {
     return {
+      title: chartTitle.value
+        ? {
+            text: chartTitle.value,
+            left: 'center',
+            top: 0,
+            textStyle: {
+              color: '#111827',
+              fontSize: 14,
+              fontWeight: 600
+            }
+          }
+        : undefined,
       tooltip: {
         trigger: 'item',
         formatter: '{b}: {c} ({d}%)'
       },
       legend: {
+        show: showLegend.value,
         bottom: 0,
         type: 'scroll',
         textStyle: { color: '#4b5563' }
@@ -257,14 +448,17 @@ const chartOption = computed<EChartsOption>(() => {
       series: [
         {
           type: 'pie',
-          radius: ['35%', '70%'],
-          center: ['50%', '42%'],
+          radius: pieDonut.value ? ['35%', '70%'] : ['0%', '72%'],
+          center: ['50%', '44%'],
           data: pieData.value,
           itemStyle: {
             borderColor: '#ffffff',
             borderWidth: 2
           },
-          label: { color: '#374151' }
+          label: {
+            show: pieShowLabels.value,
+            color: '#374151'
+          }
         }
       ]
     }
@@ -272,13 +466,25 @@ const chartOption = computed<EChartsOption>(() => {
 
   if (props.visualization === 'scatter') {
     return {
+      title: chartTitle.value
+        ? {
+            text: chartTitle.value,
+            left: 'center',
+            top: 0,
+            textStyle: {
+              color: '#111827',
+              fontSize: 14,
+              fontWeight: 600
+            }
+          }
+        : undefined,
       tooltip: {
         trigger: 'item'
       },
       grid: {
         left: 12,
         right: 12,
-        top: 18,
+        top: chartTitle.value ? 48 : 18,
         bottom: 28,
         containLabel: true
       },
@@ -305,6 +511,12 @@ const chartOption = computed<EChartsOption>(() => {
             color: '#2563eb',
             opacity: 0.78
           },
+          label: {
+            show: scatterShowLabels.value,
+            position: 'top',
+            color: '#374151',
+            formatter: (params: { data?: { name?: string } }) => params.data?.name ?? ''
+          },
           emphasis: {
             focus: 'series'
           }
@@ -314,10 +526,21 @@ const chartOption = computed<EChartsOption>(() => {
   }
 
   const isBar = props.visualization === 'bar'
-  const isArea = props.visualization === 'area'
 
   return {
-    color: palette,
+    title: chartTitle.value
+      ? {
+          text: chartTitle.value,
+          left: 'center',
+          top: 0,
+          textStyle: {
+            color: '#111827',
+            fontSize: 14,
+            fontWeight: 600
+          }
+        }
+      : undefined,
+    color: seriesConfig.value.map((series) => series.color ?? '#2563eb'),
     tooltip: {
       trigger: 'axis',
       axisPointer: {
@@ -325,7 +548,8 @@ const chartOption = computed<EChartsOption>(() => {
       }
     },
     legend: {
-      top: 0,
+      show: showLegend.value,
+      top: chartTitle.value ? 22 : 0,
       textStyle: {
         color: '#4b5563'
       }
@@ -333,42 +557,69 @@ const chartOption = computed<EChartsOption>(() => {
     grid: {
       left: 12,
       right: 12,
-      top: 40,
+      top: chartTitle.value ? 62 : 40,
       bottom: 28,
       containLabel: true
     },
-    xAxis: {
-      type: 'category',
-      data: categories.value,
-      axisLabel: {
-        color: '#6b7280'
-      },
-      axisLine: {
-        lineStyle: { color: '#d1d5db' }
-      }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: {
-        color: '#6b7280'
-      },
-      splitLine: {
-        lineStyle: { color: '#e5e7eb' }
-      }
-    },
-    series: seriesColumns.value.map((column, index) => ({
+    xAxis: isBar && barHorizontal.value
+      ? {
+          type: 'value',
+          axisLabel: {
+            color: '#6b7280'
+          },
+          min: yAxisMin.value,
+          max: yAxisMax.value,
+          splitLine: {
+            lineStyle: { color: '#e5e7eb' }
+          }
+        }
+      : {
+          type: 'category',
+          data: categories.value,
+          axisLabel: {
+            color: '#6b7280'
+          },
+          axisLine: {
+            lineStyle: { color: '#d1d5db' }
+          }
+        },
+    yAxis: isBar && barHorizontal.value
+      ? {
+          type: 'category',
+          data: categories.value,
+          axisLabel: {
+            color: '#6b7280'
+          },
+          axisLine: {
+            lineStyle: { color: '#d1d5db' }
+          }
+        }
+      : {
+          type: 'value',
+          min: yAxisMin.value,
+          max: yAxisMax.value,
+          axisLabel: {
+            color: '#6b7280'
+          },
+          splitLine: {
+            lineStyle: { color: '#e5e7eb' }
+          }
+        },
+    series: seriesConfig.value.map((series) => ({
       type: isBar ? 'bar' : 'line',
-      name: column,
-      smooth: !isBar,
-      showSymbol: false,
-      areaStyle: isArea ? { opacity: 0.18 } : undefined,
+      name: series.label ?? series.field,
+      smooth: !isBar ? smoothLines.value : undefined,
+      showSymbol: !isBar ? showSymbols.value : undefined,
+      areaStyle: !isBar && showArea.value ? { opacity: 0.18 } : undefined,
+      stack: isBar && barStacked.value ? 'total' : undefined,
       emphasis: {
         focus: 'series'
       },
       itemStyle: {
-        color: palette[index % palette.length]
+        color: series.color ?? '#2563eb',
+        borderRadius: isBar ? barBorderRadius.value : 0
       },
-      data: rows.value.map((row) => toNumber(row[column]))
+      data: rows.value.map((row) => toNumber(row[series.field]))
     }))
   }
 })
@@ -410,7 +661,12 @@ const chartOption = computed<EChartsOption>(() => {
 
       <div class="min-w-0 flex-1 rounded border border-gray-200 bg-white">
         <div v-if="visualization === 'table'" class="overflow-auto">
-          <Table :rows="tableRows" :columns="tableColumns" empty-label="No preview rows found." />
+          <Table
+            :rows="tableRows"
+            :columns="tableColumns"
+            :cell-style-resolver="tableCellStyleResolver"
+            empty-label="No preview rows found."
+          />
         </div>
 
         <div v-else class="p-3">
@@ -434,7 +690,10 @@ const chartOption = computed<EChartsOption>(() => {
             class="mb-2 text-xs text-gray-500"
           >
             X-axis: <span class="font-medium text-gray-700">{{ primaryCategoryColumn || 'row index' }}</span>
-            | Series: <span class="font-medium text-gray-700">{{ seriesColumns.join(', ') || 'none' }}</span>
+            | Series:
+            <span class="font-medium text-gray-700">
+              {{ seriesConfig.map((series) => series.label || series.field).join(', ') || 'none' }}
+            </span>
           </p>
 
           <p
@@ -457,6 +716,7 @@ const chartOption = computed<EChartsOption>(() => {
           </p>
           <EChart
             v-else
+            :key="chartRenderKey"
             :option="chartOption"
             height="320px"
           />

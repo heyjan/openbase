@@ -110,6 +110,22 @@ const horizontal = computed(() => {
   return typeof value === 'boolean' ? value : false
 })
 
+const showLegend = computed(() => {
+  const value = props.module.config.show_legend ?? props.module.config.showLegend
+  return typeof value === 'boolean' ? value : true
+})
+
+const barBorderRadius = computed(() => {
+  const value = props.module.config.bar_border_radius ?? props.module.config.barBorderRadius
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 4
+  }
+  if (value < 0) {
+    return 0
+  }
+  return value > 12 ? 12 : value
+})
+
 const chartOption = computed<EChartsOption>(() => ({
   color: series.value.map((item) => item.color),
   tooltip: {
@@ -117,6 +133,7 @@ const chartOption = computed<EChartsOption>(() => ({
     axisPointer: { type: 'shadow' }
   },
   legend: {
+    show: showLegend.value,
     top: 0,
     textStyle: { color: '#4b5563' }
   },
@@ -156,6 +173,9 @@ const chartOption = computed<EChartsOption>(() => ({
     name: item.label,
     stack: stackedBars.value ? 'total' : undefined,
     emphasis: { focus: 'series' },
+    itemStyle: {
+      borderRadius: barBorderRadius.value
+    },
     data: rows.value.map((row) => toNumber(row[item.field]))
   }))
 }))

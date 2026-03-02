@@ -122,12 +122,28 @@ const showSymbols = computed(() => {
   return typeof value === 'boolean' ? value : false
 })
 
+const showLegend = computed(() => {
+  const value = props.module.config.show_legend ?? props.module.config.showLegend
+  return typeof value === 'boolean' ? value : true
+})
+
+const yAxisMin = computed(() => {
+  const value = props.module.config.y_axis_min ?? props.module.config.yAxisMin
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+})
+
+const yAxisMax = computed(() => {
+  const value = props.module.config.y_axis_max ?? props.module.config.yAxisMax
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+})
+
 const chartOption = computed<EChartsOption>(() => ({
   color: series.value.map((item) => item.color),
   tooltip: {
     trigger: 'axis'
   },
   legend: {
+    show: showLegend.value,
     top: 0,
     textStyle: { color: '#4b5563' }
   },
@@ -150,6 +166,8 @@ const chartOption = computed<EChartsOption>(() => ({
   },
   yAxis: {
     type: 'value',
+    min: yAxisMin.value,
+    max: yAxisMax.value,
     axisLabel: {
       color: '#6b7280'
     },

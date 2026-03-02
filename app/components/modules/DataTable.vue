@@ -2,6 +2,14 @@
 import type { ModuleConfig } from '~/types/module'
 import type { ModuleDataResult } from '~/composables/useModuleData'
 import Table from '~/components/ui/Table.vue'
+import {
+  applyTableSortAndLimit,
+  getColumnNumericExtents,
+  getConditionalCellStyle,
+  parseConditionalFormattingRules,
+  resolveTableColumnOrder,
+  resolveTableVisibleColumns
+} from '~/composables/useVizConfig'
 
 const props = defineProps<{
   module: ModuleConfig
@@ -10,16 +18,26 @@ const props = defineProps<{
 
 const search = ref('')
 
-const rows = computed(() => props.moduleData?.rows ?? [])
+const allRows = computed(() => props.moduleData?.rows ?? [])
 
-const columns = computed(() => {
+const baseColumns = computed(() => {
   const configured = props.moduleData?.columns ?? []
   if (configured.length) {
     return configured
   }
-  const first = rows.value[0]
+  const first = allRows.value[0]
   return first ? Object.keys(first) : []
 })
+
+const orderedColumns = computed(() =>
+  resolveTableColumnOrder(baseColumns.value, props.module.config)
+)
+
+const visibleColumns = computed(() =>
+  resolveTableVisibleColumns(orderedColumns.value, props.module.config)
+)
+
+const rows = computed(() => applyTableSortAndLimit(allRows.value, props.module.config))
 
 const normalizeValue = (value: unknown) => {
   if (value === null || value === undefined) {
@@ -36,18 +54,36 @@ const filteredRows = computed(() => {
   if (!query) {
     return rows.value
   }
+
   return rows.value.filter((row) =>
-    columns.value.some((column) =>
+    visibleColumns.value.some((column) =>
       normalizeValue(row[column]).toLowerCase().includes(query)
     )
   )
 })
+
 const tableColumns = computed(() =>
-  columns.value.map((column) => ({
+  visibleColumns.value.map((column) => ({
     key: column,
     label: column
   }))
 )
+
+const conditionalRules = computed(() =>
+  parseConditionalFormattingRules(props.module.config.conditionalFormatting)
+)
+
+const columnExtents = computed(() =>
+  getColumnNumericExtents(filteredRows.value, visibleColumns.value)
+)
+
+const cellStyleResolver = (input: { columnKey: string; value: unknown }) =>
+  getConditionalCellStyle({
+    columnKey: input.columnKey,
+    value: input.value,
+    rules: conditionalRules.value,
+    columnExtents: columnExtents.value
+  })
 </script>
 
 <template>
@@ -63,12 +99,17 @@ const tableColumns = computed(() =>
       </p>
     </div>
 
-    <p v-if="!columns.length" class="mt-4 text-sm text-gray-500">
+    <p v-if="!tableColumns.length" class="mt-4 text-sm text-gray-500">
       No data available.
     </p>
 
     <div v-else class="mt-3 min-h-0 flex-1 overflow-auto">
-      <Table :rows="filteredRows" :columns="tableColumns" empty-label="No matching rows." />
+      <Table
+        :rows="filteredRows"
+        :columns="tableColumns"
+        :cell-style-resolver="cellStyleResolver"
+        empty-label="No matching rows."
+      />
     </div>
   </div>
 </template>
