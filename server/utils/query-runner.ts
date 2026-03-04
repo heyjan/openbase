@@ -6,6 +6,7 @@ import { runDuckDbQuery } from './data-source-adapters/duckdb'
 import { runRestQuery } from './data-source-adapters/rest-api'
 import { runMongoQuery } from './mongodb-connector'
 import { runSqliteQuery } from './sqlite-connector'
+import { decryptConnection } from './crypto'
 import { prepareQueryVariables } from '~~/shared/utils/query-variables'
 
 type SavedQueryWithSourceRow = {
@@ -14,7 +15,7 @@ type SavedQueryWithSourceRow = {
   query_parameters: Record<string, unknown> | null
   data_source_id: string
   data_source_type: string
-  data_source_connection: Record<string, unknown>
+  data_source_connection: unknown
   data_source_active: boolean
 }
 
@@ -56,6 +57,20 @@ const normalizeParameters = (value: unknown) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid query parameters' })
   }
   return value as Record<string, unknown>
+}
+
+const isEncryptedConnectionPayload = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+
+  const payload = value as Record<string, unknown>
+  return (
+    payload.algorithm === 'aes-256-gcm' &&
+    typeof payload.iv === 'string' &&
+    typeof payload.tag === 'string' &&
+    typeof payload.data === 'string'
+  )
 }
 
 const assertReadOnlySql = (queryText: string) => {
@@ -207,9 +222,14 @@ export const runSavedQueryById = async (input: {
     })
   }
 
+  const connection = decryptConnection(
+    row.data_source_connection,
+    isEncryptedConnectionPayload(row.data_source_connection)
+  )
+
   return runQuery({
     dataSourceType: row.data_source_type,
-    connection: row.data_source_connection || {},
+    connection,
     queryText: row.query_text,
     parameters: input.parameters ?? {},
     queryParameters: row.query_parameters ?? {},
