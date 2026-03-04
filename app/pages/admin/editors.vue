@@ -5,6 +5,10 @@ import type { EditorUser } from '~/types/editor'
 import { getPasswordScore, passwordStrengthLabel } from '~/utils/password'
 
 const { list, create, update } = useEditors()
+const route = useRoute()
+const isPermissionsRoute = computed(
+  () => typeof route.params.id === 'string' && route.params.id.length > 0
+)
 
 const editors = ref<EditorUser[]>([])
 const loading = ref(false)
@@ -80,11 +84,22 @@ const saveEditor = async (editor: EditorUser & { password?: string }) => {
   }
 }
 
-onMounted(loadEditors)
+onMounted(() => {
+  if (!isPermissionsRoute.value) {
+    loadEditors()
+  }
+})
+
+watch(isPermissionsRoute, (value) => {
+  if (!value) {
+    loadEditors()
+  }
+})
 </script>
 
 <template>
-  <section class="space-y-6">
+  <NuxtPage v-if="isPermissionsRoute" />
+  <section v-else class="space-y-6">
     <PageHeader
       title="Editors"
       :breadcrumbs="[
