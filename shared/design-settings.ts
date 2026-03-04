@@ -1,7 +1,8 @@
 export const DESIGN_FONT_FAMILIES = [
   'Inter',
   'IBM Plex Sans',
-  'Source Sans 3'
+  'Source Sans 3',
+  'Noto Sans'
 ] as const
 
 export type DesignFontFamily = (typeof DESIGN_FONT_FAMILIES)[number]

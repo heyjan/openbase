@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   if (!isDesignFontFamily(body.font_family)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'font_family must be one of: Inter, IBM Plex Sans, Source Sans 3'
+      statusMessage: 'font_family must be one of: Inter, IBM Plex Sans, Source Sans 3, Noto Sans'
     })
   }
 

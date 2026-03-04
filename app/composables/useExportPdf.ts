@@ -47,37 +47,129 @@ const toSafeSlug = (value: string) => {
   return normalized || 'dashboard'
 }
 
-const normalizeOklchColors = (root: HTMLElement) => {
+const UNSUPPORTED_COLOR_FUNCTION_PATTERN = /\b(?:oklch|oklab|lab|lch|color|color-mix)\(/i
+
+const hasUnsupportedColorFunction = (value: string) =>
+  UNSUPPORTED_COLOR_FUNCTION_PATTERN.test(value)
+
+const CANVAS_COLOR_SENTINEL = '#010203'
+
+const toCanvasColor = (value: string) => {
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d')
+  if (!context) {
+    return null
+  }
+
+  context.fillStyle = CANVAS_COLOR_SENTINEL
+  context.fillStyle = value
+  const parsed = context.fillStyle
+  if (parsed === CANVAS_COLOR_SENTINEL && value.toLowerCase() !== CANVAS_COLOR_SENTINEL) {
+    return null
+  }
+
+  if (hasUnsupportedColorFunction(parsed)) {
+    return null
+  }
+
+  return parsed
+}
+
+const normalizeUnsupportedColors = (sourceRoot: HTMLElement, clonedRoot: HTMLElement) => {
   const probe = document.createElement('div')
   probe.style.position = 'absolute'
   probe.style.left = '-100000px'
   probe.style.top = '0'
-  root.appendChild(probe)
+  clonedRoot.appendChild(probe)
 
-  const resolveValue = (property: string, value: string) => {
-    if (!value.includes('oklch(') || property.startsWith('--')) {
-      return value
+  const sourceElements = [sourceRoot, ...Array.from(sourceRoot.querySelectorAll<HTMLElement>('*'))]
+  const clonedElements = [clonedRoot, ...Array.from(clonedRoot.querySelectorAll<HTMLElement>('*'))]
+
+  const resolvePropertyValue = (
+    sourceElement: HTMLElement,
+    clonedElement: HTMLElement,
+    property: string,
+    clonedValue: string
+  ) => {
+    const sourceValue = getComputedStyle(sourceElement).getPropertyValue(property).trim()
+    if (sourceValue && !hasUnsupportedColorFunction(sourceValue)) {
+      return sourceValue
+    }
+
+    if (property === 'color') {
+      const parsedColor =
+        toCanvasColor(sourceValue || clonedValue) ??
+        toCanvasColor(getComputedStyle(sourceElement).color.trim())
+      if (parsedColor) {
+        return parsedColor
+      }
+
+      const inherited = getComputedStyle(clonedElement.parentElement ?? clonedRoot).color.trim()
+      if (inherited && !hasUnsupportedColorFunction(inherited)) {
+        return inherited
+      }
+      return 'inherit'
+    }
+
+    if (
+      property === 'background-color' ||
+      property === 'border-top-color' ||
+      property === 'border-right-color' ||
+      property === 'border-bottom-color' ||
+      property === 'border-left-color' ||
+      property === 'outline-color' ||
+      property === 'text-decoration-color' ||
+      property === 'fill' ||
+      property === 'stroke'
+    ) {
+      const parsedColor = toCanvasColor(sourceValue || clonedValue)
+      if (parsedColor) {
+        return parsedColor
+      }
+    }
+
+    if (property.includes('background')) {
+      return 'transparent'
+    }
+
+    if (property.includes('border') || property.includes('outline')) {
+      return 'transparent'
+    }
+
+    return 'initial'
+  }
+
+  const resolveValue = (
+    sourceElement: HTMLElement,
+    clonedElement: HTMLElement,
+    property: string,
+    clonedValue: string
+  ) => {
+    if (!hasUnsupportedColorFunction(clonedValue) || property.startsWith('--')) {
+      return clonedValue
     }
 
     probe.style.removeProperty(property)
-    probe.style.setProperty(property, value)
+    probe.style.setProperty(property, clonedValue)
     const resolved = getComputedStyle(probe).getPropertyValue(property).trim()
-    if (resolved && !resolved.includes('oklch(')) {
+    if (resolved && !hasUnsupportedColorFunction(resolved)) {
       return resolved
     }
-    return value.replace(/oklch\([^)]+\)/g, 'rgb(0, 0, 0)')
+
+    return resolvePropertyValue(sourceElement, clonedElement, property, clonedValue)
   }
 
-  const elements = [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))]
-  for (const element of elements) {
-    const computed = getComputedStyle(element)
+  for (let index = 0; index < clonedElements.length; index += 1) {
+    const clonedElement = clonedElements[index]
+    const sourceElement = sourceElements[index] ?? sourceRoot
+    const computed = getComputedStyle(clonedElement)
     for (const property of computed) {
       const value = computed.getPropertyValue(property)
-      if (!value || !value.includes('oklch(')) {
+      if (!value || !hasUnsupportedColorFunction(value)) {
         continue
       }
-      const normalized = resolveValue(property, value)
-      element.style.setProperty(property, normalized)
+      const normalized = resolveValue(sourceElement, clonedElement, property, value)
+      clonedElement.style.setProperty(property, normalized)
     }
   }
 
@@ -152,7 +244,7 @@ export const useExportPdf = (options: UseExportPdfOptions) => {
             `[data-pdf-export-marker="${exportMarker}"]`
           )
           if (clonedRoot) {
-            normalizeOklchColors(clonedRoot)
+            normalizeUnsupportedColors(sourceGrid, clonedRoot)
           }
         }
       })

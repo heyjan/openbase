@@ -10,7 +10,9 @@ const GOOGLE_FONT_HREFS: Record<DesignFontFamily, string> = {
   'IBM Plex Sans':
     'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap',
   'Source Sans 3':
-    'https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap'
+    'https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap',
+  'Noto Sans':
+    'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap'
 }
 
 const FONT_LINK_ID = 'openbase-design-font'

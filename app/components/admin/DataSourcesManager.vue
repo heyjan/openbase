@@ -6,12 +6,16 @@ import type { DataSource } from '~/types/data-source'
 const { list, create, test, remove } = useDataSources()
 const toast = useAppToast()
 
+type ConnectionState = 'checking' | 'connected' | 'disconnected' | 'unknown'
+
 const sources = ref<DataSource[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 const deletingId = ref<string | null>(null)
 const confirmDeleteOpen = ref(false)
 const pendingDeleteSource = ref<DataSource | null>(null)
+const connectionStateBySourceId = ref<Record<string, ConnectionState>>({})
+let connectionCheckRun = 0
 
 const newSource = reactive({
   name: '',
@@ -23,14 +27,82 @@ const newSource = reactive({
 const creating = ref(false)
 const createError = ref('')
 
+const CONNECTION_STATE_META: Record<
+  ConnectionState,
+  { label: string; dotClass: string; textClass: string }
+> = {
+  checking: {
+    label: 'Checking',
+    dotClass: 'bg-amber-400',
+    textClass: 'text-amber-700'
+  },
+  connected: {
+    label: 'Connected',
+    dotClass: 'bg-emerald-500',
+    textClass: 'text-emerald-700'
+  },
+  disconnected: {
+    label: 'Disconnected',
+    dotClass: 'bg-red-500',
+    textClass: 'text-red-700'
+  },
+  unknown: {
+    label: 'Unknown',
+    dotClass: 'bg-gray-300',
+    textClass: 'text-gray-600'
+  }
+}
+
+const getConnectionState = (sourceId: string): ConnectionState =>
+  connectionStateBySourceId.value[sourceId] ?? 'unknown'
+
+const getConnectionStateMeta = (sourceId: string) =>
+  CONNECTION_STATE_META[getConnectionState(sourceId)]
+
+const checkConnectionsOnce = async (dataSources: DataSource[]) => {
+  const runId = ++connectionCheckRun
+  const nextState: Record<string, ConnectionState> = {}
+
+  for (const source of dataSources) {
+    nextState[source.id] = 'checking'
+  }
+  connectionStateBySourceId.value = { ...nextState }
+
+  await Promise.allSettled(
+    dataSources.map(async (source) => {
+      try {
+        await test(source.id)
+        nextState[source.id] = 'connected'
+      } catch {
+        nextState[source.id] = 'disconnected'
+      }
+
+      if (runId === connectionCheckRun) {
+        connectionStateBySourceId.value = { ...nextState }
+      }
+    })
+  )
+
+  if (runId === connectionCheckRun) {
+    connectionStateBySourceId.value = { ...nextState }
+  }
+}
+
 const loadSources = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
     sources.value = await list()
+    if (!sources.value.length) {
+      connectionStateBySourceId.value = {}
+      return
+    }
+
+    void checkConnectionsOnce(sources.value)
   } catch (err) {
     errorMessage.value =
       err instanceof Error ? err.message : 'Failed to load data sources'
+    connectionStateBySourceId.value = {}
     toast.error('Failed to load data sources', errorMessage.value)
   } finally {
     loading.value = false
@@ -79,13 +151,25 @@ const testMessage = ref('')
 const testSource = async (source: DataSource) => {
   testMessage.value = ''
   testingId.value = source.id
+  connectionStateBySourceId.value = {
+    ...connectionStateBySourceId.value,
+    [source.id]: 'checking'
+  }
   try {
     const result = await test(source.id)
     const label = source.type === 'mongodb' ? 'Collections' : 'Tables'
     testMessage.value = `Connected. ${label} found: ${result.tables?.length ?? 0}`
+    connectionStateBySourceId.value = {
+      ...connectionStateBySourceId.value,
+      [source.id]: 'connected'
+    }
     toast.success('Connection test successful', testMessage.value)
   } catch (err) {
     testMessage.value = err instanceof Error ? err.message : 'Test failed'
+    connectionStateBySourceId.value = {
+      ...connectionStateBySourceId.value,
+      [source.id]: 'disconnected'
+    }
     toast.error('Connection test failed', testMessage.value)
   } finally {
     testingId.value = null
@@ -244,6 +328,15 @@ onMounted(loadSources)
               <div>
                 <h2 class="text-lg font-semibold">{{ source.name }}</h2>
                 <p class="text-xs text-gray-500">{{ source.type }}</p>
+                <div class="mt-1 inline-flex items-center gap-1.5 text-xs">
+                  <span
+                    class="h-2 w-2 rounded-full"
+                    :class="getConnectionStateMeta(source.id).dotClass"
+                  />
+                  <span :class="getConnectionStateMeta(source.id).textClass">
+                    {{ getConnectionStateMeta(source.id).label }}
+                  </span>
+                </div>
                 <p
                   v-if="source.type === 'sqlite' || source.type === 'duckdb'"
                   class="text-xs text-gray-500"
