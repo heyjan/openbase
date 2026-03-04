@@ -92,6 +92,14 @@ Then open `http://localhost:3000` and complete the setup flow on first run.
    export OPENBASE_DATA_DIR=/workspace
    ```
 
+   Generate `OPENBASE_ENCRYPTION_KEY` (64-char hex) with:
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   # or
+   openssl rand -hex 32
+   ```
+
    Apply the schema in `db/schema.sql` if you are not using Docker.
 
 3. Start the dev server:
