@@ -22,6 +22,9 @@ const BODY_BOTTOM_MM = 12
 
 const CONTENT_WIDTH_MM = A4_LANDSCAPE_WIDTH_MM - MARGIN_X_MM * 2
 const CONTENT_HEIGHT_MM = A4_LANDSCAPE_HEIGHT_MM - BODY_TOP_MM - BODY_BOTTOM_MM
+const HTML2CANVAS_SCALE = 1.5
+const HTML2CANVAS_MAX_WIDTH_PX = 2400
+const PDF_IMAGE_QUALITY = 0.85
 
 const formatDisplayDate = (date: Date) =>
   new Intl.DateTimeFormat('en-US', {
@@ -231,10 +234,13 @@ export const useExportPdf = (options: UseExportPdfOptions) => {
         import('html2canvas'),
         import('jspdf')
       ])
+      const captureWidthPx = Math.max(1, sourceGrid.scrollWidth || sourceGrid.clientWidth || 1)
+      const captureScale = Math.min(HTML2CANVAS_SCALE, HTML2CANVAS_MAX_WIDTH_PX / captureWidthPx)
       await nextTick()
       await waitForChartPaint()
       const renderedCanvas = await html2canvas(sourceGrid, {
-        scale: 2,
+        scale: captureScale,
+        width: captureWidthPx,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
@@ -295,9 +301,9 @@ export const useExportPdf = (options: UseExportPdfOptions) => {
           sliceHeightPx
         )
 
-        const imageDataUrl = pageCanvas.toDataURL('image/png')
+        const imageDataUrl = pageCanvas.toDataURL('image/jpeg', PDF_IMAGE_QUALITY)
         const sliceHeightMm = sliceHeightPx / pxPerMm
-        doc.addImage(imageDataUrl, 'PNG', MARGIN_X_MM, BODY_TOP_MM, CONTENT_WIDTH_MM, sliceHeightMm)
+        doc.addImage(imageDataUrl, 'JPEG', MARGIN_X_MM, BODY_TOP_MM, CONTENT_WIDTH_MM, sliceHeightMm)
       }
 
       doc.save(filename)

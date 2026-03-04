@@ -5,12 +5,17 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
   modules: ['@nuxt/ui', '@nuxtjs/google-fonts'],
+  ui: {
+    fonts: false
+  },
   googleFonts: {
     families: {
       Inter: [400, 500, 600, 700],
       'IBM Plex Sans': [400, 500, 600, 700],
-      'Source Sans 3': [400, 500, 600, 700]
+      'Source Sans 3': [400, 500, 600, 700],
+      'Noto Sans': [400, 500, 600, 700]
     },
+    download: false,
     display: 'swap',
     preload: true
   },
