@@ -3,9 +3,7 @@ import {
   LayoutDashboard,
   Link2,
   Plus,
-  RefreshCw,
   Search,
-  Table2,
   Users
 } from 'lucide-vue-next'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
@@ -80,13 +78,6 @@ const deleteDashboard = async () => {
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
-          to="/admin/ingestion"
-        >
-          <RefreshCw class="h-4 w-4" />
-          Ingestion
-        </NuxtLink>
-        <NuxtLink
-          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
           to="/admin/settings/shared-links"
         >
           <Link2 class="h-4 w-4" />
@@ -98,13 +89,6 @@ const deleteDashboard = async () => {
         >
           <Users class="h-4 w-4" />
           Editors
-        </NuxtLink>
-        <NuxtLink
-          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-gray-300"
-          to="/admin/writable-tables"
-        >
-          <Table2 class="h-4 w-4" />
-          Writable tables
         </NuxtLink>
         <NuxtLink
           class="inline-flex items-center gap-2 rounded bg-brand-primary px-3 py-2 text-sm font-medium text-white"

@@ -31,6 +31,12 @@ const toKeyFromString = (raw: string) => {
 const getEncryptionKey = () => {
   const key = toKeyFromString(process.env.OPENBASE_ENCRYPTION_KEY || '')
   if (!key) {
+    if (process.env.NODE_ENV === 'production') {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'OPENBASE_ENCRYPTION_KEY is required when NODE_ENV=production'
+      })
+    }
     return null
   }
   if (key.length !== KEY_LENGTH_BYTES) {

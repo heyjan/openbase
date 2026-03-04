@@ -40,6 +40,7 @@ export type TableVizOptions = SharedVizOptions & {
   sortColumn?: string
   sortDirection?: SortDirection
   rowLimit?: number
+  showSearch?: boolean
   conditionalFormatting?: ConditionalFormatRule[]
 }
 

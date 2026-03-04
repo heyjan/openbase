@@ -5,10 +5,12 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 const email = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
+const sent = ref(false)
 const magicLink = ref('')
 
 const submit = async () => {
   errorMessage.value = ''
+  sent.value = false
   magicLink.value = ''
   loading.value = true
   try {
@@ -19,6 +21,7 @@ const submit = async () => {
         body: { email: email.value }
       }
     )
+    sent.value = response.ok
     if (response.magicLink) {
       magicLink.value = response.magicLink
     }
@@ -63,6 +66,13 @@ const submit = async () => {
 
     <p v-if="errorMessage" class="mt-4 text-sm text-red-600">
       {{ errorMessage }}
+    </p>
+
+    <p
+      v-if="sent"
+      class="mt-4 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+    >
+      Check your inbox for your setup link.
     </p>
 
     <div

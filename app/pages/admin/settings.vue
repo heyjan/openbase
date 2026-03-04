@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Database, Link2, Palette, Users } from 'lucide-vue-next'
+import { Database, Link2, Palette, Table2, Users } from 'lucide-vue-next'
 import SettingsNavCard from '~/components/ui/SettingsNavCard.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 
@@ -25,6 +25,11 @@ const navigationItems = [
     label: 'Shared Links',
     to: '/admin/settings/shared-links',
     icon: Link2
+  },
+  {
+    label: 'Writable Tables',
+    to: '/admin/settings/writable-tables',
+    icon: Table2
   }
 ]
 

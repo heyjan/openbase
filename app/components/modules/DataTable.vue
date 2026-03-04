@@ -17,6 +17,16 @@ const props = defineProps<{
 }>()
 
 const search = ref('')
+const showSearch = computed(() => {
+  const config = props.module.config ?? {}
+  if (typeof config.showSearch === 'boolean') {
+    return config.showSearch
+  }
+  if (typeof config.show_search === 'boolean') {
+    return config.show_search
+  }
+  return false
+})
 
 const allRows = computed(() => props.moduleData?.rows ?? [])
 
@@ -50,6 +60,10 @@ const normalizeValue = (value: unknown) => {
 }
 
 const filteredRows = computed(() => {
+  if (!showSearch.value) {
+    return rows.value
+  }
+
   const query = search.value.trim().toLowerCase()
   if (!query) {
     return rows.value
@@ -60,6 +74,12 @@ const filteredRows = computed(() => {
       normalizeValue(row[column]).toLowerCase().includes(query)
     )
   )
+})
+
+watch(showSearch, (enabled) => {
+  if (!enabled) {
+    search.value = ''
+  }
 })
 
 const tableColumns = computed(() =>
@@ -88,22 +108,22 @@ const cellStyleResolver = (input: { columnKey: string; value: unknown }) =>
 
 <template>
   <div class="flex h-full flex-col">
-    <div class="flex flex-wrap items-center justify-between gap-3">
+    <div v-if="showSearch" class="flex flex-wrap items-center justify-between gap-3">
       <UInput
         v-model="search"
         placeholder="Search rows"
         class="w-full max-w-xs"
       />
-      <p class="text-xs text-gray-500">
-        {{ filteredRows.length }} rows
-      </p>
     </div>
 
     <p v-if="!tableColumns.length" class="mt-4 text-sm text-gray-500">
       No data available.
     </p>
 
-    <div v-else class="mt-3 min-h-0 flex-1 overflow-auto">
+    <div
+      v-else
+      :class="showSearch ? 'mt-3 min-h-0 flex-1 overflow-auto' : 'min-h-0 flex-1 overflow-auto'"
+    >
       <Table
         :rows="filteredRows"
         :columns="tableColumns"

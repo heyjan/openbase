@@ -391,7 +391,40 @@ const tableVisibleColumns = computed(() =>
   resolveTableVisibleColumns(tableOrderedColumns.value, config.value)
 )
 
+const tableShowSearch = computed(() =>
+  readBoolean(['showSearch', 'show_search'], false)
+)
+
+const tableSearchQuery = ref('')
+
 const tableRows = computed(() => applyTableSortAndLimit(rows.value, config.value))
+
+const normalizeTableValue = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value)
+  }
+  return String(value)
+}
+
+const filteredTableRows = computed(() => {
+  if (!tableShowSearch.value) {
+    return tableRows.value
+  }
+
+  const query = tableSearchQuery.value.trim().toLowerCase()
+  if (!query) {
+    return tableRows.value
+  }
+
+  return tableRows.value.filter((row) =>
+    tableVisibleColumns.value.some((column) =>
+      normalizeTableValue(row[column]).toLowerCase().includes(query)
+    )
+  )
+})
 
 const tableColumns = computed(() =>
   tableVisibleColumns.value.map((column) => ({
@@ -405,7 +438,7 @@ const tableConditionalRules = computed(() =>
 )
 
 const tableColumnExtents = computed(() =>
-  getColumnNumericExtents(tableRows.value, tableVisibleColumns.value)
+  getColumnNumericExtents(filteredTableRows.value, tableVisibleColumns.value)
 )
 
 const tableCellStyleResolver = (input: { columnKey: string; value: unknown }) =>
@@ -419,6 +452,12 @@ const tableCellStyleResolver = (input: { columnKey: string; value: unknown }) =>
 const chartRenderKey = computed(
   () => `${props.visualization}:${JSON.stringify(config.value)}:${rows.value.length}`
 )
+
+watch(tableShowSearch, (enabled) => {
+  if (!enabled) {
+    tableSearchQuery.value = ''
+  }
+})
 
 const chartOption = computed<EChartsOption>(() => {
   if (props.visualization === 'pie') {
@@ -661,8 +700,15 @@ const chartOption = computed<EChartsOption>(() => {
 
       <div class="min-w-0 flex-1 rounded border border-gray-200 bg-white">
         <div v-if="visualization === 'table'" class="overflow-auto">
+          <div v-if="tableShowSearch" class="border-b border-gray-200 p-3">
+            <UInput
+              v-model="tableSearchQuery"
+              placeholder="Search rows"
+              class="w-full max-w-xs"
+            />
+          </div>
           <Table
-            :rows="tableRows"
+            :rows="filteredTableRows"
             :columns="tableColumns"
             :cell-style-resolver="tableCellStyleResolver"
             empty-label="No preview rows found."

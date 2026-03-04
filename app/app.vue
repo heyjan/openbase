@@ -7,6 +7,7 @@ const menuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 const toast = useAppToast()
 const route = useRoute()
+const logoSrc = '/brain-icon-7087186-512.png'
 
 const hiddenTopBarPaths = new Set(['/login', '/admin/login'])
 const hiddenTopBarPrefixes = ['/setup', '/d', '/editor']
@@ -103,7 +104,7 @@ onBeforeUnmount(() => {
     <div class="flex h-full items-center justify-between gap-4 px-6">
       <div class="flex min-w-0 items-center gap-10">
         <NuxtLink to="/" class="flex shrink-0 items-center">
-          <img src="/brain-icon-7087186-512.png" alt="Openbase" class="h-12 w-12" />
+          <img :src="logoSrc" alt="Openbase" class="h-12 w-12" />
         </NuxtLink>
       </div>
       <div ref="menuRef" class="relative">

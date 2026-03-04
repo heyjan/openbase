@@ -480,6 +480,14 @@ watch(
         </div>
 
         <div class="grid gap-3 md:grid-cols-4">
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Search bar
+            <USwitch
+              :model-value="readBoolean('showSearch', false)"
+              @update:model-value="updateBoolean('showSearch', $event)"
+            />
+          </label>
+
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Sort column
             <USelect

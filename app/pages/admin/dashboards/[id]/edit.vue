@@ -5,6 +5,7 @@ import DashboardEditor from '~/components/dashboard/DashboardEditor.vue'
 import DashboardFilterBar from '~/components/dashboard/DashboardFilterBar.vue'
 import DashboardMetadataModal from '~/components/dashboard/DashboardMetadataModal.vue'
 import ModuleConfigPanel from '~/components/dashboard/ModuleConfigPanel.vue'
+import Breadcrumbs from '~/components/ui/Breadcrumbs.vue'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import {
   getModuleMinGridHeight,

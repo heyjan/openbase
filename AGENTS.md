@@ -16,14 +16,10 @@ Use feature-local organization where possible (for example, dashboard logic stay
 - Do not add explanatory/helper copy in frontend forms, modals, or empty states unless explicitly requested in the task/spec. Default to concise labels and actions only.
 
 ## Build, Test, and Development Commands
-- `npm install`: install dependencies.
-- `npm run dev`: run Nuxt dev server (default `http://localhost:3000`).
-- `npm run build`: production build; use as the primary pre-PR verification step.
-- `npm run preview`: serve the production build locally.
-- `npm run generate`: generate static output when needed.
-- `docker-compose up --build`: start app + PostgreSQL with schema bootstrap for full local stack.
-
-Set `DATABASE_URL` for non-Docker local runs (see `README.md`).
+- `podman compose down`: stop and remove the running stack.
+- `podman compose build`: rebuild images.
+- `podman compose up`: start app + PostgreSQL with schema bootstrap for the local stack.
+- After startup, run checks/tests from inside the Podman environment.
 
 ## Coding Style & Naming Conventions
 - Language stack: TypeScript + Vue SFC.
@@ -39,17 +35,9 @@ No dedicated ESLint/Prettier config is committed; consistency with existing code
 ### E2E Tests (Playwright)
 End-to-end tests live in `e2e/` and use [Playwright](https://playwright.dev/) with Chromium.
 
-**Setup (once, inside the devcontainer or toolbox):**
-```bash
-npm run playwright:install   # downloads Chromium + system deps
-```
-
-**Running tests:**
-```bash
-npm run test:e2e             # headless run
-npm run test:e2e:headed      # opens a visible browser
-npm run test:e2e:ui          # interactive Playwright UI
-```
+**Environment:**
+- Use Podman containers for Playwright setup and execution.
+- Do not run host-level package manager commands for test setup or execution.
 
 The Playwright config (`playwright.config.ts`) auto-starts the Nuxt dev server when not in CI. Set `BASE_URL` to override the target (default `http://localhost:3000`).
 
@@ -59,7 +47,7 @@ The Playwright config (`playwright.config.ts`) auto-starts the Nuxt dev server w
 - Keep tests independent — each test should not depend on state from another.
 
 ### General
-- Run `npm run build` before every PR.
+- Before every PR, run `podman compose down`, `podman compose build`, and `podman compose up`.
 - Manually verify critical flows: setup, admin auth, dashboard editing/sharing, and data-source browsing.
 - For unit tests (future), prefer `*.test.ts` naming and colocate by feature (for example, `server/**/__tests__`).
 

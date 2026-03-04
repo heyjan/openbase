@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft } from 'lucide-vue-next'
-import type { BreadcrumbItem } from '~/components/ui/Breadcrumbs.vue'
+import Breadcrumbs, { type BreadcrumbItem } from '~/components/ui/Breadcrumbs.vue'
 
 const props = defineProps<{
   title: string

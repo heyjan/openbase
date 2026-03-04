@@ -25,8 +25,7 @@ const { data: response, pending, error } = useAsyncData(
   asyncKey,
   () => (token.value ? getPublic(slug.value, token.value) : null),
   {
-    watch: [slug, token],
-    getCachedData: () => undefined
+    watch: [slug, token]
   }
 )
 

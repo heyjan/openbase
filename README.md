@@ -15,6 +15,16 @@ It started from frustration with Metabase limitations, and evolved into a flexib
 
 Current milestone: **v0.1 stabilization** (**March 2026**).
 
+### Deployment progress
+
+- Deployment spec moved to `documentation/DEPLOYMENT.md`.
+- Completed from deployment spec:
+  - Step 1: `.env`-driven configuration and `.env.example` template.
+  - Step 2: setup flow now confirms magic-link delivery and production SMTP is fail-fast validated.
+  - Step 3: production multi-stage `Dockerfile` added.
+  - Step 6 (Security): stronger security headers and production encryption-key requirement.
+- Pending by plan: reverse proxy/TLS and production compose rollout steps.
+
 ### Recently completed
 
 - Editor RBAC with separate editor auth/session handling.
@@ -47,7 +57,8 @@ Current milestone: **v0.1 stabilization** (**March 2026**).
 ## Quick start (Docker)
 
 ```bash
-docker-compose up --build
+cp .env.example .env
+podman compose up --build
 ```
 
 Then open `http://localhost:3000` and complete the setup flow on first run.
@@ -60,19 +71,24 @@ Then open `http://localhost:3000` and complete the setup flow on first run.
    npm install
    ```
 
-2. Set the database URL (PostgreSQL required for the app metadata):
+2. Set required environment variables (recommended via `.env`):
 
    ```bash
-   export DATABASE_URL=postgres://postgres:postgres@localhost:5432/openbase
+   cp .env.example .env
    ```
 
-   Optional environment variables:
+   If not using `.env`, export at least:
 
    ```bash
-   # Required to encrypt data source connection configs at rest
-   export OPENBASE_ENCRYPTION_KEY=your-32-byte-key
+   export DATABASE_URL=postgres://openbase:password@localhost:5432/openbase
 
-   # Base directory for SQLite/DuckDB files (defaults to process cwd)
+   # Required in production
+   export SMTP_HOST=smtp.example.com
+   export SMTP_USER=noreply@example.com
+   export SMTP_PASS=your-smtp-password
+   export OPENBASE_ENCRYPTION_KEY=your-64-char-hex-key
+
+   # Optional
    export OPENBASE_DATA_DIR=/workspace
    ```
 
@@ -114,19 +130,7 @@ Then open `http://localhost:3000` and complete the setup flow on first run.
 ## Security hardening
 
 - Recursive API input sanitization for request payloads.
-- Security headers (CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`).
+- Security headers (CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Permissions-Policy`).
 - In-memory sliding-window rate limiting for login/admin/write/public routes.
-- Optional AES-256-GCM encryption for data source connection settings (`OPENBASE_ENCRYPTION_KEY`).
+- AES-256-GCM encryption for data source connection settings (`OPENBASE_ENCRYPTION_KEY` required in production).
 - Audit log tracking for login/logout and editor write events.
-
-## Optional ingestion worker webhooks
-
-Manual pipeline triggers in `/admin/ingestion` can call external workers if webhook URLs are configured.
-
-- `INGESTION_WEBHOOK_BASE_URL`: Base URL used as `<base>/<pipeline-id>`.
-- `INGESTION_WEBHOOK_AMAZON_FORECAST_URL`: Override URL for `amazon-forecast`.
-- `INGESTION_WEBHOOK_AMAZON_ACTUALS_URL`: Override URL for `amazon-actuals`.
-- `INGESTION_WEBHOOK_FORECAST_OUTLIERS_URL`: Override URL for `forecast-outliers`.
-- `INGESTION_WEBHOOK_TIMEOUT_MS`: Request timeout (default `30000`).
-
-Worker responses may include `{ "message": "...", "rowCount": 123 }` for ingestion run logs.

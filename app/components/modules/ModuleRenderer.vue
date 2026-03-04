@@ -64,6 +64,7 @@ const title = computed(() => {
   const moduleTitle = props.module.title?.trim()
   return moduleTitle || defaultTitles[props.module.type]
 })
+const showTypeLabel = computed(() => props.module.type !== 'data_table')
 
 const moduleRef = toRef(props, 'module')
 const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
@@ -84,7 +85,7 @@ const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
     <div class="flex items-start justify-between gap-3">
       <div>
         <h3 class="text-sm font-semibold text-gray-900">{{ title }}</h3>
-        <p class="mt-1 text-xs uppercase tracking-wide text-gray-500">
+        <p v-if="showTypeLabel" class="mt-1 text-xs uppercase tracking-wide text-gray-500">
           {{ module.type.replace(/_/g, ' ') }}
         </p>
       </div>

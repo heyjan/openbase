@@ -244,6 +244,7 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
       columnOrder: [...columns],
       sortDirection: 'asc',
       rowLimit: 500,
+      showSearch: false,
       conditionalFormatting: []
     } as VizOptionsByType[T]
   }
@@ -337,6 +338,7 @@ const sanitizeVizConfigForType = (
         : undefined
     normalized.sortDirection = sortDirectionFromConfig(normalized.sortDirection)
     normalized.rowLimit = positiveIntegerFromConfig(normalized.rowLimit, 500)
+    normalized.showSearch = readConfiguredBoolean(normalized, ['showSearch', 'show_search'], false)
     normalized.conditionalFormatting = parseConditionalFormattingRules(
       normalized.conditionalFormatting
     )

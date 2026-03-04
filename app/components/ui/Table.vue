@@ -59,7 +59,7 @@ const tableColumns = computed(() =>
           color: 'neutral',
           variant: 'ghost',
           size: 'xs',
-          class: '-ml-2 font-semibold',
+          class: '-ml-2 font-semibold text-gray-700',
           onClick: () => tableColumn.toggleSorting(sort === 'asc')
         },
         () => `${column.label ?? column.key}${indicator}`
@@ -117,7 +117,27 @@ const tableColumns = computed(() =>
     <UTable
       :data="rows"
       :columns="tableColumns"
-      class="min-w-full [&_thead_th]:bg-gray-50 [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-gray-500 [&_tbody_td]:align-top [&_tbody_td]:py-2.5 [&_tbody_td]:text-sm [&_tbody_td]:text-gray-700 [&_tbody_tr:nth-child(even)]:bg-gray-50/40 [&_tbody_tr:hover]:bg-gray-50"
+      class="ob-table min-w-full [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-gray-700 [&_tbody_td]:align-top [&_tbody_td]:py-2.5 [&_tbody_td]:text-sm [&_tbody_td]:text-gray-700"
     />
   </div>
 </template>
+
+<style scoped>
+.ob-table :deep(thead th) {
+  background-color: #f6ebe8;
+  background-color: color-mix(in srgb, var(--color-brand-secondary, #d97556) 16%, white);
+  border-bottom: 1px solid #d1d5db;
+}
+
+.ob-table :deep(tbody td) {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ob-table :deep(tbody tr:last-child td) {
+  border-bottom: 0;
+}
+
+.ob-table :deep(tbody tr:hover) {
+  background-color: #f9fafb;
+}
+</style>
