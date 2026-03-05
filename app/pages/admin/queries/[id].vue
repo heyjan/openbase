@@ -278,6 +278,10 @@ const saveVisualization = async (payload: {
 
   const savedQueryId = await persistQuery()
   if (!savedQueryId) {
+    toast.error(
+      'Failed to save visualization',
+      errorMessage.value || 'Resolve query errors and try again.'
+    )
     return
   }
 

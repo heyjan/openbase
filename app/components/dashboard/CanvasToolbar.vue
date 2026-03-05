@@ -62,7 +62,11 @@ const loadVisualizations = async () => {
 }
 
 const toggleVisualizationPicker = () => {
-  visualizationPickerOpen.value = !visualizationPickerOpen.value
+  const opening = !visualizationPickerOpen.value
+  visualizationPickerOpen.value = opening
+  if (opening) {
+    void loadVisualizations()
+  }
 }
 
 const addFromVisualization = () => {

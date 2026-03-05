@@ -264,11 +264,12 @@ const variableDefinitions = computed<VariableDefinition[]>(() => {
 
   return detectedVariables.value.map((name) => {
     const matched = mapByName.get(name)
+    const hasDefaultValue = isProvidedParameterValue(matched?.defaultValue)
     return {
       name,
       label: matched?.label,
       type: matched?.type ?? 'text',
-      required: matched?.required ?? false,
+      required: matched?.required === true && hasDefaultValue,
       defaultValue: matched?.defaultValue,
       options: matched?.options,
       sourceQueryId: matched?.sourceQueryId,
