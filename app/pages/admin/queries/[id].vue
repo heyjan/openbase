@@ -22,7 +22,8 @@ const { list: listDataSources } = useDataSources()
 const { list: listQueries, getById, create, update, preview } = useQueries()
 const {
   list: listQueryVisualizations,
-  create: createVisualization
+  create: createVisualization,
+  update: updateVisualization
 } = useQueryVisualizations()
 const toast = useAppToast()
 
@@ -283,19 +284,31 @@ const saveVisualization = async (payload: {
   const mapped = mapVisualizationToModule(payload.visualization, payload.config ?? {})
 
   try {
-    const created = await createVisualization({
-      savedQueryId,
-      name,
-      moduleType: mapped.moduleType,
-      config: {
-        ...mapped.config
-      }
-    })
+    const existing = savedVisualizations.value.find(
+      (visualization) => visualization.moduleType === mapped.moduleType
+    )
+
+    const saved = existing
+      ? await updateVisualization(existing.id, {
+          name,
+          config: {
+            ...mapped.config
+          }
+        })
+      : await createVisualization({
+          savedQueryId,
+          name,
+          moduleType: mapped.moduleType,
+          config: {
+            ...mapped.config
+          }
+        })
+
     savedVisualizations.value = [
-      created,
-      ...savedVisualizations.value.filter((visualization) => visualization.id !== created.id)
+      saved,
+      ...savedVisualizations.value.filter((visualization) => visualization.id !== saved.id)
     ]
-    toast.success('Visualization saved')
+    toast.success(existing ? 'Visualization updated' : 'Visualization saved')
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to save visualization'

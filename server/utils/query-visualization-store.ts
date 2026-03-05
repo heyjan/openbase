@@ -62,22 +62,55 @@ const selectBase = `SELECT
  FROM query_visualizations qv
  JOIN saved_queries sq ON sq.id = qv.saved_query_id`
 
+const selectLatestBase = `WITH ranked AS (
+  SELECT
+    qv.id,
+    qv.saved_query_id,
+    sq.name AS saved_query_name,
+    qv.name,
+    qv.module_type,
+    qv.config,
+    qv.created_at,
+    qv.updated_at,
+    ROW_NUMBER() OVER (
+      PARTITION BY qv.saved_query_id, qv.module_type
+      ORDER BY qv.updated_at DESC, qv.created_at DESC, qv.id DESC
+    ) AS row_rank
+  FROM query_visualizations qv
+  JOIN saved_queries sq ON sq.id = qv.saved_query_id`
+
+const selectLatestProjection = `SELECT
+  id,
+  saved_query_id,
+  saved_query_name,
+  name,
+  module_type,
+  config,
+  created_at,
+  updated_at
+ FROM ranked
+ WHERE row_rank = 1`
+
 export const listQueryVisualizations = async (input?: {
   savedQueryId?: string
 }): Promise<QueryVisualizationRecord[]> => {
   if (input?.savedQueryId) {
     const result = await query<QueryVisualizationRow>(
-      `${selectBase}
+      `${selectLatestBase}
        WHERE qv.saved_query_id = $1
-       ORDER BY qv.updated_at DESC, qv.created_at DESC`,
+      )
+      ${selectLatestProjection}
+      ORDER BY updated_at DESC, created_at DESC, id DESC`,
       [input.savedQueryId]
     )
     return result.rows.map(mapQueryVisualization)
   }
 
   const result = await query<QueryVisualizationRow>(
-    `${selectBase}
-     ORDER BY qv.updated_at DESC, qv.created_at DESC`
+    `${selectLatestBase}
+    )
+    ${selectLatestProjection}
+    ORDER BY updated_at DESC, created_at DESC, id DESC`
   )
   return result.rows.map(mapQueryVisualization)
 }
@@ -104,6 +137,30 @@ export const createQueryVisualization = async (input: {
   config?: Record<string, unknown>
 }): Promise<QueryVisualizationRecord> => {
   try {
+    const existing = await query<{ id: string }>(
+      `SELECT id
+       FROM query_visualizations
+       WHERE saved_query_id = $1
+         AND module_type = $2
+       ORDER BY updated_at DESC, created_at DESC, id DESC
+       LIMIT 1`,
+      [input.savedQueryId, input.moduleType]
+    )
+
+    const existingId = existing.rows[0]?.id
+    if (existingId) {
+      const result = await query<{ id: string }>(
+        `UPDATE query_visualizations
+         SET name = $1,
+             config = $2,
+             updated_at = now()
+         WHERE id = $3
+         RETURNING id`,
+        [input.name, input.config ?? {}, existingId]
+      )
+      return await getQueryVisualizationById(result.rows[0].id)
+    }
+
     const result = await query<{ id: string }>(
       `INSERT INTO query_visualizations (
          saved_query_id,

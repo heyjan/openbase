@@ -203,7 +203,6 @@ export const useInlineCellEdit = (input: {
 
     const nextValue = editValue.value === '' ? null : editValue.value
     const previousValue = row[currentEditingCell.columnKey]
-    row[currentEditingCell.columnKey] = nextValue
 
     saving.value = true
     saveError.value = ''
@@ -217,10 +216,24 @@ export const useInlineCellEdit = (input: {
 
       const rowCount = response.rowCount ?? 0
       if (rowCount === 0) {
-        row[currentEditingCell.columnKey] = previousValue
         saveError.value = 'No rows were updated. Refresh and try again.'
         toast.error('Cell update failed', saveError.value)
         return
+      }
+
+      if (rowCount === 1) {
+        const updatedRow = response.rows?.[0]
+        const columnKey = currentEditingCell.columnKey
+        if (
+          updatedRow &&
+          Object.prototype.hasOwnProperty.call(updatedRow, columnKey)
+        ) {
+          row[columnKey] = updatedRow[columnKey]
+        } else {
+          row[columnKey] = nextValue
+        }
+      } else {
+        row[currentEditingCell.columnKey] = nextValue
       }
 
       if (rowCount > 1) {
@@ -229,7 +242,7 @@ export const useInlineCellEdit = (input: {
 
       clearEditingState()
 
-      if (input.refresh) {
+      if (input.refresh && rowCount > 1) {
         try {
           await input.refresh()
         } catch (error) {

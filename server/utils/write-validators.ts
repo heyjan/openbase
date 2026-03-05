@@ -18,6 +18,7 @@ const UUID_PATTERN =
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const INTEGER_PATTERN = /^-?\d+$/
 const NUMERIC_PATTERN = /^-?\d+(?:\.\d+)?$/
+const NUMERIC_COMMA_PATTERN = /^-?\d+(?:,\d+)?$/
 
 const normalizeColumnName = (value: string) => value.trim().toLowerCase()
 
@@ -42,6 +43,25 @@ const validateBoolean = (value: unknown, columnName: string) => {
     }
   }
   throw createError({ statusCode: 400, statusMessage: `${columnName} must be boolean` })
+}
+
+const parseNumericInput = (value: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  if (NUMERIC_PATTERN.test(trimmed)) {
+    const parsed = Number(trimmed)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  if (NUMERIC_COMMA_PATTERN.test(trimmed)) {
+    const parsed = Number(trimmed.replace(',', '.'))
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return null
 }
 
 const validateValueForColumn = (
@@ -84,8 +104,11 @@ const validateValueForColumn = (
     if (typeof value === 'number' && Number.isFinite(value)) {
       return value
     }
-    if (typeof value === 'string' && NUMERIC_PATTERN.test(value.trim())) {
-      return Number(value)
+    if (typeof value === 'string') {
+      const parsed = parseNumericInput(value)
+      if (parsed !== null) {
+        return parsed
+      }
     }
     throw createError({ statusCode: 400, statusMessage: `${columnName} must be numeric` })
   }

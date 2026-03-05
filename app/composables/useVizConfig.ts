@@ -15,15 +15,54 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === 'string')
 
+const DECIMAL_COMMA_PATTERN = /^-?\d+(?:,\d+)?$/
+
 export const toNumber = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value
   }
   if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
+    const trimmed = value.trim()
+    const parsed = Number(trimmed)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+    if (!DECIMAL_COMMA_PATTERN.test(trimmed)) {
+      return null
+    }
+    const commaParsed = Number(trimmed.replace(',', '.'))
+    return Number.isFinite(commaParsed) ? commaParsed : null
   }
   return null
+}
+
+const readConfiguredValue = (config: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(config, key)) {
+      return config[key]
+    }
+  }
+  return undefined
+}
+
+const readConfiguredStringArray = (config: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const value = config[key]
+    if (isStringArray(value)) {
+      return value
+    }
+  }
+  return []
+}
+
+const readConfiguredString = (config: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const value = config[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+  return ''
 }
 
 export const columnIsNumeric = (rows: Record<string, unknown>[], column: string) => {
@@ -135,6 +174,12 @@ const positiveIntegerFromConfig = (value: unknown, fallback: number) => {
   const rounded = Math.trunc(value)
   return rounded > 0 ? rounded : fallback
 }
+
+const readConfiguredPositiveInteger = (
+  config: Record<string, unknown>,
+  keys: string[],
+  fallback: number
+) => positiveIntegerFromConfig(readConfiguredValue(config, keys), fallback)
 
 const parseSeries = (
   value: unknown,
@@ -321,23 +366,32 @@ const sanitizeVizConfigForType = (
   const categoryColumns = getCategoryColumns(columns, numericColumns)
 
   if (visualization === 'table') {
-    const columnOrder = isStringArray(normalized.columnOrder)
-      ? normalized.columnOrder.filter((column) => columns.includes(column))
-      : []
-    const ordered = [...columnOrder, ...columns.filter((column) => !columnOrder.includes(column))]
+    const columnOrder = readConfiguredStringArray(normalized, ['columnOrder', 'column_order'])
+      .filter((column) => columns.includes(column))
+    const deduplicatedOrder = columnOrder.filter(
+      (column, index, source) => source.indexOf(column) === index
+    )
+    const ordered = [
+      ...deduplicatedOrder,
+      ...columns.filter((column) => !deduplicatedOrder.includes(column))
+    ]
 
-    const visibleColumns = isStringArray(normalized.visibleColumns)
-      ? ordered.filter((column) => normalized.visibleColumns.includes(column))
+    const configuredVisible = readConfiguredStringArray(
+      normalized,
+      ['visibleColumns', 'visible_columns']
+    )
+    const visibleColumns = configuredVisible.length
+      ? ordered.filter((column) => configuredVisible.includes(column))
       : ordered
 
     normalized.columnOrder = ordered
     normalized.visibleColumns = visibleColumns
-    normalized.sortColumn =
-      typeof normalized.sortColumn === 'string' && columns.includes(normalized.sortColumn)
-        ? normalized.sortColumn
-        : undefined
-    normalized.sortDirection = sortDirectionFromConfig(normalized.sortDirection)
-    normalized.rowLimit = positiveIntegerFromConfig(normalized.rowLimit, 500)
+    const sortColumn = readConfiguredString(normalized, ['sortColumn', 'sort_column'])
+    normalized.sortColumn = sortColumn && columns.includes(sortColumn) ? sortColumn : undefined
+    normalized.sortDirection = sortDirectionFromConfig(
+      readConfiguredValue(normalized, ['sortDirection', 'sort_direction'])
+    )
+    normalized.rowLimit = readConfiguredPositiveInteger(normalized, ['rowLimit', 'row_limit'], 500)
     normalized.showSearch = readConfiguredBoolean(normalized, ['showSearch', 'show_search'], false)
     normalized.conditionalFormatting = parseConditionalFormattingRules(
       normalized.conditionalFormatting
@@ -465,19 +519,20 @@ const countTopLevelDifferences = (current: Record<string, unknown>, defaults: Re
 }
 
 export const resolveTableColumnOrder = (columns: string[], config: Record<string, unknown>) => {
-  const configuredOrder = isStringArray(config.columnOrder)
-    ? config.columnOrder.filter((column, index, source) =>
+  const configuredOrder = readConfiguredStringArray(config, ['columnOrder', 'column_order'])
+    .filter(
+      (column, index, source) =>
         columns.includes(column) && source.indexOf(column) === index
-      )
-    : []
+    )
 
   return [...configuredOrder, ...columns.filter((column) => !configuredOrder.includes(column))]
 }
 
 export const resolveTableVisibleColumns = (orderedColumns: string[], config: Record<string, unknown>) => {
-  const configuredVisible = isStringArray(config.visibleColumns)
-    ? config.visibleColumns.filter((column) => orderedColumns.includes(column))
-    : []
+  const configuredVisible = readConfiguredStringArray(
+    config,
+    ['visibleColumns', 'visible_columns']
+  ).filter((column) => orderedColumns.includes(column))
 
   if (!configuredVisible.length) {
     return orderedColumns
@@ -504,8 +559,10 @@ export const applyTableSortAndLimit = (
   config: Record<string, unknown>
 ) => {
   const nextRows = [...rows]
-  const sortColumn = typeof config.sortColumn === 'string' ? config.sortColumn : ''
-  const sortDirection = sortDirectionFromConfig(config.sortDirection)
+  const sortColumn = readConfiguredString(config, ['sortColumn', 'sort_column'])
+  const sortDirection = sortDirectionFromConfig(
+    readConfiguredValue(config, ['sortDirection', 'sort_direction'])
+  )
 
   if (sortColumn) {
     nextRows.sort((leftRow, rightRow) => {
@@ -514,7 +571,7 @@ export const applyTableSortAndLimit = (
     })
   }
 
-  const rowLimit = positiveIntegerFromConfig(config.rowLimit, 500)
+  const rowLimit = readConfiguredPositiveInteger(config, ['rowLimit', 'row_limit'], 500)
   return nextRows.slice(0, rowLimit)
 }
 
@@ -529,14 +586,8 @@ const isConditionalOperator = (value: unknown): value is ConditionalFormatOperat
   value === 'contains'
 
 const parseRuleNumber = (value: unknown): number | undefined => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value
-  }
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : undefined
-  }
-  return undefined
+  const parsed = toNumber(value)
+  return parsed === null ? undefined : parsed
 }
 
 export const parseConditionalFormattingRules = (value: unknown): ConditionalFormatRule[] => {

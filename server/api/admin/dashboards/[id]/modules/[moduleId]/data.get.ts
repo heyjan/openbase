@@ -36,7 +36,7 @@ const parseFilters = (query: Record<string, unknown>) => {
 }
 
 const parseLimit = (moduleConfig: Record<string, unknown>) => {
-  const limitCandidate = moduleConfig.limit ?? moduleConfig.row_limit
+  const limitCandidate = moduleConfig.limit ?? moduleConfig.rowLimit ?? moduleConfig.row_limit
   if (typeof limitCandidate !== 'number' || Number.isNaN(limitCandidate)) {
     return 200
   }
