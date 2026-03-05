@@ -1,4 +1,4 @@
-import { createError, defineEventHandler, getRouterParam } from 'h3'
+import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3'
 import { getDashboardBySlug, listModules } from '~~/server/utils/dashboard-store'
 import { canEditorViewDashboard } from '~~/server/utils/permission-store'
 import { getSavedQueryById } from '~~/server/utils/query-store'
@@ -50,6 +50,24 @@ const mapQueryListOptions = (
   return options
 }
 
+const parseSourceQueryParameters = (query: Record<string, unknown>) => {
+  const parameters: Record<string, unknown> = {}
+
+  for (const [key, rawValue] of Object.entries(query)) {
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue
+    if (value === undefined || value === null) {
+      continue
+    }
+    if (typeof value === 'string' && !value.trim()) {
+      continue
+    }
+
+    parameters[key] = value
+  }
+
+  return parameters
+}
+
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   const moduleId = getRouterParam(event, 'moduleId')
@@ -89,6 +107,7 @@ export default defineEventHandler(async (event) => {
     type: 'text' as const
   }))
   const definitions = configuredDefinitions.length ? configuredDefinitions : fallbackDefinitions
+  const sourceQueryParameters = parseSourceQueryParameters(getQuery(event) as Record<string, unknown>)
   const variables: EditorVariableControl[] = []
 
   for (const definition of definitions) {
@@ -127,7 +146,7 @@ export default defineEventHandler(async (event) => {
     try {
       const sourceResult = await runSavedQueryById({
         savedQueryId: definition.sourceQueryId,
-        parameters: {},
+        parameters: sourceQueryParameters,
         limit: 100
       })
       const fallbackColumn = sourceResult.columns[0]

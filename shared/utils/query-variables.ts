@@ -24,6 +24,16 @@ export type QueryParameterConfig = Record<string, unknown> & {
 const hasOwn = (value: Record<string, unknown>, key: string) =>
   Object.prototype.hasOwnProperty.call(value, key)
 
+const isProvidedValue = (value: unknown) => {
+  if (value === undefined || value === null) {
+    return false
+  }
+  if (typeof value === 'string') {
+    return value.trim().length > 0
+  }
+  return true
+}
+
 const variableNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/
 const variableTokenPattern = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g
 
@@ -159,12 +169,16 @@ export const prepareQueryVariables = (input: {
   const variables = extractVariables(input.queryText)
 
   for (const variableName of variables) {
-    if (hasOwn(runtimeParameters, variableName)) {
+    const hasRuntimeValue =
+      hasOwn(runtimeParameters, variableName) && isProvidedValue(runtimeParameters[variableName])
+    if (hasRuntimeValue) {
       continue
     }
 
     const definition = definitionsByName.get(variableName)
-    if (definition?.defaultValue !== undefined) {
+    const hasDefaultValue =
+      definition !== undefined && isProvidedValue(definition.defaultValue)
+    if (hasDefaultValue) {
       runtimeParameters[variableName] = definition.defaultValue
       continue
     }

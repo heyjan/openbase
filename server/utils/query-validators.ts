@@ -15,11 +15,35 @@ const parseRuntimeParameters = (value: unknown) => {
   return asRecord(value, 'parameters')
 }
 
+const hasVariableDefaultValue = (value: unknown) => {
+  if (value === undefined || value === null) {
+    return false
+  }
+  if (typeof value === 'string') {
+    return value.trim().length > 0
+  }
+  return true
+}
+
+const assertPersistableVariables = (
+  variables: ReturnType<typeof parseVariableDefinitions>
+) => {
+  for (const variable of variables) {
+    if (variable.required && !hasVariableDefaultValue(variable.defaultValue)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Variable "${variable.name}" requires a default value when required is enabled`
+      })
+    }
+  }
+}
+
 const parseSavedQueryParameters = (value: unknown) => {
   const parameters = parseRuntimeParameters(value)
   try {
     const hasVariables = Object.prototype.hasOwnProperty.call(parameters, 'variables')
     const variables = parseVariableDefinitions(parameters)
+    assertPersistableVariables(variables)
     if (!hasVariables) {
       return parameters
     }

@@ -89,6 +89,20 @@ const mapQueryListOptions = (
   return options
 }
 
+const sanitizeRuntimeParameters = (parameters: Record<string, unknown>) => {
+  const next: Record<string, unknown> = {}
+  for (const [name, value] of Object.entries(parameters)) {
+    if (value === undefined || value === null) {
+      continue
+    }
+    if (typeof value === 'string' && !value.trim()) {
+      continue
+    }
+    next[name] = value
+  }
+  return next
+}
+
 const syncDashboardVariables = async () => {
   if (!process.client) {
     return
@@ -163,17 +177,27 @@ const syncDashboardVariables = async () => {
           continue
         }
 
-        const sourceResult = await previewQuery(definition.sourceQueryId, { limit: 100 })
-        const fallbackColumn = sourceResult.columns[0]
-        const valueColumn = definition.valueColumn || fallbackColumn || ''
-        const labelColumn = definition.labelColumn || valueColumn
-        if (!valueColumn) {
+        const control = controlsByName.get(definition.name)
+        if (!control) {
           continue
         }
 
-        const control = controlsByName.get(definition.name)
-        if (control) {
+        try {
+          const sourceResult = await previewQuery(definition.sourceQueryId, {
+            limit: 100,
+            parameters: sanitizeRuntimeParameters(dashboardVariableValues.value)
+          })
+          const fallbackColumn = sourceResult.columns[0]
+          const valueColumn = definition.valueColumn || fallbackColumn || ''
+          const labelColumn = definition.labelColumn || valueColumn
+          if (!valueColumn) {
+            control.options = []
+            continue
+          }
+
           control.options = mapQueryListOptions(sourceResult.rows, valueColumn, labelColumn)
+        } catch {
+          control.options = []
         }
       }
     }

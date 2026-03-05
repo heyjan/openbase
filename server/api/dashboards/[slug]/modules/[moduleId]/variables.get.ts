@@ -50,6 +50,28 @@ const mapQueryListOptions = (
   return options
 }
 
+const parseSourceQueryParameters = (query: Record<string, unknown>) => {
+  const parameters: Record<string, unknown> = {}
+
+  for (const [key, rawValue] of Object.entries(query)) {
+    if (key === 'token') {
+      continue
+    }
+
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue
+    if (value === undefined || value === null) {
+      continue
+    }
+    if (typeof value === 'string' && !value.trim()) {
+      continue
+    }
+
+    parameters[key] = value
+  }
+
+  return parameters
+}
+
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   const moduleId = getRouterParam(event, 'moduleId')
@@ -86,6 +108,7 @@ export default defineEventHandler(async (event) => {
     type: 'text' as const
   }))
   const definitions = configuredDefinitions.length ? configuredDefinitions : fallbackDefinitions
+  const sourceQueryParameters = parseSourceQueryParameters(query as Record<string, unknown>)
   const variables: PublicVariableControl[] = []
 
   for (const definition of definitions) {
@@ -124,7 +147,7 @@ export default defineEventHandler(async (event) => {
     try {
       const sourceResult = await runSavedQueryById({
         savedQueryId: definition.sourceQueryId,
-        parameters: {},
+        parameters: sourceQueryParameters,
         limit: 100
       })
       const fallbackColumn = sourceResult.columns[0]

@@ -86,6 +86,32 @@ const sourceQueryErrors = reactive<Record<string, string>>({})
 const loadingSourceColumns = reactive<Record<string, boolean>>({})
 const loadedSourceQueryByVariable = reactive<Record<string, string>>({})
 
+const isProvidedParameterValue = (value: unknown) => {
+  if (value === undefined || value === null) {
+    return false
+  }
+  if (typeof value === 'string') {
+    return value.trim().length > 0
+  }
+  return true
+}
+
+const sanitizeParameterMap = (parameters: Record<string, unknown>) => {
+  const next: Record<string, unknown> = {}
+  for (const [name, value] of Object.entries(parameters)) {
+    if (!isProvidedParameterValue(value)) {
+      continue
+    }
+    next[name] = value
+  }
+  return next
+}
+
+const getParameterSignature = (parameters: Record<string, unknown>) =>
+  JSON.stringify(
+    Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right))
+  )
+
 const visualizationLabel: Record<QueryPreviewVisualization, string> = {
   table: 'Table',
   line: 'Line Chart',
@@ -252,6 +278,27 @@ const variableDefinitions = computed<VariableDefinition[]>(() => {
   })
 })
 
+const previewParameterPayload = computed(() => {
+  const allowed = new Set(detectedVariables.value)
+  const current = props.previewParameters ?? {}
+  const next: Record<string, unknown> = {}
+
+  for (const [name, value] of Object.entries(current)) {
+    if (!allowed.has(name) || !isProvidedParameterValue(value)) {
+      continue
+    }
+    next[name] = value
+  }
+
+  return next
+})
+
+const hasVariableDefaultValue = (definition: VariableDefinition) =>
+  isProvidedParameterValue(definition.defaultValue)
+
+const isRequiredToggleDisabled = (definition: VariableDefinition) =>
+  definition.required !== true && !hasVariableDefaultValue(definition)
+
 const sourceQueryOptions = computed(() =>
   (props.savedQueries ?? []).filter((query) => query.id !== props.currentQueryId)
 )
@@ -295,20 +342,41 @@ const onVariableTextInput = (
 ) => {
   const target = event.target as HTMLInputElement | HTMLSelectElement | null
   const value = target?.value ?? ''
+  const normalizedValue = value.trim() ? value : undefined
 
-  updateVariableDefinition(variableName, (definition) => ({
-    ...definition,
-    [key]: value.trim() ? value : undefined
-  }))
+  updateVariableDefinition(variableName, (definition) => {
+    if (key !== 'defaultValue') {
+      return {
+        ...definition,
+        [key]: normalizedValue
+      }
+    }
+
+    return {
+      ...definition,
+      defaultValue: normalizedValue,
+      required:
+        definition.required === true && isProvidedParameterValue(normalizedValue)
+    }
+  })
 }
 
 const onVariableRequiredChange = (event: Event, variableName: string) => {
   const target = event.target as HTMLInputElement | null
 
-  updateVariableDefinition(variableName, (definition) => ({
-    ...definition,
-    required: target?.checked === true
-  }))
+  updateVariableDefinition(variableName, (definition) => {
+    const checked = target?.checked === true
+    if (checked && !hasVariableDefaultValue(definition)) {
+      return {
+        ...definition,
+        required: false
+      }
+    }
+    return {
+      ...definition,
+      required: checked
+    }
+  })
 }
 
 const onVariableTypeChange = (event: Event, variableName: string) => {
@@ -331,7 +399,11 @@ const onVariableTypeChange = (event: Event, variableName: string) => {
   })
 }
 
-const loadSourceColumns = async (variableName: string, sourceQueryId: string) => {
+const loadSourceColumns = async (
+  variableName: string,
+  sourceQueryId: string,
+  rawParameters: Record<string, unknown>
+) => {
   if (!sourceQueryId.trim()) {
     sourceQueryColumns[variableName] = []
     sourceQueryErrors[variableName] = ''
@@ -339,8 +411,11 @@ const loadSourceColumns = async (variableName: string, sourceQueryId: string) =>
     return
   }
 
+  const parameters = sanitizeParameterMap(rawParameters)
+  const cacheKey = `${sourceQueryId}::${getParameterSignature(parameters)}`
+
   if (
-    loadedSourceQueryByVariable[variableName] === sourceQueryId &&
+    loadedSourceQueryByVariable[variableName] === cacheKey &&
     Array.isArray(sourceQueryColumns[variableName])
   ) {
     return
@@ -350,9 +425,12 @@ const loadSourceColumns = async (variableName: string, sourceQueryId: string) =>
   sourceQueryErrors[variableName] = ''
 
   try {
-    const result = await preview(sourceQueryId, { limit: 1 })
+    const result = await preview(sourceQueryId, {
+      limit: 1,
+      parameters
+    })
     sourceQueryColumns[variableName] = result.columns
-    loadedSourceQueryByVariable[variableName] = sourceQueryId
+    loadedSourceQueryByVariable[variableName] = cacheKey
   } catch (error) {
     sourceQueryColumns[variableName] = []
     sourceQueryErrors[variableName] =
@@ -385,13 +463,15 @@ const areParameterMapsEqual = (
 const normalizePreviewParameters = () => {
   const current = props.previewParameters ?? {}
   const next: Record<string, unknown> = {}
-  for (const variable of detectedVariables.value) {
-    if (Object.prototype.hasOwnProperty.call(current, variable)) {
-      next[variable] = current[variable]
+  const allowed = new Set(detectedVariables.value)
+
+  for (const [name, value] of Object.entries(current)) {
+    if (!allowed.has(name) || !isProvidedParameterValue(value)) {
       continue
     }
-    next[variable] = ''
+    next[name] = value
   }
+
   if (!areParameterMapsEqual(current, next)) {
     emit('update:preview-parameters', next)
   }
@@ -401,11 +481,11 @@ const updatePreviewParameter = (variable: string, value: string) => {
   const next: Record<string, unknown> = {}
   const current = props.previewParameters ?? {}
   for (const name of detectedVariables.value) {
-    if (name === variable) {
-      next[name] = value
+    const candidate = name === variable ? value : current[name]
+    if (!isProvidedParameterValue(candidate)) {
       continue
     }
-    next[name] = Object.prototype.hasOwnProperty.call(current, name) ? current[name] : ''
+    next[name] = candidate
   }
   emit('update:preview-parameters', next)
 }
@@ -505,8 +585,8 @@ watch(
 )
 
 watch(
-  variableDefinitions,
-  (definitions) => {
+  [variableDefinitions, previewParameterPayload],
+  ([definitions, previewParameters]) => {
     const active = new Set(definitions.map((definition) => definition.name))
 
     for (const key of Object.keys(sourceQueryColumns)) {
@@ -520,6 +600,9 @@ watch(
 
     for (const definition of definitions) {
       if (definition.type !== 'query_list') {
+        sourceQueryColumns[definition.name] = []
+        sourceQueryErrors[definition.name] = ''
+        loadedSourceQueryByVariable[definition.name] = ''
         continue
       }
       if (!definition.sourceQueryId) {
@@ -528,7 +611,7 @@ watch(
         loadedSourceQueryByVariable[definition.name] = ''
         continue
       }
-      loadSourceColumns(definition.name, definition.sourceQueryId)
+      loadSourceColumns(definition.name, definition.sourceQueryId, previewParameters)
     }
   },
   { immediate: true, deep: true }
@@ -755,6 +838,7 @@ watch(
               <label class="mt-3 inline-flex items-center gap-2 text-xs font-medium text-gray-700">
                 <input
                   :checked="definition.required === true"
+                  :disabled="isRequiredToggleDisabled(definition)"
                   type="checkbox"
                   class="h-4 w-4 rounded border border-gray-300"
                   @change="onVariableRequiredChange($event, definition.name)"
