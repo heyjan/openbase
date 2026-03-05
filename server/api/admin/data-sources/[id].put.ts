@@ -1,6 +1,7 @@
 import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
 import { updateDataSource } from '~~/server/utils/data-source-store'
 import { parseDataSourceUpdate } from '~~/server/utils/data-source-validators'
+import { toPublicDataSource } from '~~/server/utils/data-source-public'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -9,5 +10,5 @@ export default defineEventHandler(async (event) => {
   }
   const payload = await readBody(event)
   const updates = parseDataSourceUpdate(payload)
-  return updateDataSource(id, updates)
+  return toPublicDataSource(await updateDataSource(id, updates))
 })

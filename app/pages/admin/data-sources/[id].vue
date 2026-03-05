@@ -20,6 +20,70 @@ const tableLabelPlural = computed(() =>
   source.value?.type === 'mongodb' ? 'collections' : 'tables'
 )
 
+const asTrimmedString = (value: unknown) =>
+  typeof value === 'string' ? value.trim() : ''
+
+const parseConnectionUrl = (raw: string) => {
+  try {
+    return new URL(raw)
+  } catch {
+    return null
+  }
+}
+
+const parseDatabaseFromPath = (pathname: string) =>
+  pathname.replace(/^\/+/, '').split(/[/?]/)[0] || ''
+
+const summarizeNetworkConnection = (connection: Record<string, unknown>) => {
+  const rawUrl =
+    asTrimmedString(connection.connectionString) ||
+    asTrimmedString(connection.url) ||
+    asTrimmedString(connection.uri)
+
+  const parsed = rawUrl ? parseConnectionUrl(rawUrl) : null
+  const host = parsed?.hostname || asTrimmedString(connection.host)
+  const port =
+    parsed?.port ||
+    (typeof connection.port === 'number' && Number.isFinite(connection.port)
+      ? String(Math.trunc(connection.port))
+      : asTrimmedString(connection.port))
+  const database =
+    (parsed ? parseDatabaseFromPath(parsed.pathname) : '') ||
+    asTrimmedString(connection.database)
+
+  const details: string[] = []
+  if (host) {
+    details.push(`Host: ${host}${port ? `:${port}` : ''}`)
+  }
+  if (database) {
+    details.push(`Database: ${database}`)
+  }
+  return details
+}
+
+const sourceConnectionDetails = computed(() => {
+  const sourceValue = source.value
+  if (!sourceValue) {
+    return [] as string[]
+  }
+
+  if (sourceValue.type === 'sqlite' || sourceValue.type === 'duckdb') {
+    const filepath = asTrimmedString(sourceValue.connection?.filepath)
+    return filepath ? [filepath] : []
+  }
+
+  if (
+    sourceValue.type === 'postgresql' ||
+    sourceValue.type === 'postgres' ||
+    sourceValue.type === 'mysql' ||
+    sourceValue.type === 'mongodb'
+  ) {
+    return summarizeNetworkConnection(sourceValue.connection)
+  }
+
+  return []
+})
+
 const tables = ref<string[]>([])
 const tableLoading = ref(false)
 const tableError = ref('')
@@ -27,6 +91,11 @@ const tableError = ref('')
 const selectedTable = ref('')
 const rows = ref<Record<string, unknown>[]>([])
 const columns = ref<string[]>([])
+const pageSize = 50
+const currentPage = ref(1)
+const hasMoreRows = ref(false)
+const sortBy = ref('')
+const sortDir = ref<'asc' | 'desc'>('asc')
 const rowsLoading = ref(false)
 const rowsError = ref('')
 const deleting = ref(false)
@@ -40,6 +109,9 @@ const loadTables = async () => {
     tables.value = await listTables(dataSourceId.value)
     selectedTable.value = tables.value[0] || ''
     if (selectedTable.value) {
+      currentPage.value = 1
+      sortBy.value = ''
+      sortDir.value = 'asc'
       await loadRows()
     }
   } catch (err) {
@@ -57,20 +129,80 @@ const loadRows = async () => {
   if (!selectedTable.value) {
     rows.value = []
     columns.value = []
+    hasMoreRows.value = false
     return
   }
   rowsLoading.value = true
   rowsError.value = ''
   try {
-    const result = await getRows(dataSourceId.value, selectedTable.value, 50)
+    const result = await getRows(dataSourceId.value, selectedTable.value, {
+      limit: pageSize,
+      page: currentPage.value,
+      sortBy: sortBy.value || undefined,
+      sortDir: sortBy.value ? sortDir.value : undefined
+    })
     rows.value = result.rows
     columns.value = result.columns
+    hasMoreRows.value = result.hasMore
   } catch (err) {
     rowsError.value = err instanceof Error ? err.message : 'Failed to load rows'
+    hasMoreRows.value = false
     toast.error('Failed to load rows', rowsError.value)
   } finally {
     rowsLoading.value = false
   }
+}
+
+const handleTableChange = async () => {
+  currentPage.value = 1
+  sortBy.value = ''
+  sortDir.value = 'asc'
+  await loadRows()
+}
+
+const toggleSort = async (column: string) => {
+  if (sortBy.value !== column) {
+    sortBy.value = column
+    sortDir.value = 'asc'
+  } else {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  }
+
+  currentPage.value = 1
+  await loadRows()
+}
+
+const goToPreviousPage = async () => {
+  if (currentPage.value <= 1 || rowsLoading.value) {
+    return
+  }
+  currentPage.value -= 1
+  await loadRows()
+}
+
+const goToNextPage = async () => {
+  if (!hasMoreRows.value || rowsLoading.value) {
+    return
+  }
+  currentPage.value += 1
+  await loadRows()
+}
+
+const getSortIndicator = (column: string) => {
+  if (sortBy.value !== column) {
+    return '-'
+  }
+  return sortDir.value === 'asc' ? '^' : 'v'
+}
+
+const formatCellValue = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value)
+  }
+  return String(value)
 }
 
 const deleteSource = async () => {
@@ -89,10 +221,6 @@ const deleteSource = async () => {
     deleting.value = false
   }
 }
-
-watch(selectedTable, () => {
-  loadRows()
-})
 
 onMounted(loadTables)
 </script>
@@ -135,25 +263,11 @@ onMounted(loadTables)
         <h2 class="text-lg font-semibold">{{ source?.name }}</h2>
         <p class="text-xs text-gray-500">{{ source?.type }}</p>
         <p
-          v-if="source?.type === 'sqlite' || source?.type === 'duckdb'"
+          v-for="detail in sourceConnectionDetails"
+          :key="detail"
           class="text-xs text-gray-500"
         >
-          {{ source?.connection?.filepath }}
-        </p>
-        <p
-          v-else-if="source?.type === 'postgresql' || source?.type === 'postgres'"
-          class="text-xs text-gray-500"
-        >
-          {{ source?.connection?.connectionString }}
-        </p>
-        <p v-else-if="source?.type === 'mysql'" class="text-xs text-gray-500">
-          {{ source?.connection?.uri }}
-        </p>
-        <p v-else-if="source?.type === 'mongodb'" class="text-xs text-gray-500">
-          Database: {{ source?.connection?.database }}
-        </p>
-        <p v-if="source?.type === 'mongodb'" class="text-xs text-gray-500">
-          {{ source?.connection?.uri }}
+          {{ detail }}
         </p>
       </div>
 
@@ -167,6 +281,7 @@ onMounted(loadTables)
             <select
               v-model="selectedTable"
               class="appearance-none rounded border border-gray-300 px-3 py-2 pr-8 text-sm"
+              @change="handleTableChange"
             >
               <option v-for="table in tables" :key="table" :value="table">
                 {{ table }}
@@ -199,7 +314,14 @@ onMounted(loadTables)
                   :key="column"
                   class="border-b border-gray-200 px-3 py-2"
                 >
-                  {{ column }}
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 font-semibold text-gray-600 hover:text-gray-900"
+                    @click="toggleSort(column)"
+                  >
+                    <span>{{ column }}</span>
+                    <span class="text-[10px]">{{ getSortIndicator(column) }}</span>
+                  </button>
                 </th>
               </tr>
             </thead>
@@ -218,11 +340,33 @@ onMounted(loadTables)
                   :key="`${rowIndex}-${column}`"
                   class="border-b border-gray-200 px-3 py-2 text-sm text-gray-700"
                 >
-                  {{ row[column] }}
+                  {{ formatCellValue(row[column]) }}
                 </td>
               </tr>
             </tbody>
           </table>
+          <div
+            v-if="!rowsLoading && !rowsError"
+            class="mt-3 flex items-center justify-end gap-2"
+          >
+            <button
+              type="button"
+              class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="currentPage <= 1 || rowsLoading"
+              @click="goToPreviousPage"
+            >
+              Previous
+            </button>
+            <span class="text-xs text-gray-500">Page {{ currentPage }}</span>
+            <button
+              type="button"
+              class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="!hasMoreRows || rowsLoading"
+              @click="goToNextPage"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>

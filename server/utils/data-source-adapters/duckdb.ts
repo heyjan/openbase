@@ -4,6 +4,12 @@ import { resolveDataFilePath } from '~~/server/utils/data-path'
 
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_$]*$/
 
+type DataBrowserRowsOptions = {
+  offset?: number
+  sortBy?: string
+  sortDir?: 'asc' | 'desc'
+}
+
 const compileNamedParameters = (
   queryText: string,
   parameters: Record<string, unknown>
@@ -175,7 +181,8 @@ export const listDuckDbTables = async (connection: Record<string, unknown>) => {
 export const getDuckDbRows = async (
   connection: Record<string, unknown>,
   table: string,
-  limit = 50
+  limit = 50,
+  options: DataBrowserRowsOptions = {}
 ) => {
   const filepath = typeof connection.filepath === 'string' ? connection.filepath.trim() : ''
   if (!filepath) {
@@ -184,6 +191,11 @@ export const getDuckDbRows = async (
 
   const parsed = parseTableReference(table)
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.trunc(limit), 1000)) : 50
+  const safeOffset =
+    typeof options.offset === 'number' && Number.isFinite(options.offset)
+      ? Math.max(0, Math.trunc(options.offset))
+      : 0
+  const safeSortDir = options.sortDir === 'desc' ? 'DESC' : 'ASC'
 
   return withConnection(filepath, async ({ all }) => {
     const exists = await all(
@@ -200,10 +212,29 @@ export const getDuckDbRows = async (
       throw createError({ statusCode: 404, statusMessage: 'Table not found' })
     }
 
+    const columnsQuery = await all(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = $1
+         AND table_name = $2
+       ORDER BY ordinal_position`,
+      [parsed.schema, parsed.table]
+    ) as Array<{ column_name: string }>
+
+    const columns = columnsQuery.map((row) => row.column_name)
+    const sortColumn = options.sortBy?.trim()
+
+    if (sortColumn && !columns.includes(sortColumn)) {
+      throw createError({ statusCode: 400, statusMessage: 'Invalid sort column' })
+    }
+
+    const orderBySql = sortColumn
+      ? ` ORDER BY ${quoteIdentifier(sortColumn)} ${safeSortDir}`
+      : ''
+
     const sql =
-      `SELECT * FROM ${quoteIdentifier(parsed.schema)}.${quoteIdentifier(parsed.table)} LIMIT $1`
-    const rows = (await all(sql, [safeLimit])) as Record<string, unknown>[]
-    const columns = rows.length ? Object.keys(rows[0]) : []
+      `SELECT * FROM ${quoteIdentifier(parsed.schema)}.${quoteIdentifier(parsed.table)}${orderBySql} LIMIT $1 OFFSET $2`
+    const rows = (await all(sql, [safeLimit, safeOffset])) as Record<string, unknown>[]
 
     return {
       columns,

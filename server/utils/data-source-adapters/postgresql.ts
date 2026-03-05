@@ -3,6 +3,12 @@ import { Pool } from 'pg'
 
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_$]*$/
 
+type DataBrowserRowsOptions = {
+  offset?: number
+  sortBy?: string
+  sortDir?: 'asc' | 'desc'
+}
+
 const parseTableReference = (value: string) => {
   const trimmed = value.trim()
   if (!trimmed) {
@@ -133,7 +139,8 @@ export const listPostgresTables = async (connection: Record<string, unknown>) =>
 export const getPostgresRows = async (
   connection: Record<string, unknown>,
   table: string,
-  limit = 50
+  limit = 50,
+  options: DataBrowserRowsOptions = {}
 ) => {
   const connectionString = toPostgresConnectionString(connection)
   if (!connectionString) {
@@ -145,6 +152,11 @@ export const getPostgresRows = async (
 
   const { schema, table: tableName } = parseTableReference(table)
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.trunc(limit), 1000)) : 50
+  const safeOffset =
+    typeof options.offset === 'number' && Number.isFinite(options.offset)
+      ? Math.max(0, Math.trunc(options.offset))
+      : 0
+  const safeSortDir = options.sortDir === 'desc' ? 'DESC' : 'ASC'
 
   const pool = new Pool({ connectionString })
   try {
@@ -162,10 +174,31 @@ export const getPostgresRows = async (
       throw createError({ statusCode: 404, statusMessage: 'Table not found' })
     }
 
-    const sql = `SELECT * FROM ${quoteIdentifier(schema)}.${quoteIdentifier(tableName)} LIMIT $1`
-    const result = await pool.query<Record<string, unknown>>(sql, [safeLimit])
+    const columnsResult = await pool.query<{ column_name: string }>(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = $1
+         AND table_name = $2
+       ORDER BY ordinal_position`,
+      [schema, tableName]
+    )
+
+    const columns = columnsResult.rows.map((row) => row.column_name)
+    const sortColumn = options.sortBy?.trim()
+
+    if (sortColumn && !columns.includes(sortColumn)) {
+      throw createError({ statusCode: 400, statusMessage: 'Invalid sort column' })
+    }
+
+    const orderBySql = sortColumn
+      ? ` ORDER BY ${quoteIdentifier(sortColumn)} ${safeSortDir}`
+      : ''
+    const sql =
+      `SELECT * FROM ${quoteIdentifier(schema)}.${quoteIdentifier(tableName)}${orderBySql} LIMIT $1 OFFSET $2`
+    const result = await pool.query<Record<string, unknown>>(sql, [safeLimit, safeOffset])
+
     return {
-      columns: result.fields.map((field) => field.name),
+      columns: columns.length ? columns : result.fields.map((field) => field.name),
       rows: result.rows
     }
   } finally {

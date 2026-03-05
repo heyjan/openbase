@@ -4,6 +4,21 @@ import type {
   DataSourceUpdate
 } from '~/types/data-source'
 
+type DataSourceRowsQuery = {
+  limit?: number
+  page?: number
+  sortBy?: string
+  sortDir?: 'asc' | 'desc'
+}
+
+type DataSourceRowsResult = {
+  columns: string[]
+  rows: Record<string, unknown>[]
+  page: number
+  limit: number
+  hasMore: boolean
+}
+
 export const useDataSources = () => {
   const list = () => $fetch<DataSource[]>('/api/admin/data-sources')
 
@@ -36,10 +51,14 @@ export const useDataSources = () => {
   const listTables = (id: string) =>
     $fetch<string[]>(`/api/admin/data-sources/${id}/tables`)
 
-  const getRows = (id: string, table: string, limit = 50) =>
-    $fetch<{ columns: string[]; rows: Record<string, unknown>[] }>(
+  const getRows = (
+    id: string,
+    table: string,
+    query: DataSourceRowsQuery = {}
+  ) =>
+    $fetch<DataSourceRowsResult>(
       `/api/admin/data-sources/${id}/rows`,
-      { query: { table, limit } }
+      { query: { table, ...query } }
     )
 
   return {

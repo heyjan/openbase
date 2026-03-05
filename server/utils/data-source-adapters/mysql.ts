@@ -2,6 +2,12 @@ import { createError } from 'h3'
 
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_$]*$/
 
+type DataBrowserRowsOptions = {
+  offset?: number
+  sortBy?: string
+  sortDir?: 'asc' | 'desc'
+}
+
 type NamedQueryCompilation = {
   sql: string
   values: unknown[]
@@ -178,7 +184,8 @@ export const listMySqlTables = async (connectionConfig: Record<string, unknown>)
 export const getMySqlRows = async (
   connectionConfig: Record<string, unknown>,
   table: string,
-  limit = 50
+  limit = 50,
+  options: DataBrowserRowsOptions = {}
 ) => {
   const mysql = await import('mysql2/promise')
   const connection = await mysql.createConnection(toMySqlConnectionOptions(connectionConfig))
@@ -204,22 +211,46 @@ export const getMySqlRows = async (
     }
 
     const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.trunc(limit), 1000)) : 50
+    const safeOffset =
+      typeof options.offset === 'number' && Number.isFinite(options.offset)
+        ? Math.max(0, Math.trunc(options.offset))
+        : 0
+    const safeSortDir = options.sortDir === 'desc' ? 'DESC' : 'ASC'
+
+    const [columnRows] = await connection.execute<Array<{ column_name: string }>>(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = ?
+         AND table_name = ?
+       ORDER BY ordinal_position`,
+      [database, parsed.table]
+    )
+
+    const columns = columnRows.map((row) => row.column_name)
+    const sortColumn = options.sortBy?.trim()
+
+    if (sortColumn && !columns.includes(sortColumn)) {
+      throw createError({ statusCode: 400, statusMessage: 'Invalid sort column' })
+    }
 
     const tableReference = `${quoteIdentifier(database)}.${quoteIdentifier(parsed.table)}`
+    const orderBySql = sortColumn
+      ? ` ORDER BY ${quoteIdentifier(sortColumn)} ${safeSortDir}`
+      : ''
     const [rows, fields] = await connection.execute(
-      `SELECT * FROM ${tableReference} LIMIT ?`,
-      [safeLimit]
+      `SELECT * FROM ${tableReference}${orderBySql} LIMIT ? OFFSET ?`,
+      [safeLimit, safeOffset]
     )
 
     const typedRows = (Array.isArray(rows) ? rows : []) as Record<string, unknown>[]
-    const columns = Array.isArray(fields)
+    const selectedColumns = Array.isArray(fields)
       ? fields.map((field) => String(field.name))
       : typedRows.length
         ? Object.keys(typedRows[0])
-        : []
+        : columns
 
     return {
-      columns,
+      columns: selectedColumns,
       rows: typedRows
     }
   } finally {

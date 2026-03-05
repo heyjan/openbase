@@ -3,6 +3,12 @@ import fs from 'fs'
 import { createError } from 'h3'
 import { resolveDataFilePath } from './data-path'
 
+type DataBrowserRowsOptions = {
+  offset?: number
+  sortBy?: string
+  sortDir?: 'asc' | 'desc'
+}
+
 const openDatabase = (filepath: string) => {
   const resolvedPath = resolveDataFilePath(filepath)
   if (!fs.existsSync(resolvedPath)) {
@@ -26,7 +32,12 @@ export const listSqliteTables = (filepath: string) => {
   }
 }
 
-export const getSqliteRows = (filepath: string, table: string, limit = 50) => {
+export const getSqliteRows = (
+  filepath: string,
+  table: string,
+  limit = 50,
+  options: DataBrowserRowsOptions = {}
+) => {
   const db = openDatabase(filepath)
   try {
     const tables = db
@@ -40,10 +51,32 @@ export const getSqliteRows = (filepath: string, table: string, limit = 50) => {
       throw createError({ statusCode: 404, statusMessage: 'Table not found' })
     }
 
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.trunc(limit), 1000)) : 50
+    const safeOffset =
+      typeof options.offset === 'number' && Number.isFinite(options.offset)
+        ? Math.max(0, Math.trunc(options.offset))
+        : 0
+    const safeSortDir = options.sortDir === 'desc' ? 'DESC' : 'ASC'
+
+    const escapedTable = table.replace(/"/g, '""')
+    const columns = db
+      .prepare(`PRAGMA table_info("${escapedTable}")`)
+      .all()
+      .map((row) => String(row.name))
+    const sortColumn = options.sortBy?.trim()
+
+    if (sortColumn && !columns.includes(sortColumn)) {
+      throw createError({ statusCode: 400, statusMessage: 'Invalid sort column' })
+    }
+
+    const orderBySql = sortColumn
+      ? ` ORDER BY "${sortColumn.replace(/"/g, '""')}" ${safeSortDir}`
+      : ''
+
     const rows = db
-      .prepare(`SELECT * FROM "${table.replace(/"/g, '""')}" LIMIT ?`)
-      .all(limit)
-    const columns = rows.length ? Object.keys(rows[0]) : []
+      .prepare(`SELECT * FROM "${escapedTable}"${orderBySql} LIMIT ? OFFSET ?`)
+      .all(safeLimit, safeOffset)
+
     return { columns, rows }
   } finally {
     db.close()
