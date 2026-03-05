@@ -404,30 +404,37 @@ test.describe.serial('database integration + RBAC', () => {
       await editorPage.goto('/admin')
       await expect(editorPage).toHaveURL(/\/admin\/login$/)
 
-      await editorPage.goto('/editor/data-entry')
-      await expect(
-        editorPage.getByRole('link', { name: new RegExp(ALLOWED_TABLE_NAME) })
-      ).toBeVisible()
-      await expect(editorPage.getByText(DENIED_TABLE_NAME)).toHaveCount(0)
+      const allowedInsert = await editorPage.request.post(
+        `/api/editor/writable-tables/${allowedWritableTable.id}/insert`,
+        {
+          data: {
+            values: {
+              week_start: '2026-01-05',
+              asin: 'RBAC-ASIN-001',
+              units_sold: 15,
+              revenue: '120.50'
+            }
+          }
+        }
+      )
+      await ensureOk(allowedInsert, 'editor insert permitted table')
 
-      await editorPage
-        .getByRole('link', { name: new RegExp(ALLOWED_TABLE_NAME) })
-        .first()
-        .click()
-
-      await editorPage.getByLabel('week_start').fill('2026-01-05')
-      await editorPage.getByLabel('asin').fill('RBAC-ASIN-001')
-      await editorPage.getByLabel('units_sold').fill('15')
-      await editorPage.getByLabel('revenue').fill('120.50')
-      await editorPage.getByRole('button', { name: 'Insert row' }).click()
-      await expect(editorPage.getByText('Row inserted')).toBeVisible()
-
-      await editorPage.getByLabel('Column').selectOption('revenue')
-      await editorPage.getByLabel('Value').fill('333.33')
-      await editorPage.getByLabel('Where column').selectOption('asin')
-      await editorPage.getByLabel('Where value').fill('RBAC-ASIN-001')
-      await editorPage.getByRole('button', { name: 'Update rows' }).click()
-      await expect(editorPage.getByText('Rows updated')).toBeVisible()
+      const allowedUpdate = await editorPage.request.put(
+        `/api/editor/writable-tables/${allowedWritableTable.id}/update`,
+        {
+          data: {
+            values: {
+              revenue: '333.33'
+            },
+            where: {
+              asin: 'RBAC-ASIN-001'
+            }
+          }
+        }
+      )
+      await ensureOk(allowedUpdate, 'editor update permitted table')
+      const allowedUpdatePayload = (await allowedUpdate.json()) as { rowCount: number }
+      expect(allowedUpdatePayload.rowCount).toBe(1)
 
       const forbiddenInsert = await editorPage.request.post(
         `/api/editor/writable-tables/${deniedWritableTable.id}/insert`,

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Writable Tables allow **editors** (non-admin users) to insert and update data directly in your PostgreSQL tables through a web UI. This is useful for manual data entry, corrections, or allowing dashboard viewers to contribute data.
+Writable Tables allow **editors** (non-admin users) to insert and update data directly in your PostgreSQL tables through dashboard and API workflows. This is useful for manual data entry, corrections, or allowing dashboard viewers to contribute data.
 
 ---
 
@@ -61,39 +61,19 @@ The editor has a completely separate login flow from admins:
 
 ### Phase 3: Editor Experience
 
-Once logged in, the editor sees two main sections:
+Once logged in, the editor works from assigned dashboards:
 
-#### 3.1 Dashboards (`/editor` or `/editor/dashboards`)
+#### 3.1 Dashboards (`/editor` and `/editor/dashboards/{slug}`)
 - Lists all dashboards the editor has been granted access to
 - Clicking a dashboard opens `/editor/dashboards/{slug}`
 - The dashboard renders with the same `DashboardGrid` and `DashboardFilterBar` as the admin view
-- Editors can **view** dashboard data but the dashboard itself is read-only
+- If a table module is linked to a writable table and permissions allow updates, configured columns are inline-editable
+- Saving an edited cell calls `PUT /api/editor/writable-tables/{id}/update`
+- Non-editable columns remain read-only
 
-#### 3.2 Data Entry (`/editor/data-entry`)
-- Lists all writable tables the editor has permission to edit
-- Clicking a table opens `/editor/data-entry/{tableId}`
-
-The **Data Entry UI** for each table provides:
-
-**Current Rows Display**
-- Shows up to 50 existing rows in the table
-- Columns are filtered by the `allowedColumns` config
-
-**Insert Form** (if `allowInsert` is enabled)
-- One input field per column in the table schema
-- Input types are auto-detected:
-  - Boolean → dropdown (true/false/empty)
-  - Date → date picker
-  - Number → number input
-  - Text → text input
-- Submit inserts a new row via `POST /api/editor/writable-tables/{id}/insert`
-
-**Update Form** (if `allowUpdate` is enabled)
-- Select which column to update (SET clause)
-- Enter the new value
-- Select a WHERE column (to identify which rows to update)
-- Enter the WHERE value
-- Submit updates matching rows via `PUT /api/editor/writable-tables/{id}/update`
+#### 3.2 Insert Workflow
+- Insert operations are available through `POST /api/editor/writable-tables/{id}/insert` when `allowInsert` is enabled
+- Payload values must match configured allowed columns and column types
 
 ---
 
@@ -134,11 +114,10 @@ The **Data Entry UI** for each table provides:
    - Open a private/incognito browser window
    - Navigate to `/editor/login`
    - Log in with the editor credentials
-   - Go to `/editor/data-entry` — you should see the writable table listed
-   - Click it to open the data entry form
-   - **Test Insert**: Fill in name, email, score, active → Submit
-   - **Test Update**: Select column `score`, enter new value, WHERE column `name`, WHERE value = the name you inserted → Submit
-   - Verify in the rows display that the data was inserted/updated
+   - Open an assigned dashboard at `/editor/dashboards/{slug}`
+   - In a linked table module, edit an allowed cell inline and save
+   - Verify the updated value appears after refresh
+   - **Optional API insert check**: call `POST /api/editor/writable-tables/{id}/insert` with editor auth cookie
 
 6. **Verify in the database**:
    ```sql
@@ -149,9 +128,9 @@ The **Data Entry UI** for each table provides:
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
-| Editor can't see any tables | Missing permission | Admin > Editors > Permissions — check the writable table |
+| Editor can't edit cells | Missing dashboard/table permission or no writable table linked to module | Admin > Editors > Permissions and module `config.writableTableId` |
 | "Insert not allowed" error | `allowInsert` is off | Edit the writable table config and enable it |
-| Column not showing in form | Not in `allowedColumns` | Update the writable table's allowed columns list |
+| Column is not editable inline | Not in `allowedColumns` or updates disabled | Update `allowedColumns` and ensure `allowUpdate` is enabled |
 | Editor login fails | Account inactive or wrong credentials | Check `is_active` flag in Admin > Editors |
 | "Data source not found" error | Source deleted or inactive | Verify the data source exists and is active |
 
@@ -171,8 +150,8 @@ The **Data Entry UI** for each table provides:
 | Editor Login | `app/pages/editor/login.vue` |
 | Editor Home (Dashboards) | `app/pages/editor/index.vue` |
 | Dashboard View | `app/pages/editor/dashboards/[slug].vue` |
-| Data Entry List | `app/pages/editor/data-entry/index.vue` |
-| Data Entry Form | `app/pages/editor/data-entry/[id].vue` |
+| Inline Edit Composable | `app/composables/useInlineCellEdit.ts` |
+| Data Table Renderer | `app/components/modules/DataTable.vue` |
 | **Server APIs** | |
 | Admin Writable Tables CRUD | `server/api/admin/writable-tables/` |
 | Admin Editors CRUD | `server/api/admin/editors/` |

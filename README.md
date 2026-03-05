@@ -128,12 +128,12 @@ Then open `http://localhost:3000` and complete the setup flow on first run.
 - **SQLite:** Local file path. Read-only mode with path validation under `OPENBASE_DATA_DIR`.
 - **MongoDB:** Connection URI and database name; collections are listed and browsable.
 
-## RBAC & Data Entry
+## RBAC & Editor Writes
 
 - Admins manage editors at `/admin/editors`.
 - Admins define writable PostgreSQL tables at `/admin/writable-tables`.
 - Admins assign dashboard/table permissions per editor.
-- Editors sign in at `/editor/login`, access assigned dashboards at `/editor`, and perform data entry at `/editor/data-entry`.
+- Editors sign in at `/editor/login`, access assigned dashboards at `/editor`, and edit permitted table cells directly inside `/editor/dashboards/{slug}`.
 
 ## Security hardening
 

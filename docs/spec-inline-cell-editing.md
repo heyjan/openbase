@@ -2,7 +2,7 @@
 
 ## Context
 
-Editors currently have a clunky separate data-entry page (`/editor/data-entry/[id]`) with generic INSERT/UPDATE forms. The real use case is simple: an editor logs in monthly, sees a dashboard table (e.g., Country | Month | Revenue), and types revenue numbers into 15 cells. We need click-to-edit directly in the dashboard table — no separate page needed.
+Editors previously had a clunky separate write page with generic INSERT/UPDATE forms. The real use case is simple: an editor logs in monthly, sees a dashboard table (e.g., Country | Month | Revenue), and types revenue numbers into 15 cells. We need click-to-edit directly in the dashboard table — no separate page needed.
 
 **Use case:** Editor has 15 countries, enters revenue for each monthly. Only the `revenue` column is editable; `country` and `month` are read-only context.
 

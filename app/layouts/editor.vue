@@ -31,16 +31,9 @@ const logout = async () => {
           <NuxtLink
             to="/editor"
             class="text-sm"
-            :class="isActive('/editor') && !isActive('/editor/data-entry') ? 'text-gray-900' : 'text-gray-600'"
+            :class="isActive('/editor') ? 'text-gray-900' : 'text-gray-600'"
           >
             Dashboards
-          </NuxtLink>
-          <NuxtLink
-            to="/editor/data-entry"
-            class="text-sm"
-            :class="isActive('/editor/data-entry') ? 'text-gray-900' : 'text-gray-600'"
-          >
-            Data Entry
           </NuxtLink>
         </div>
 
