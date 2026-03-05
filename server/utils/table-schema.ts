@@ -93,3 +93,39 @@ export const getPostgresTableSchema = async (
     await pool.end()
   }
 }
+
+export const getPostgresTablePrimaryKey = async (
+  connection: Record<string, unknown>,
+  tableName: string
+): Promise<string[]> => {
+  const connectionString = toPostgresConnectionString(connection)
+  if (!connectionString) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'PostgreSQL connection string is required'
+    })
+  }
+
+  const { schema, table } = parseTableReference(tableName)
+  const pool = new Pool({ connectionString })
+
+  try {
+    const result = await pool.query<{ column_name: string }>(
+      `SELECT kcu.column_name
+       FROM information_schema.table_constraints tc
+       JOIN information_schema.key_column_usage kcu
+         ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+        AND tc.table_name = kcu.table_name
+       WHERE tc.constraint_type = 'PRIMARY KEY'
+         AND tc.table_schema = $1
+         AND tc.table_name = $2
+       ORDER BY kcu.ordinal_position ASC`,
+      [schema, table]
+    )
+
+    return result.rows.map((row) => row.column_name)
+  } finally {
+    await pool.end()
+  }
+}

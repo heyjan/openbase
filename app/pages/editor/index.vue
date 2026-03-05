@@ -16,7 +16,7 @@ const { data: dashboards, pending, error } = useAsyncData(
 
 <template>
   <section class="space-y-6">
-    <PageHeader title="Dashboards" :breadcrumbs="[{ label: 'Editor' }, { label: 'Dashboards' }]" />
+    <PageHeader title="Dashboards" />
 
     <p v-if="pending" class="text-sm text-gray-500">Loading...</p>
     <p v-else-if="error" class="text-sm text-red-600">

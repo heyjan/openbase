@@ -42,8 +42,8 @@ const loadPermissions = async () => {
       tableName: table.tableName,
       dataSourceName: table.dataSourceName
     }))
-    dashboardIds.value = [...payload.dashboardIds]
-    writableTableIds.value = [...payload.writableTableIds]
+    dashboardIds.value = [...(payload.dashboardIds || [])]
+    writableTableIds.value = [...(payload.writableTableIds || [])]
   } catch (error) {
     loadError.value =
       error instanceof Error ? error.message : 'Failed to load permissions'
@@ -52,12 +52,20 @@ const loadPermissions = async () => {
   }
 }
 
-const toggleId = (collection: { value: string[] }, id: string) => {
-  if (collection.value.includes(id)) {
-    collection.value = collection.value.filter((value) => value !== id)
+const toggleDashboardId = (id: string) => {
+  if (dashboardIds.value.includes(id)) {
+    dashboardIds.value = dashboardIds.value.filter((value) => value !== id)
     return
   }
-  collection.value = [...collection.value, id]
+  dashboardIds.value = [...dashboardIds.value, id]
+}
+
+const toggleWritableTableId = (id: string) => {
+  if (writableTableIds.value.includes(id)) {
+    writableTableIds.value = writableTableIds.value.filter((value) => value !== id)
+    return
+  }
+  writableTableIds.value = [...writableTableIds.value, id]
 }
 
 const save = async () => {
@@ -128,7 +136,7 @@ watch(editorId, () => {
             <input
               type="checkbox"
               :checked="dashboardIds.includes(dashboard.id)"
-              @change="toggleId(dashboardIds, dashboard.id)"
+              @change="toggleDashboardId(dashboard.id)"
             />
             <span>{{ dashboard.name }}</span>
             <span class="text-gray-400">/{{ dashboard.slug }}</span>
@@ -147,7 +155,7 @@ watch(editorId, () => {
             <input
               type="checkbox"
               :checked="writableTableIds.includes(table.id)"
-              @change="toggleId(writableTableIds, table.id)"
+              @change="toggleWritableTableId(table.id)"
             />
             <span>{{ table.tableName }}</span>
             <span class="text-gray-400">{{ table.dataSourceName }}</span>

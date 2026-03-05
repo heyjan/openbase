@@ -44,6 +44,7 @@ const component = computed(() => componentMap[props.module.type] ?? KpiCard)
 const isTextModule = computed(() => isTextModuleType(props.module.type))
 const route = useRoute()
 const isPublicDashboardRoute = computed(() => route.path.startsWith('/d/'))
+const isEditorRoute = computed(() => route.path.startsWith('/editor/dashboards/'))
 
 const defaultTitles: Record<ModuleConfig['type'], string> = {
   time_series_chart: 'Time Series',
@@ -114,6 +115,7 @@ const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
         class="h-full"
         :module="module"
         :module-data="data"
+        :editable="isEditorRoute && module.type === 'data_table'"
         :refresh="refresh"
       />
     </div>
@@ -137,6 +139,7 @@ const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
       class="h-full"
       :module="module"
       :module-data="data"
+      :editable="isEditorRoute && module.type === 'data_table'"
       :refresh="refresh"
     />
   </div>

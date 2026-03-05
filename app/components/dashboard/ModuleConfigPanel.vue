@@ -20,6 +20,7 @@ const emit = defineEmits<{
 }>()
 
 const { list: listTemplates, create: createTemplate } = useTemplates()
+const { list: listWritableTables } = useWritableTables()
 const toast = useAppToast()
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/
 const fontSizePresets: FontSizePreset[] = ['M', 'L', 'XL']
@@ -64,6 +65,10 @@ const textConfigDraft = reactive<{
 
 const configText = ref('{}')
 const parseError = ref('')
+const writableTables = ref<Array<{ id: string; tableName: string; dataSourceName?: string }>>([])
+const writableTablesLoading = ref(false)
+const writableTableError = ref('')
+const selectedWritableTableId = ref('')
 const templates = ref<ModuleTemplate[]>([])
 const templatesLoading = ref(false)
 const templateError = ref('')
@@ -74,6 +79,7 @@ const savingTemplate = ref(false)
 const isTextModule = computed(
   () => !!props.module && isTextModuleType(props.module.type)
 )
+const isDataTableModule = computed(() => props.module?.type === 'data_table')
 
 const colorHexWithoutHash = computed({
   get: () =>
@@ -99,6 +105,22 @@ const parseConfigText = () => {
     throw new Error('Config must be a JSON object.')
   }
   return parsed as Record<string, unknown>
+}
+
+const parseConfigTextSafe = () => {
+  try {
+    return parseConfigText()
+  } catch {
+    return null
+  }
+}
+
+const readWritableTableId = (config: Record<string, unknown> | null | undefined) => {
+  if (!config) {
+    return ''
+  }
+  const candidate = config.writableTableId ?? config.writable_table_id
+  return typeof candidate === 'string' ? candidate.trim() : ''
 }
 
 const normalizeTextConfig = (
@@ -170,6 +192,49 @@ const loadTemplates = async () => {
   }
 }
 
+const loadWritableTables = async () => {
+  writableTablesLoading.value = true
+  writableTableError.value = ''
+  try {
+    const items = await listWritableTables()
+    writableTables.value = items.map((table) => ({
+      id: table.id,
+      tableName: table.tableName,
+      dataSourceName: table.dataSourceName
+    }))
+  } catch (error) {
+    writableTableError.value =
+      error instanceof Error ? error.message : 'Failed to load writable tables'
+  } finally {
+    writableTablesLoading.value = false
+  }
+}
+
+const onWritableTableChange = () => {
+  if (!isDataTableModule.value) {
+    return
+  }
+
+  let parsedConfig: Record<string, unknown>
+  try {
+    parsedConfig = parseConfigText()
+  } catch (error) {
+    parseError.value = error instanceof Error ? error.message : 'Invalid module config.'
+    return
+  }
+
+  const nextValue = selectedWritableTableId.value.trim()
+  if (nextValue) {
+    parsedConfig.writableTableId = nextValue
+  } else {
+    delete parsedConfig.writableTableId
+  }
+  delete parsedConfig.writable_table_id
+
+  configText.value = JSON.stringify(parsedConfig, null, 2)
+  parseError.value = ''
+}
+
 watch(
   () => props.module,
   (module) => {
@@ -187,6 +252,7 @@ watch(
     draft.gridW = module.gridW
     draft.gridH = module.gridH
     configText.value = JSON.stringify(module.config ?? {}, null, 2)
+    selectedWritableTableId.value = readWritableTableId(module.config)
     parseError.value = ''
     templateError.value = ''
     selectedTemplateId.value = ''
@@ -206,6 +272,26 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => [configText.value, isDataTableModule.value] as const,
+  () => {
+    if (!isDataTableModule.value) {
+      selectedWritableTableId.value = ''
+      return
+    }
+
+    const parsedConfig = parseConfigTextSafe()
+    if (!parsedConfig) {
+      return
+    }
+
+    const nextWritableTableId = readWritableTableId(parsedConfig)
+    if (nextWritableTableId !== selectedWritableTableId.value) {
+      selectedWritableTableId.value = nextWritableTableId
+    }
+  }
 )
 
 const save = () => {
@@ -296,7 +382,10 @@ const saveCurrentAsTemplate = async () => {
   }
 }
 
-onMounted(loadTemplates)
+onMounted(() => {
+  loadTemplates()
+  loadWritableTables()
+})
 </script>
 
 <template>
@@ -379,6 +468,28 @@ onMounted(loadTemplates)
         v-else
         class="block text-xs font-medium uppercase tracking-wide text-gray-600"
       >
+        <span v-if="isDataTableModule" class="block">
+          Writable Table
+          <select
+            v-model="selectedWritableTableId"
+            class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            :disabled="writableTablesLoading"
+            @change="onWritableTableChange"
+          >
+            <option value="">None</option>
+            <option
+              v-for="table in writableTables"
+              :key="table.id"
+              :value="table.id"
+            >
+              {{ table.tableName }}{{ table.dataSourceName ? ` (${table.dataSourceName})` : '' }}
+            </option>
+          </select>
+        </span>
+        <p v-if="isDataTableModule && writableTableError" class="mt-1 text-xs text-red-600">
+          {{ writableTableError }}
+        </p>
+
         Config (JSON)
         <textarea
           v-model="configText"

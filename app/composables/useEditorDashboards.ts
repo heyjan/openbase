@@ -3,24 +3,32 @@ import type { ModuleConfig } from '~/types/module'
 import type { QueryVariable } from '~/types/query-variable'
 
 export const useEditorDashboards = () => {
-  const list = () => $fetch<Dashboard[]>('/api/editor/dashboards')
+  const requestFetch = process.server ? useRequestFetch() : $fetch
+  const baseRequestOptions = process.server ? {} : ({ credentials: 'include' as const })
+
+  const list = () =>
+    requestFetch<Dashboard[]>('/api/editor/dashboards', baseRequestOptions)
 
   const getBySlug = (slug: string) =>
-    $fetch<{ dashboard: Dashboard; modules: ModuleConfig[] }>(`/api/editor/dashboards/${slug}`)
+    requestFetch<{ dashboard: Dashboard; modules: ModuleConfig[] }>(
+      `/api/editor/dashboards/${slug}`,
+      baseRequestOptions
+    )
 
   const getModuleData = (
     slug: string,
     moduleId: string,
     query?: Record<string, string>
   ) =>
-    $fetch<{ rows: Record<string, unknown>[]; columns: string[]; rowCount: number }>(
+    requestFetch<{ rows: Record<string, unknown>[]; columns: string[]; rowCount: number }>(
       `/api/editor/dashboards/${slug}/modules/${moduleId}/data`,
-      { query }
+      { ...baseRequestOptions, query }
     )
 
   const getModuleVariables = (slug: string, moduleId: string) =>
-    $fetch<{ variables: QueryVariable[] }>(
-      `/api/editor/dashboards/${slug}/modules/${moduleId}/variables`
+    requestFetch<{ variables: QueryVariable[] }>(
+      `/api/editor/dashboards/${slug}/modules/${moduleId}/variables`,
+      baseRequestOptions
     )
 
   return {

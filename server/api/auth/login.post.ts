@@ -41,13 +41,15 @@ export default defineEventHandler(async (event) => {
   await updateLastLogin(admin.id)
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)
   const sessionToken = await createSession(admin.id, expiresAt)
+  const maxAgeSeconds = SESSION_TTL_DAYS * 24 * 60 * 60
 
   setCookie(event, ADMIN_SESSION_COOKIE, sessionToken, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    expires: expiresAt
+    expires: expiresAt,
+    maxAge: maxAgeSeconds
   })
 
   try {

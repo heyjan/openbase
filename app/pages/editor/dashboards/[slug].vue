@@ -18,8 +18,7 @@ const { data: response, pending, error } = useAsyncData(
   asyncKey,
   () => getBySlug(slug.value),
   {
-    watch: [slug],
-    getCachedData: () => undefined
+    watch: [slug]
   }
 )
 

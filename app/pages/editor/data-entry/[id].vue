@@ -194,11 +194,6 @@ watch(tableId, () => {
   <section class="space-y-6">
     <PageHeader
       :title="tableName || 'Data Entry'"
-      :breadcrumbs="[
-        { label: 'Editor', to: '/editor' },
-        { label: 'Data Entry', to: '/editor/data-entry' },
-        { label: tableName || 'Table' }
-      ]"
       back-to="/editor/data-entry"
       back-label="Back"
     />

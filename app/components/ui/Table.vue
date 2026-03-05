@@ -8,6 +8,23 @@ type ColumnInput = {
   label?: string
 }
 
+type EditingCell = {
+  rowIndex: number
+  columnKey: string
+}
+
+const normalizeColumn = (value: string) => value.trim().toLowerCase()
+
+const toDisplayValue = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value)
+  }
+  return String(value)
+}
+
 const props = withDefaults(
   defineProps<{
     rows: TableRow[]
@@ -19,15 +36,34 @@ const props = withDefaults(
       value: unknown
       rowIndex: number
     }) => Record<string, string> | undefined
+    editingCell?: EditingCell | null
+    editValue?: string
+    editableColumns?: string[]
+    saving?: boolean
+    onStartEdit?: (rowIndex: number, columnKey: string) => void
+    onEditValueChange?: (value: string) => void
+    onSaveEdit?: () => void | Promise<void>
+    onCancelEdit?: () => void
   }>(),
   {
     columns: () => [],
     emptyLabel: 'No rows found.',
-    cellStyleResolver: undefined
+    cellStyleResolver: undefined,
+    editingCell: null,
+    editValue: '',
+    editableColumns: () => [],
+    saving: false,
+    onStartEdit: undefined,
+    onEditValueChange: undefined,
+    onSaveEdit: undefined,
+    onCancelEdit: undefined
   }
 )
 
 const UButton = resolveComponent('UButton')
+const editableColumnsSet = computed(() =>
+  new Set(props.editableColumns.map(normalizeColumn))
+)
 
 const derivedColumns = computed<ColumnInput[]>(() => {
   if (props.columns.length) {
@@ -82,13 +118,126 @@ const tableColumns = computed(() =>
         value
       })
 
-      let rendered = ''
-      if (value === null || value === undefined) {
-        rendered = ''
-      } else if (typeof value === 'object') {
-        rendered = JSON.stringify(value)
-      } else {
-        rendered = String(value)
+      const rendered = toDisplayValue(value)
+      const isEditable =
+        editableColumnsSet.value.has(normalizeColumn(column.id)) &&
+        typeof props.onStartEdit === 'function'
+      const isEditing =
+        props.editingCell?.rowIndex === row.index &&
+        props.editingCell?.columnKey === column.id
+
+      if (isEditable && isEditing) {
+        const onFocusOut = (event: FocusEvent) => {
+          const currentTarget = event.currentTarget as HTMLElement | null
+          const relatedTarget = event.relatedTarget as Node | null
+          if (!currentTarget) {
+            return
+          }
+          if (relatedTarget && currentTarget.contains(relatedTarget)) {
+            return
+          }
+          props.onCancelEdit?.()
+        }
+
+        return h(
+          'div',
+          {
+            class: 'inline-flex w-full items-center gap-1 rounded border border-blue-200 bg-white p-1',
+            onFocusout: onFocusOut
+          },
+          [
+            h('input', {
+              value: props.editValue ?? '',
+              disabled: props.saving,
+              class:
+                'min-w-0 flex-1 rounded border border-blue-300 px-2 py-1 text-sm text-gray-900 outline-none ring-0 focus:border-blue-500',
+              onInput: (event: Event) => {
+                const target = event.target as HTMLInputElement
+                props.onEditValueChange?.(target.value)
+              },
+              onKeydown: (event: KeyboardEvent) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  props.onSaveEdit?.()
+                  return
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  props.onCancelEdit?.()
+                }
+              },
+              onVnodeMounted: (vnode: { el: Element | null }) => {
+                const input = vnode.el as HTMLInputElement | null
+                if (!input) {
+                  return
+                }
+                input.focus()
+                input.select()
+              }
+            }),
+            h(
+              'button',
+              {
+                type: 'button',
+                disabled: props.saving,
+                class:
+                  'inline-flex h-7 w-7 items-center justify-center rounded border border-green-300 text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60',
+                onClick: (event: MouseEvent) => {
+                  event.preventDefault()
+                  props.onSaveEdit?.()
+                }
+              },
+              props.saving
+                ? h('span', {
+                    class:
+                      'h-3.5 w-3.5 animate-spin rounded-full border-2 border-green-600 border-t-transparent'
+                  })
+                : '✓'
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                disabled: props.saving,
+                class:
+                  'inline-flex h-7 w-7 items-center justify-center rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60',
+                onClick: (event: MouseEvent) => {
+                  event.preventDefault()
+                  props.onCancelEdit?.()
+                }
+              },
+              '×'
+            )
+          ]
+        )
+      }
+
+      if (isEditable) {
+        const isEmpty = rendered.length === 0
+        return h(
+          'span',
+          {
+            role: 'button',
+            tabindex: 0,
+            class: [
+              'inline-block w-full rounded px-1 py-0.5',
+              'cursor-pointer hover:bg-blue-50 hover:ring-1 hover:ring-blue-200',
+              isEmpty ? 'text-gray-400' : ''
+            ],
+            style,
+            onClick: (event: MouseEvent) => {
+              event.preventDefault()
+              props.onStartEdit?.(row.index, column.id)
+            },
+            onKeydown: (event: KeyboardEvent) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                props.onStartEdit?.(row.index, column.id)
+              }
+            }
+          },
+          isEmpty ? '(click to edit)' : rendered
+        )
       }
 
       if (!style) {

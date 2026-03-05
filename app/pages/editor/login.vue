@@ -13,6 +13,7 @@ const submit = async () => {
   try {
     await $fetch('/api/auth/editor-login', {
       method: 'POST',
+      credentials: 'include',
       body: {
         email: email.value,
         password: password.value

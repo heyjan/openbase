@@ -5,6 +5,7 @@ const route = useRoute()
 const loggingOut = ref(false)
 
 const isActive = (target: string) => route.path === target || route.path.startsWith(`${target}/`)
+const isEditorDashboardRoute = computed(() => route.path.startsWith('/editor/dashboards/'))
 
 const logout = async () => {
   if (loggingOut.value) {
@@ -55,7 +56,13 @@ const logout = async () => {
       </div>
     </header>
 
-    <main class="mx-auto w-full max-w-6xl px-6 py-5">
+    <main
+      :class="
+        isEditorDashboardRoute
+          ? 'w-full px-6 py-5'
+          : 'mx-auto w-full max-w-6xl px-6 py-5'
+      "
+    >
       <slot />
     </main>
   </div>

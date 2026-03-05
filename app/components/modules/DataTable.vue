@@ -2,6 +2,7 @@
 import type { ModuleConfig } from '~/types/module'
 import type { ModuleDataResult } from '~/composables/useModuleData'
 import Table from '~/components/ui/Table.vue'
+import { useInlineCellEdit } from '~/composables/useInlineCellEdit'
 import {
   applyTableSortAndLimit,
   getColumnNumericExtents,
@@ -14,6 +15,8 @@ import {
 const props = defineProps<{
   module: ModuleConfig
   moduleData?: ModuleDataResult
+  editable?: boolean
+  refresh?: () => Promise<void>
 }>()
 
 const search = ref('')
@@ -104,6 +107,28 @@ const cellStyleResolver = (input: { columnKey: string; value: unknown }) =>
     rules: conditionalRules.value,
     columnExtents: columnExtents.value
   })
+
+const moduleId = computed(() => props.module.id)
+const inlineEditEnabled = computed(() => Boolean(props.editable))
+const inlineCellEdit = useInlineCellEdit({
+  moduleId,
+  enabled: inlineEditEnabled,
+  refresh: props.refresh
+})
+
+const isInlineEditable = computed(
+  () => inlineEditEnabled.value && inlineCellEdit.meta.value.editable
+)
+
+const editableColumns = computed(() =>
+  isInlineEditable.value ? inlineCellEdit.editableColumns.value : []
+)
+
+const onStartEdit = (rowIndex: number, columnKey: string) => {
+  inlineCellEdit.startEdit(rowIndex, columnKey, filteredRows.value)
+}
+
+const onSaveEdit = () => inlineCellEdit.saveCell(filteredRows.value)
 </script>
 
 <template>
@@ -128,6 +153,14 @@ const cellStyleResolver = (input: { columnKey: string; value: unknown }) =>
         :rows="filteredRows"
         :columns="tableColumns"
         :cell-style-resolver="cellStyleResolver"
+        :editing-cell="isInlineEditable ? inlineCellEdit.editingCell.value : null"
+        :edit-value="inlineCellEdit.editValue.value"
+        :editable-columns="editableColumns"
+        :saving="inlineCellEdit.saving.value"
+        :on-start-edit="isInlineEditable ? onStartEdit : undefined"
+        :on-edit-value-change="inlineCellEdit.setEditValue"
+        :on-save-edit="isInlineEditable ? onSaveEdit : undefined"
+        :on-cancel-edit="inlineCellEdit.cancelEdit"
         empty-label="No matching rows."
       />
     </div>
