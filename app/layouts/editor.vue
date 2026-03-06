@@ -1,11 +1,28 @@
 <script setup lang="ts">
 import { LogOut } from 'lucide-vue-next'
+import Breadcrumbs, { type BreadcrumbItem } from '~/components/ui/Breadcrumbs.vue'
 
 const route = useRoute()
 const loggingOut = ref(false)
+const logoSrc = '/brain-icon-7087186-512.png'
 
-const isActive = (target: string) => route.path === target || route.path.startsWith(`${target}/`)
 const isEditorDashboardRoute = computed(() => route.path.startsWith('/editor/dashboards/'))
+const slug = computed(() => (typeof route.params.slug === 'string' ? route.params.slug : ''))
+
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
+  if (isEditorDashboardRoute.value) {
+    return [
+      { label: 'Dashboards', to: '/editor' },
+      { label: slug.value || 'Dashboard' }
+    ]
+  }
+
+  if (route.path === '/editor') {
+    return [{ label: 'Dashboards' }]
+  }
+
+  return []
+})
 
 const logout = async () => {
   if (loggingOut.value) {
@@ -24,22 +41,18 @@ const logout = async () => {
 
 <template>
   <div class="min-h-screen bg-gray-50">
-    <header class="border-b border-gray-200 bg-white px-6 py-3">
-      <div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
-        <div class="flex items-center gap-5">
-          <NuxtLink to="/editor" class="text-sm font-semibold text-gray-900">Editor</NuxtLink>
-          <NuxtLink
-            to="/editor"
-            class="text-sm"
-            :class="isActive('/editor') ? 'text-gray-900' : 'text-gray-600'"
-          >
-            Dashboards
+    <header class="h-12 border-b border-gray-200 bg-white">
+      <div class="flex h-full items-center justify-between gap-4 px-6">
+        <div class="flex min-w-0 items-center gap-4">
+          <NuxtLink to="/editor" class="flex shrink-0 items-center">
+            <img :src="logoSrc" alt="Openbase" class="h-12 w-12" />
           </NuxtLink>
+          <Breadcrumbs v-if="breadcrumbItems.length" :items="breadcrumbItems" />
         </div>
 
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded border border-gray-200 px-3 py-1.5 text-sm text-gray-700"
+          class="inline-flex h-8 items-center gap-1.5 rounded bg-brand-secondary px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
           :disabled="loggingOut"
           @click="logout"
         >
