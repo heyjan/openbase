@@ -56,6 +56,12 @@ type QueryPayload = {
   parameters: Record<string, unknown>
 }
 
+type PersistQueryOptions = {
+  showSuccessToast?: boolean
+  showErrorToast?: boolean
+  showNoChangesToast?: boolean
+}
+
 const canPreview = computed(
   () => Boolean(form.value.name.trim() && form.value.dataSourceId && form.value.queryText.trim())
 )
@@ -154,9 +160,12 @@ const updateQueryParameters = (value: Record<string, unknown>) => {
   queryParameters.value = value
 }
 
-const persistQuery = async () => {
+const persistQuery = async (options: PersistQueryOptions = {}) => {
   const payload = buildPayload()
   if (!validatePayload(payload)) {
+    if (options.showErrorToast !== false && errorMessage.value) {
+      toast.error('Failed to save query', errorMessage.value)
+    }
     return null
   }
 
@@ -165,6 +174,9 @@ const persistQuery = async () => {
   const needsUpdate = !needsCreate && payloadSignature !== lastSavedSignature.value
 
   if (!needsCreate && !needsUpdate) {
+    if (options.showNoChangesToast) {
+      toast.info('No changes to save')
+    }
     return queryId.value
   }
 
@@ -179,15 +191,25 @@ const persistQuery = async () => {
         await navigateTo(`/admin/queries/${created.id}`, { replace: true })
       }
 
+      if (options.showSuccessToast) {
+        toast.success('Query created')
+      }
+
       return created.id
     }
 
     await update(queryId.value, payload)
     lastSavedSignature.value = payloadSignature
+    if (options.showSuccessToast) {
+      toast.success('Query saved')
+    }
     return queryId.value
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to save query'
+    if (options.showErrorToast !== false) {
+      toast.error('Failed to save query', errorMessage.value)
+    }
     return null
   } finally {
     saving.value = false
@@ -240,12 +262,19 @@ const mapVisualizationToModule = (
 const saveQuery = async () => {
   errorMessage.value = ''
   previewResult.value = null
-  await persistQuery()
+  await persistQuery({
+    showSuccessToast: true,
+    showErrorToast: true,
+    showNoChangesToast: true
+  })
 }
 
 const runPreview = async () => {
   errorMessage.value = ''
-  const savedQueryId = await persistQuery()
+  const savedQueryId = await persistQuery({
+    showSuccessToast: false,
+    showErrorToast: true
+  })
   if (!savedQueryId) {
     return
   }
@@ -276,7 +305,10 @@ const saveVisualization = async (payload: {
     return
   }
 
-  const savedQueryId = await persistQuery()
+  const savedQueryId = await persistQuery({
+    showSuccessToast: false,
+    showErrorToast: false
+  })
   if (!savedQueryId) {
     toast.error(
       'Failed to save visualization',

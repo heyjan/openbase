@@ -4,6 +4,7 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 import type { SavedQuery } from '~/types/query'
 
 const { list, remove } = useQueries()
+const toast = useAppToast()
 
 const queries = ref<SavedQuery[]>([])
 const loading = ref(false)
@@ -29,9 +30,11 @@ const deleteQuery = async (queryId: string) => {
   try {
     await remove(queryId)
     await loadQueries()
+    toast.success('Query deleted')
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to delete query'
+    toast.error('Failed to delete query', errorMessage.value)
   } finally {
     deletingId.value = null
   }

@@ -5,6 +5,7 @@ import type { EditorUser } from '~/types/editor'
 import { getPasswordScore, passwordStrengthLabel } from '~/utils/password'
 
 const { list, create, update } = useEditors()
+const toast = useAppToast()
 const route = useRoute()
 const isPermissionsRoute = computed(
   () => typeof route.params.id === 'string' && route.params.id.length > 0
@@ -57,8 +58,10 @@ const addEditor = async () => {
     newEditor.name = ''
     newEditor.password = ''
     await loadEditors()
+    toast.success('Editor added')
   } catch (error) {
     createError.value = error instanceof Error ? error.message : 'Failed to create editor'
+    toast.error('Failed to add editor', createError.value)
   } finally {
     creating.value = false
   }
@@ -77,8 +80,10 @@ const saveEditor = async (editor: EditorUser & { password?: string }) => {
     })
     editor.password = ''
     await loadEditors()
+    toast.success('Editor saved')
   } catch (error) {
     updateError.value = error instanceof Error ? error.message : 'Failed to update editor'
+    toast.error('Failed to save editor', updateError.value)
   } finally {
     updatingId.value = null
   }

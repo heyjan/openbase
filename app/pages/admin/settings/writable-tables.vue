@@ -10,6 +10,7 @@ type WritableTableForm = WritableTable & {
 
 const { list, create, update, remove } = useWritableTables()
 const { list: listDataSources } = useDataSources()
+const toast = useAppToast()
 
 const writableTables = ref<WritableTableForm[]>([])
 const dataSources = ref<DataSource[]>([])
@@ -90,9 +91,11 @@ const addWritableTable = async () => {
     newTable.description = ''
 
     await loadData()
+    toast.success('Writable table added')
   } catch (error) {
     createError.value =
       error instanceof Error ? error.message : 'Failed to create writable table'
+    toast.error('Failed to add writable table', createError.value)
   } finally {
     creating.value = false
   }
@@ -112,9 +115,11 @@ const saveWritableTable = async (table: WritableTableForm) => {
       description: table.descriptionInput.trim() || null
     })
     await loadData()
+    toast.success('Writable table saved')
   } catch (error) {
     updateError.value =
       error instanceof Error ? error.message : 'Failed to update writable table'
+    toast.error('Failed to save writable table', updateError.value)
   } finally {
     updatingId.value = null
   }
@@ -127,9 +132,11 @@ const deleteWritableTable = async (id: string) => {
   try {
     await remove(id)
     await loadData()
+    toast.success('Writable table deleted')
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to delete writable table'
+    toast.error('Failed to delete writable table', errorMessage.value)
   } finally {
     deletingId.value = null
   }

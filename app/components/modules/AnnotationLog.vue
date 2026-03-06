@@ -11,6 +11,7 @@ const props = defineProps<{
 
 const route = useRoute()
 const { create } = useAnnotations()
+const toast = useAppToast()
 
 const slug = computed(() =>
   typeof route.params.slug === 'string' ? route.params.slug : ''
@@ -80,11 +81,13 @@ const submit = async () => {
     form.eventDate = ''
 
     submitSuccess.value = 'Annotation added.'
+    toast.success('Annotation added')
     if (props.refresh) {
       await props.refresh()
     }
   } catch (error) {
     submitError.value = error instanceof Error ? error.message : 'Failed to add annotation'
+    toast.error('Failed to add annotation', submitError.value)
   } finally {
     submitting.value = false
   }

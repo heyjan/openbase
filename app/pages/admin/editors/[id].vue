@@ -5,6 +5,7 @@ import PageHeader from '~/components/ui/PageHeader.vue'
 const route = useRoute()
 const editorId = computed(() => String(route.params.id || ''))
 const { getPermissions, updatePermissions } = useEditors()
+const toast = useAppToast()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -83,9 +84,11 @@ const save = async () => {
       writableTableIds: writableTableIds.value
     })
     successMessage.value = 'Permissions saved'
+    toast.success('Permissions saved')
   } catch (error) {
     actionError.value =
       error instanceof Error ? error.message : 'Failed to save permissions'
+    toast.error('Failed to save permissions', actionError.value)
   } finally {
     saving.value = false
   }

@@ -3,6 +3,7 @@ import { Plus } from 'lucide-vue-next'
 import PageHeader from '~/components/ui/PageHeader.vue'
 
 const { create } = useDashboard()
+const toast = useAppToast()
 
 const name = ref('')
 const slug = ref('')
@@ -19,10 +20,12 @@ const submit = async () => {
       slug: slug.value,
       description: description.value || undefined
     })
+    toast.success('Dashboard created')
     await navigateTo(`/admin/dashboards/${dashboard.id}/edit`)
   } catch (err) {
     formError.value =
       err instanceof Error ? err.message : 'Failed to create dashboard'
+    toast.error('Failed to create dashboard', formError.value)
   } finally {
     submitting.value = false
   }

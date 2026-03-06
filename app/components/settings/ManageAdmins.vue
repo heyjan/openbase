@@ -4,6 +4,7 @@ import type { AdminUser } from '~/types/admin'
 import { getPasswordScore, passwordStrengthLabel } from '~/utils/password'
 
 const { list, create, update } = useAdmins()
+const toast = useAppToast()
 
 const admins = ref<AdminUser[]>([])
 const loading = ref(false)
@@ -43,8 +44,10 @@ const addAdmin = async () => {
     newAdmin.name = ''
     newAdmin.password = ''
     await loadAdmins()
+    toast.success('Admin added')
   } catch (err) {
     createError.value = err instanceof Error ? err.message : 'Failed to add admin'
+    toast.error('Failed to add admin', createError.value)
   } finally {
     creating.value = false
   }
@@ -65,8 +68,10 @@ const saveAdmin = async (admin: AdminUser & { password?: string }) => {
     })
     admin.password = ''
     await loadAdmins()
+    toast.success('Admin saved')
   } catch (err) {
     updateError.value = err instanceof Error ? err.message : 'Failed to update admin'
+    toast.error('Failed to save admin', updateError.value)
   } finally {
     updatingId.value = null
   }
