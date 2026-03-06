@@ -42,3 +42,4 @@ db/*.sqlite3-*
 mcp.json
 spec.md
 documentation/
+docs/
