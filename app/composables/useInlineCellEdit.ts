@@ -20,6 +20,63 @@ type WritableMetaResponse =
 
 const NOT_EDITABLE_META: WritableMetaResponse = { editable: false }
 const normalizeColumn = (value: string) => value.trim().toLowerCase()
+const hasOwn = (value: Record<string, unknown>, key: string) =>
+  Object.prototype.hasOwnProperty.call(value, key)
+
+const pickFirstPresent = (value: unknown) => {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (entry === undefined || entry === null) {
+        continue
+      }
+      if (typeof entry === 'string' && !entry.trim()) {
+        continue
+      }
+      return entry
+    }
+    return undefined
+  }
+
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  if (typeof value === 'string' && !value.trim()) {
+    return undefined
+  }
+
+  return value
+}
+
+const readIdentifierFromRow = (row: TableRow, identifierColumn: string) => {
+  if (hasOwn(row, identifierColumn)) {
+    return row[identifierColumn]
+  }
+
+  const normalizedIdentifier = normalizeColumn(identifierColumn)
+  for (const [rowColumn, rowValue] of Object.entries(row)) {
+    if (normalizeColumn(rowColumn) === normalizedIdentifier) {
+      return rowValue
+    }
+  }
+
+  return undefined
+}
+
+const readIdentifierFromQuery = (
+  query: Record<string, unknown>,
+  identifierColumn: string
+) => {
+  const normalizedIdentifier = normalizeColumn(identifierColumn)
+
+  for (const [queryKey, queryValue] of Object.entries(query)) {
+    if (normalizeColumn(queryKey) !== normalizedIdentifier) {
+      continue
+    }
+    return pickFirstPresent(queryValue)
+  }
+
+  return undefined
+}
 
 const extractErrorMessage = (error: unknown, fallback: string) => {
   if (error && typeof error === 'object') {
@@ -185,10 +242,19 @@ export const useInlineCellEdit = (input: {
     }
 
     const where: Record<string, unknown> = {}
+    const queryRecord = route.query as Record<string, unknown>
+
     for (const identifierColumn of meta.value.identifierColumns) {
-      const identifierValue = row[identifierColumn]
+      const identifierValueFromRow = readIdentifierFromRow(row, identifierColumn)
+      const identifierValue =
+        identifierValueFromRow === undefined || identifierValueFromRow === null
+          ? readIdentifierFromQuery(queryRecord, identifierColumn)
+          : identifierValueFromRow
+
       if (identifierValue === null || identifierValue === undefined) {
-        saveError.value = `Missing identifier value for ${identifierColumn}.`
+        saveError.value =
+          `Missing identifier value for ${identifierColumn}. ` +
+          `Include this primary-key column in the module query to enable writable edits.`
         toast.error('Cell update failed', saveError.value)
         return
       }
