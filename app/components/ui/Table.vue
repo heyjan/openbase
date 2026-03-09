@@ -36,6 +36,13 @@ const props = withDefaults(
       value: unknown
       rowIndex: number
     }) => Record<string, string> | undefined
+    cellValueFormatter?: (input: {
+      row: TableRow
+      columnKey: string
+      value: unknown
+      rowIndex: number
+      defaultValue: string
+    }) => string
     editingCell?: EditingCell | null
     editValue?: string
     editableColumns?: string[]
@@ -49,6 +56,7 @@ const props = withDefaults(
     columns: () => [],
     emptyLabel: 'No rows found.',
     cellStyleResolver: undefined,
+    cellValueFormatter: undefined,
     editingCell: null,
     editValue: '',
     editableColumns: () => [],
@@ -118,7 +126,14 @@ const tableColumns = computed(() =>
         value
       })
 
-      const rendered = toDisplayValue(value)
+      const defaultValue = toDisplayValue(value)
+      const rendered = props.cellValueFormatter?.({
+        row: row.original,
+        rowIndex: row.index,
+        columnKey: column.id,
+        value,
+        defaultValue
+      }) ?? defaultValue
       const isEditable =
         editableColumnsSet.value.has(normalizeColumn(column.id)) &&
         typeof props.onStartEdit === 'function'

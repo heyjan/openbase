@@ -3,6 +3,7 @@ import type {
   ConditionalFormatOperator,
   ConditionalFormatRule,
   QueryPreviewVisualization,
+  TableColumnValueFormat,
   VizOptionsByType,
   VizSeriesOption
 } from '~/types/viz-options'
@@ -89,6 +90,66 @@ export const getNumericColumns = (rows: Record<string, unknown>[], columns: stri
 export const getCategoryColumns = (columns: string[], numericColumns: string[]) => {
   const categoryColumns = columns.filter((column) => !numericColumns.includes(column))
   return categoryColumns.length ? categoryColumns : columns
+}
+
+export type TableColumnValueFormatMap = Record<string, TableColumnValueFormat>
+
+const parseTableColumnValueFormat = (value: unknown): TableColumnValueFormat | null => {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const prefix =
+    typeof value.prefix === 'string' && value.prefix.trim() ? value.prefix : undefined
+  const suffix =
+    typeof value.suffix === 'string' && value.suffix.trim() ? value.suffix : undefined
+
+  if (!prefix && !suffix) {
+    return null
+  }
+
+  return {
+    prefix,
+    suffix
+  }
+}
+
+export const parseTableColumnValueFormats = (
+  value: unknown,
+  columns: string[]
+): TableColumnValueFormatMap => {
+  if (!isRecord(value)) {
+    return {}
+  }
+
+  const allowedColumns = new Set(columns)
+  const parsed: TableColumnValueFormatMap = {}
+
+  for (const [column, rawFormat] of Object.entries(value)) {
+    if (!allowedColumns.has(column)) {
+      continue
+    }
+
+    const format = parseTableColumnValueFormat(rawFormat)
+    if (!format) {
+      continue
+    }
+
+    parsed[column] = format
+  }
+
+  return parsed
+}
+
+const readConfiguredTableColumnValueFormats = (
+  config: Record<string, unknown>,
+  columns: string[]
+) => {
+  const configured = parseTableColumnValueFormats(config.columnValueFormats, columns)
+  if (Object.keys(configured).length) {
+    return configured
+  }
+  return parseTableColumnValueFormats(config.column_value_formats, columns)
 }
 
 const getDefaultSeries = (
@@ -290,6 +351,7 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
       sortDirection: 'asc',
       rowLimit: 500,
       showSearch: false,
+      columnValueFormats: {},
       conditionalFormatting: []
     } as VizOptionsByType[T]
   }
@@ -393,6 +455,7 @@ const sanitizeVizConfigForType = (
     )
     normalized.rowLimit = readConfiguredPositiveInteger(normalized, ['rowLimit', 'row_limit'], 500)
     normalized.showSearch = readConfiguredBoolean(normalized, ['showSearch', 'show_search'], false)
+    normalized.columnValueFormats = readConfiguredTableColumnValueFormats(normalized, columns)
     normalized.conditionalFormatting = parseConditionalFormattingRules(
       normalized.conditionalFormatting
     )
@@ -539,6 +602,29 @@ export const resolveTableVisibleColumns = (orderedColumns: string[], config: Rec
   }
 
   return orderedColumns.filter((column) => configuredVisible.includes(column))
+}
+
+export const resolveTableColumnValueFormats = (
+  columns: string[],
+  config: Record<string, unknown>
+) =>
+  readConfiguredTableColumnValueFormats(config, columns)
+
+export const formatTableCellDisplayValue = (
+  defaultValue: string,
+  columnKey: string,
+  formats: TableColumnValueFormatMap
+) => {
+  if (!defaultValue.length) {
+    return defaultValue
+  }
+
+  const columnFormat = formats[columnKey]
+  if (!columnFormat) {
+    return defaultValue
+  }
+
+  return `${columnFormat.prefix ?? ''}${defaultValue}${columnFormat.suffix ?? ''}`
 }
 
 const compareValues = (left: unknown, right: unknown) => {

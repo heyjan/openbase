@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { GripVertical, RotateCcw, Trash2 } from 'lucide-vue-next'
-import type { ConditionalFormatRule, QueryPreviewVisualization, VizSeriesOption } from '~/types/viz-options'
+import type {
+  ConditionalFormatRule,
+  QueryPreviewVisualization,
+  TableColumnValueFormat,
+  VizSeriesOption
+} from '~/types/viz-options'
 import {
   getCategoryColumns,
   getNumericColumns,
   parseConditionalFormattingRules,
   resolveTableColumnOrder,
+  resolveTableColumnValueFormats,
   resolveTableVisibleColumns,
   toNumber
 } from '~/composables/useVizConfig'
@@ -143,6 +149,10 @@ const visibleColumns = computed(() =>
   resolveTableVisibleColumns(orderedColumns.value, props.modelValue)
 )
 
+const columnValueFormats = computed(() =>
+  resolveTableColumnValueFormats(props.columns, props.modelValue)
+)
+
 const moveColumn = (column: string, direction: -1 | 1) => {
   const order = [...orderedColumns.value]
   const index = order.indexOf(column)
@@ -208,6 +218,36 @@ const toggleVisibleColumn = (column: string, checked: boolean) => {
 
   updateConfig({
     visibleColumns: orderedColumns.value.filter((entry) => set.has(entry))
+  })
+}
+
+const updateColumnValueFormat = (
+  column: string,
+  key: keyof TableColumnValueFormat,
+  rawValue: unknown
+) => {
+  const text = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
+  const next: Record<string, TableColumnValueFormat> = {
+    ...columnValueFormats.value
+  }
+  const current: TableColumnValueFormat = {
+    ...(next[column] ?? {})
+  }
+
+  if (text.trim()) {
+    current[key] = text
+  } else {
+    delete current[key]
+  }
+
+  if (!current.prefix && !current.suffix) {
+    delete next[column]
+  } else {
+    next[column] = current
+  }
+
+  updateConfig({
+    columnValueFormats: next
   })
 }
 
@@ -523,6 +563,37 @@ watch(
               @update:model-value="updateInteger('rowLimit', $event, 500)"
             />
           </label>
+        </div>
+
+        <div>
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Value affixes</p>
+          <div class="mt-2 space-y-2">
+            <div
+              v-for="column in orderedColumns"
+              :key="`affix-${column}`"
+              class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[minmax(0,1fr)_140px_140px]"
+            >
+              <p class="text-sm text-gray-700">{{ column }}</p>
+
+              <label class="block text-[11px] font-medium uppercase tracking-wide text-gray-600">
+                Prefix
+                <UInput
+                  class="mt-1"
+                  :model-value="columnValueFormats[column]?.prefix ?? ''"
+                  @update:model-value="updateColumnValueFormat(column, 'prefix', $event)"
+                />
+              </label>
+
+              <label class="block text-[11px] font-medium uppercase tracking-wide text-gray-600">
+                Suffix
+                <UInput
+                  class="mt-1"
+                  :model-value="columnValueFormats[column]?.suffix ?? ''"
+                  @update:model-value="updateColumnValueFormat(column, 'suffix', $event)"
+                />
+              </label>
+            </div>
+          </div>
         </div>
 
         <div>

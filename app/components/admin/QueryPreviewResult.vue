@@ -7,12 +7,14 @@ import type { SavedQueryPreviewResult } from '~/types/query'
 import type { QueryPreviewVisualization, VizSeriesOption } from '~/types/viz-options'
 import {
   applyTableSortAndLimit,
+  formatTableCellDisplayValue,
   getCategoryColumns,
   getColumnNumericExtents,
   getConditionalCellStyle,
   getNumericColumns,
   parseConditionalFormattingRules,
   resolveTableColumnOrder,
+  resolveTableColumnValueFormats,
   resolveTableVisibleColumns,
   toNumber
 } from '~/composables/useVizConfig'
@@ -433,6 +435,10 @@ const tableColumns = computed(() =>
   }))
 )
 
+const tableColumnValueFormats = computed(() =>
+  resolveTableColumnValueFormats(tableVisibleColumns.value, config.value)
+)
+
 const tableConditionalRules = computed(() =>
   parseConditionalFormattingRules(config.value.conditionalFormatting)
 )
@@ -448,6 +454,13 @@ const tableCellStyleResolver = (input: { columnKey: string; value: unknown }) =>
     rules: tableConditionalRules.value,
     columnExtents: tableColumnExtents.value
   })
+
+const tableCellValueFormatter = (input: { columnKey: string; defaultValue: string }) =>
+  formatTableCellDisplayValue(
+    input.defaultValue,
+    input.columnKey,
+    tableColumnValueFormats.value
+  )
 
 const chartRenderKey = computed(
   () => `${props.visualization}:${JSON.stringify(config.value)}:${rows.value.length}`
@@ -711,6 +724,7 @@ const chartOption = computed<EChartsOption>(() => {
             :rows="filteredTableRows"
             :columns="tableColumns"
             :cell-style-resolver="tableCellStyleResolver"
+            :cell-value-formatter="tableCellValueFormatter"
             empty-label="No preview rows found."
           />
         </div>

@@ -5,10 +5,12 @@ import Table from '~/components/ui/Table.vue'
 import { useInlineCellEdit } from '~/composables/useInlineCellEdit'
 import {
   applyTableSortAndLimit,
+  formatTableCellDisplayValue,
   getColumnNumericExtents,
   getConditionalCellStyle,
   parseConditionalFormattingRules,
   resolveTableColumnOrder,
+  resolveTableColumnValueFormats,
   resolveTableVisibleColumns
 } from '~/composables/useVizConfig'
 
@@ -92,6 +94,10 @@ const tableColumns = computed(() =>
   }))
 )
 
+const columnValueFormats = computed(() =>
+  resolveTableColumnValueFormats(visibleColumns.value, props.module.config)
+)
+
 const conditionalRules = computed(() =>
   parseConditionalFormattingRules(props.module.config.conditionalFormatting)
 )
@@ -107,6 +113,13 @@ const cellStyleResolver = (input: { columnKey: string; value: unknown }) =>
     rules: conditionalRules.value,
     columnExtents: columnExtents.value
   })
+
+const cellValueFormatter = (input: { columnKey: string; defaultValue: string }) =>
+  formatTableCellDisplayValue(
+    input.defaultValue,
+    input.columnKey,
+    columnValueFormats.value
+  )
 
 const moduleId = computed(() => props.module.id)
 const inlineEditEnabled = computed(() => Boolean(props.editable))
@@ -153,6 +166,7 @@ const onSaveEdit = () => inlineCellEdit.saveCell(filteredRows.value)
         :rows="filteredRows"
         :columns="tableColumns"
         :cell-style-resolver="cellStyleResolver"
+        :cell-value-formatter="cellValueFormatter"
         :editing-cell="isInlineEditable ? inlineCellEdit.editingCell.value : null"
         :edit-value="inlineCellEdit.editValue.value"
         :editable-columns="editableColumns"

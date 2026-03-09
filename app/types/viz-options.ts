@@ -34,6 +34,11 @@ type SharedVizOptions = {
   titleOverride?: string
 }
 
+export type TableColumnValueFormat = {
+  prefix?: string
+  suffix?: string
+}
+
 export type TableVizOptions = SharedVizOptions & {
   visibleColumns?: string[]
   columnOrder?: string[]
@@ -41,6 +46,7 @@ export type TableVizOptions = SharedVizOptions & {
   sortDirection?: SortDirection
   rowLimit?: number
   showSearch?: boolean
+  columnValueFormats?: Record<string, TableColumnValueFormat>
   conditionalFormatting?: ConditionalFormatRule[]
 }
 
