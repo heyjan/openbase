@@ -91,7 +91,8 @@ const derivedColumns = computed<ColumnInput[]>(() => {
 
 const tableColumns = computed(() =>
   derivedColumns.value.map((column) => ({
-    accessorKey: column.key,
+    id: column.key,
+    accessorFn: (row: TableRow) => row[column.key],
     enableSorting: true,
     header: ({ column: tableColumn }: { column: { getIsSorted: () => false | 'asc' | 'desc'; toggleSorting: (desc?: boolean) => void } }) => {
       const sort = tableColumn.getIsSorted()
@@ -276,25 +277,33 @@ const tableColumns = computed(() =>
   <p v-if="!rows.length" class="px-3 py-4 text-sm text-gray-500">{{ emptyLabel }}</p>
   <div
     v-else
-    class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+    class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm"
   >
     <UTable
       :data="rows"
       :columns="tableColumns"
-      class="ob-table min-w-full [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-gray-700 [&_tbody_td]:align-top [&_tbody_td]:py-2.5 [&_tbody_td]:text-sm [&_tbody_td]:text-gray-700"
+      class="ob-table w-full [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-gray-700 [&_tbody_td]:align-top [&_tbody_td]:py-2.5 [&_tbody_td]:text-sm [&_tbody_td]:text-gray-700"
     />
   </div>
 </template>
 
 <style scoped>
+.ob-table :deep(table) {
+  min-width: 100%;
+  width: max-content;
+  table-layout: auto;
+}
+
 .ob-table :deep(thead th) {
   background-color: #f6ebe8;
   background-color: color-mix(in srgb, var(--color-brand-secondary, #d97556) 16%, white);
   border-bottom: 1px solid #d1d5db;
+  white-space: nowrap;
 }
 
 .ob-table :deep(tbody td) {
   border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
 }
 
 .ob-table :deep(tbody tr:last-child td) {
