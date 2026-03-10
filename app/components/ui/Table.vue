@@ -73,6 +73,8 @@ const props = withDefaults(
 )
 
 const UButton = resolveComponent('UButton')
+const BODY_CELL_CONTENT_CLASS =
+  'ob-cell-content flex min-h-[52px] w-full items-center px-4 py-3'
 const editableColumnsSet = computed(() =>
   new Set(props.editableColumns.map(normalizeColumn))
 )
@@ -106,7 +108,7 @@ const tableColumns = computed(() =>
       return h(
         'div',
         {
-          class: 'inline-flex w-full items-center rounded-sm',
+          class: 'inline-flex min-h-10 w-full items-center rounded-sm px-2',
           style
         },
         [
@@ -172,7 +174,7 @@ const tableColumns = computed(() =>
         return h(
           'div',
           {
-            class: 'inline-flex w-full items-center gap-1 rounded border border-blue-200 bg-white p-1',
+            class: `${BODY_CELL_CONTENT_CLASS} gap-1 rounded border border-blue-200 bg-white px-2 py-2`,
             onFocusout: onFocusOut
           },
           [
@@ -250,9 +252,8 @@ const tableColumns = computed(() =>
             role: 'button',
             tabindex: 0,
             class: [
-              style
-                ? 'ob-cell-fill block w-full px-4 py-4'
-                : 'inline-block w-full rounded px-1 py-0.5',
+              BODY_CELL_CONTENT_CLASS,
+              style ? 'ob-cell-fill rounded' : 'rounded',
               'cursor-pointer hover:bg-blue-50 hover:ring-1 hover:ring-blue-200',
               isEmpty ? 'text-gray-400' : ''
             ],
@@ -272,14 +273,10 @@ const tableColumns = computed(() =>
         )
       }
 
-      if (!style) {
-        return rendered
-      }
-
       return h(
         'span',
         {
-          class: 'ob-cell-fill block w-full px-4 py-4',
+          class: [BODY_CELL_CONTENT_CLASS, style ? 'ob-cell-fill' : ''],
           style
         },
         rendered
@@ -298,7 +295,7 @@ const tableColumns = computed(() =>
     <UTable
       :data="rows"
       :columns="tableColumns"
-      class="ob-table w-full [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-gray-700 [&_tbody_td]:align-top [&_tbody_td]:py-2.5 [&_tbody_td]:text-sm [&_tbody_td]:text-gray-700"
+      class="ob-table w-full [&_thead_th]:align-middle [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-gray-700 [&_tbody_td]:align-middle [&_tbody_td]:p-0 [&_tbody_td]:text-sm [&_tbody_td]:text-gray-700"
     />
   </div>
 </template>
@@ -319,6 +316,7 @@ const tableColumns = computed(() =>
 
 .ob-table :deep(tbody td) {
   border-bottom: 1px solid #e5e7eb;
+  padding: 0;
   white-space: nowrap;
 }
 
