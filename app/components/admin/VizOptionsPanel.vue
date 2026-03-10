@@ -343,7 +343,12 @@ const currentSeries = computed<VizSeriesOption[]>(() => {
 })
 
 const seriesCandidateFields = computed(() => {
-  if (props.vizType === 'pie' || props.vizType === 'scatter' || props.vizType === 'table') {
+  if (
+    props.vizType === 'pie' ||
+    props.vizType === 'scatter' ||
+    props.vizType === 'table' ||
+    props.vizType === 'waterfall'
+  ) {
     return []
   }
 
@@ -879,7 +884,7 @@ watch(
         </div>
       </template>
 
-      <template v-else-if="vizType === 'bar'">
+      <template v-else-if="vizType === 'bar' || vizType === 'stacked_horizontal_bar'">
         <div class="grid gap-3 md:grid-cols-2">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             X-axis field
@@ -936,12 +941,18 @@ watch(
         </div>
 
         <div class="grid gap-3 md:grid-cols-4">
-          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+          <label
+            v-if="vizType === 'bar'"
+            class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+          >
             Stacked
             <USwitch :model-value="readBoolean('stacked', false)" @update:model-value="updateBoolean('stacked', $event)" />
           </label>
 
-          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+          <label
+            v-if="vizType === 'bar'"
+            class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+          >
             Horizontal
             <USwitch :model-value="readBoolean('horizontal', false)" @update:model-value="updateBoolean('horizontal', $event)" />
           </label>
@@ -961,6 +972,145 @@ watch(
               :model-value="readNumber('barBorderRadius', 4)"
               @update:model-value="updateConfig({ barBorderRadius: sliderToNumber($event, 4) })"
             />
+          </label>
+        </div>
+      </template>
+
+      <template v-else-if="vizType === 'waterfall'">
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Category field
+            <USelect
+              class="mt-1"
+              :items="columns.map((column) => ({ label: column, value: column }))"
+              :model-value="readString('categoryField')"
+              @update:model-value="updateConfig({ categoryField: String($event || '') })"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Value field
+            <USelect
+              class="mt-1"
+              :items="numericColumns.map((column) => ({ label: column, value: column }))"
+              :model-value="readString('valueField')"
+              @update:model-value="updateConfig({ valueField: String($event || '') })"
+            />
+          </label>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-4">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Increase color
+            <input
+              :value="readString('positiveColor', '#16a34a')"
+              type="color"
+              class="mt-1 h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+              @input="updateConfig({ positiveColor: ($event.target as HTMLInputElement).value })"
+            >
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Decrease color
+            <input
+              :value="readString('negativeColor', '#dc2626')"
+              type="color"
+              class="mt-1 h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+              @input="updateConfig({ negativeColor: ($event.target as HTMLInputElement).value })"
+            >
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Total color
+            <input
+              :value="readString('totalColor', '#2563eb')"
+              type="color"
+              class="mt-1 h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+              @input="updateConfig({ totalColor: ($event.target as HTMLInputElement).value })"
+            >
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Border radius
+            <USlider
+              class="mt-2"
+              :min="0"
+              :max="12"
+              :step="1"
+              :model-value="readNumber('barBorderRadius', 4)"
+              @update:model-value="updateConfig({ barBorderRadius: sliderToNumber($event, 4) })"
+            />
+          </label>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Show legend
+            <USwitch :model-value="readBoolean('showLegend', false)" @update:model-value="updateBoolean('showLegend', $event)" />
+          </label>
+        </div>
+      </template>
+
+      <template v-else-if="vizType === 'radar'">
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Axis field
+            <USelect
+              class="mt-1"
+              :items="[
+                ...categoryColumns.map((column) => ({ label: column, value: column })),
+                ...numericColumns
+                  .filter((column) => !categoryColumns.includes(column))
+                  .map((column) => ({ label: column, value: column }))
+              ]"
+              :model-value="readString('xField')"
+              @update:model-value="updateConfig({ xField: String($event || '') })"
+            />
+          </label>
+        </div>
+
+        <div>
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Series fields</p>
+          <div class="mt-2 grid gap-1 md:grid-cols-3">
+            <label
+              v-for="field in seriesCandidateFields"
+              :key="`radar-series-${field}`"
+              class="inline-flex items-center gap-2 text-sm text-gray-700"
+            >
+              <input
+                :checked="currentSeries.some((entry) => entry.field === field)"
+                type="checkbox"
+                class="h-4 w-4 rounded border border-gray-300"
+                @change="toggleSeriesField(field, ($event.target as HTMLInputElement).checked)"
+              >
+              <span>{{ field }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div v-if="currentSeries.length" class="space-y-2">
+          <div
+            v-for="(series, index) in currentSeries"
+            :key="`radar-series-options-${series.field}`"
+            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[1fr_120px]"
+          >
+            <UInput
+              :model-value="series.label ?? series.field"
+              @update:model-value="updateSeries(index, { label: String($event || '') })"
+            />
+            <input
+              :value="series.color ?? '#2563eb'"
+              type="color"
+              class="h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+              @input="updateSeries(index, { color: ($event.target as HTMLInputElement).value })"
+            >
+          </div>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Show legend
+            <USwitch :model-value="readBoolean('showLegend', true)" @update:model-value="updateBoolean('showLegend', $event)" />
           </label>
         </div>
       </template>

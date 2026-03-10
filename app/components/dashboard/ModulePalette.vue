@@ -36,6 +36,21 @@ const items: PaletteItem[] = [
     description: 'Category comparison with grouped or stacked bars'
   },
   {
+    type: 'stacked_horizontal_bar_chart',
+    label: 'Stacked Horizontal Bar',
+    description: 'Horizontal stacked comparison across categories'
+  },
+  {
+    type: 'waterfall_chart',
+    label: 'Waterfall Chart',
+    description: 'Running contribution bridge with total'
+  },
+  {
+    type: 'radar_chart',
+    label: 'Radar Chart',
+    description: 'Multi-metric profile across categories'
+  },
+  {
     type: 'scatter_chart',
     label: 'Scatter Chart',
     description: 'Compare numeric relationships with bubble sizing'

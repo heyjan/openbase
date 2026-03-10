@@ -9,6 +9,17 @@ import type {
 } from '~/types/viz-options'
 
 const DEFAULT_PALETTE = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
+const VISUALIZATION_TYPES: QueryPreviewVisualization[] = [
+  'table',
+  'line',
+  'area',
+  'bar',
+  'stacked_horizontal_bar',
+  'waterfall',
+  'radar',
+  'pie',
+  'scatter'
+]
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -28,6 +39,12 @@ const formatWithThousandsSeparator = (value: unknown) => {
   if (numeric === null) {
     return null
   }
+
+  // Keep small whole numbers (for example month indexes) unchanged.
+  if (Number.isInteger(numeric) && Math.abs(numeric) < 1000) {
+    return null
+  }
+
   return THOUSANDS_SEPARATOR_FORMATTER.format(numeric)
 }
 
@@ -430,6 +447,44 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
     } as VizOptionsByType[T]
   }
 
+  if (visualization === 'stacked_horizontal_bar') {
+    return {
+      titleOverride: baseTitle,
+      xField: primaryCategory,
+      series: getDefaultSeries(seriesFields, 6),
+      stacked: true,
+      horizontal: true,
+      showLegend: true,
+      barBorderRadius: 4
+    } as VizOptionsByType[T]
+  }
+
+  if (visualization === 'waterfall') {
+    const categoryField = categoryColumns[0] ?? columns[0] ?? ''
+    const valueField =
+      numericColumns.find((column) => column !== categoryField) ?? numericColumns[0] ?? ''
+
+    return {
+      titleOverride: baseTitle,
+      categoryField,
+      valueField,
+      positiveColor: '#16a34a',
+      negativeColor: '#dc2626',
+      totalColor: '#2563eb',
+      showLegend: false,
+      barBorderRadius: 4
+    } as VizOptionsByType[T]
+  }
+
+  if (visualization === 'radar') {
+    return {
+      titleOverride: baseTitle,
+      xField: primaryCategory,
+      series: getDefaultSeries(seriesFields, 6),
+      showLegend: true
+    } as VizOptionsByType[T]
+  }
+
   if (visualization === 'pie') {
     const categoryField = categoryColumns[0] ?? columns[0] ?? ''
     const valueField =
@@ -519,7 +574,13 @@ const sanitizeVizConfigForType = (
     return normalized
   }
 
-  if (visualization === 'line' || visualization === 'area' || visualization === 'bar') {
+  if (
+    visualization === 'line' ||
+    visualization === 'area' ||
+    visualization === 'bar' ||
+    visualization === 'stacked_horizontal_bar' ||
+    visualization === 'radar'
+  ) {
     const xField = readConfiguredField(
       normalized,
       ['xField', 'x_field'],
@@ -551,20 +612,67 @@ const sanitizeVizConfigForType = (
       normalized.yAxisMax = readConfiguredOptionalNumber(normalized, ['yAxisMax', 'y_axis_max'])
     }
 
-    if (visualization === 'bar') {
-      normalized.stacked = readConfiguredBoolean(normalized, ['stacked'], false)
-      normalized.horizontal = readConfiguredBoolean(normalized, ['horizontal'], false)
+    if (visualization === 'bar' || visualization === 'stacked_horizontal_bar') {
+      normalized.stacked = readConfiguredBoolean(
+        normalized,
+        ['stacked'],
+        visualization === 'stacked_horizontal_bar'
+      )
+      normalized.horizontal = readConfiguredBoolean(
+        normalized,
+        ['horizontal'],
+        visualization === 'stacked_horizontal_bar'
+      )
       normalized.barBorderRadius = readConfiguredNumber(
         normalized,
         ['barBorderRadius', 'bar_border_radius'],
         4
       )
+      if (visualization === 'stacked_horizontal_bar') {
+        normalized.stacked = true
+        normalized.horizontal = true
+      }
     }
 
     normalized.showLegend = readConfiguredBoolean(
       normalized,
       ['showLegend', 'show_legend'],
       true
+    )
+    return normalized
+  }
+
+  if (visualization === 'waterfall') {
+    normalized.categoryField = readConfiguredField(
+      normalized,
+      ['categoryField', 'category_field', 'xField', 'x_field'],
+      columns,
+      typeof defaults.categoryField === 'string' ? defaults.categoryField : ''
+    )
+    normalized.valueField = readConfiguredField(
+      normalized,
+      ['valueField', 'value_field'],
+      numericColumns,
+      typeof defaults.valueField === 'string' ? defaults.valueField : ''
+    )
+    normalized.positiveColor =
+      normalizeHexColor(readConfiguredValue(normalized, ['positiveColor', 'positive_color'])) ??
+      '#16a34a'
+    normalized.negativeColor =
+      normalizeHexColor(readConfiguredValue(normalized, ['negativeColor', 'negative_color'])) ??
+      '#dc2626'
+    normalized.totalColor =
+      normalizeHexColor(readConfiguredValue(normalized, ['totalColor', 'total_color'])) ??
+      '#2563eb'
+    normalized.showLegend = readConfiguredBoolean(
+      normalized,
+      ['showLegend', 'show_legend'],
+      false
+    )
+    normalized.barBorderRadius = readConfiguredNumber(
+      normalized,
+      ['barBorderRadius', 'bar_border_radius'],
+      4
     )
     return normalized
   }
@@ -979,6 +1087,9 @@ export const useVizConfig = (input: {
       line: buildAutoVizConfig('line', columns, rows, queryName),
       area: buildAutoVizConfig('area', columns, rows, queryName),
       bar: buildAutoVizConfig('bar', columns, rows, queryName),
+      stacked_horizontal_bar: buildAutoVizConfig('stacked_horizontal_bar', columns, rows, queryName),
+      waterfall: buildAutoVizConfig('waterfall', columns, rows, queryName),
+      radar: buildAutoVizConfig('radar', columns, rows, queryName),
       pie: buildAutoVizConfig('pie', columns, rows, queryName),
       scatter: buildAutoVizConfig('scatter', columns, rows, queryName)
     } as Record<QueryPreviewVisualization, Record<string, unknown>>
@@ -995,7 +1106,7 @@ export const useVizConfig = (input: {
 
     const next = {} as Record<QueryPreviewVisualization, Record<string, unknown>>
 
-    for (const visualization of ['table', 'line', 'area', 'bar', 'pie', 'scatter'] as const) {
+    for (const visualization of VISUALIZATION_TYPES) {
       const autoConfig = autoConfigByType.value[visualization]
       const savedConfig = savedConfigByType.value[visualization]
 
@@ -1023,7 +1134,7 @@ export const useVizConfig = (input: {
 
     const next = {} as Record<QueryPreviewVisualization, Record<string, unknown>>
 
-    for (const visualization of ['table', 'line', 'area', 'bar', 'pie', 'scatter'] as const) {
+    for (const visualization of VISUALIZATION_TYPES) {
       const baseConfig = baseConfigByType.value[visualization]
       const override = overridesByType[visualization]
 

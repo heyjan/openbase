@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { EChartsOption } from 'echarts'
 import { use } from 'echarts/core'
-import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
+import { BarChart, LineChart, PieChart, RadarChart, ScatterChart } from 'echarts/charts'
 import {
   DatasetComponent,
   GridComponent,
   LegendComponent,
+  RadarComponent,
   TooltipComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -16,11 +17,13 @@ use([
   LineChart,
   BarChart,
   PieChart,
+  RadarChart,
   ScatterChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
-  DatasetComponent
+  DatasetComponent,
+  RadarComponent
 ])
 
 const props = withDefaults(

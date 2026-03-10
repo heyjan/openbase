@@ -15,8 +15,9 @@ const props = defineProps<{
   moduleData?: ModuleDataResult
 }>()
 
-const palette = ['#2563eb', '#16a34a', '#dc2626', '#ea580c', '#9333ea', '#0f766e']
-const rows = computed(() => (props.moduleData?.rows ?? []).slice(0, 80).reverse())
+const palette = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
+
+const rows = computed(() => (props.moduleData?.rows ?? []).slice(0, 80))
 
 const toNumber = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -34,10 +35,12 @@ const xField = computed(() => {
   if (typeof configured === 'string' && configured.trim()) {
     return configured
   }
+
   const first = rows.value[0]
   if (!first) {
     return ''
   }
+
   for (const key of Object.keys(first)) {
     if (toNumber(first[key]) === null) {
       return key
@@ -52,7 +55,7 @@ const inferredSeries = computed<SeriesConfig[]>(() => {
     return []
   }
   const numericFields = Object.keys(first).filter((key) => toNumber(first[key]) !== null)
-  return numericFields.slice(0, 4).map((field, index) => ({
+  return numericFields.slice(0, 6).map((field, index) => ({
     field,
     label: field,
     color: palette[index % palette.length]
@@ -89,108 +92,93 @@ const series = computed(() =>
   configuredSeries.value.length ? configuredSeries.value : inferredSeries.value
 )
 
-const hasData = computed(() => rows.value.length > 0 && series.value.length > 0)
-
 const categories = computed(() =>
   rows.value.map((row, index) => {
     if (xField.value === 'index') {
       return String(index + 1)
     }
-    return String(row[xField.value] ?? index + 1)
+    const value = row[xField.value]
+    return String(value ?? index + 1)
   })
 )
-
-const stackedBars = computed(() => {
-  const value = props.module.config.stacked
-  if (typeof value === 'boolean') {
-    return value
-  }
-  return props.module.type === 'stacked_horizontal_bar_chart'
-})
-
-const horizontal = computed(() => {
-  const value = props.module.config.horizontal
-  if (typeof value === 'boolean') {
-    return value
-  }
-  return props.module.type === 'stacked_horizontal_bar_chart'
-})
 
 const showLegend = computed(() => {
   const value = props.module.config.show_legend ?? props.module.config.showLegend
   return typeof value === 'boolean' ? value : true
 })
 
-const barBorderRadius = computed(() => {
-  const value = props.module.config.bar_border_radius ?? props.module.config.barBorderRadius
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return 4
-  }
-  if (value < 0) {
-    return 0
-  }
-  return value > 12 ? 12 : value
-})
+const indicators = computed(() =>
+  categories.value.map((name, index) => {
+    const values = series.value
+      .map((item) => toNumber(rows.value[index]?.[item.field]))
+      .filter((value): value is number => value !== null)
+    const maxValue = values.length ? Math.max(...values) : 0
+    const scaleMax = maxValue > 0 ? maxValue * 1.2 : 1
+
+    return {
+      name,
+      max: scaleMax
+    }
+  })
+)
+
+const radarSeriesData = computed(() =>
+  series.value.map((item) => ({
+    name: item.label,
+    value: rows.value.map((row) => toNumber(row[item.field]) ?? 0),
+    areaStyle: {
+      opacity: 0.08
+    }
+  }))
+)
+
+const hasData = computed(() => indicators.value.length > 2 && series.value.length > 0)
 
 const chartOption = computed<EChartsOption>(() => ({
   color: series.value.map((item) => item.color),
   tooltip: {
-    trigger: 'axis',
-    axisPointer: { type: 'shadow' }
+    trigger: 'item'
   },
   legend: {
     show: showLegend.value,
     top: 0,
     textStyle: { color: '#4b5563' }
   },
-  grid: {
-    left: 12,
-    right: 12,
-    top: 40,
-    bottom: 28,
-    containLabel: true
-  },
-  xAxis: horizontal.value
-    ? {
-        type: 'value',
-        axisLabel: { color: '#6b7280' },
-        splitLine: { lineStyle: { color: '#e5e7eb' } }
-      }
-    : {
-        type: 'category',
-        data: categories.value,
-        axisLabel: { color: '#6b7280' },
-        axisLine: { lineStyle: { color: '#d1d5db' } }
-      },
-  yAxis: horizontal.value
-    ? {
-        type: 'category',
-        data: categories.value,
-        axisLabel: { color: '#6b7280' },
-        axisLine: { lineStyle: { color: '#d1d5db' } }
-      }
-    : {
-        type: 'value',
-        axisLabel: { color: '#6b7280' },
-        splitLine: { lineStyle: { color: '#e5e7eb' } }
-      },
-  series: series.value.map((item) => ({
-    type: 'bar',
-    name: item.label,
-    stack: stackedBars.value ? 'total' : undefined,
-    emphasis: { focus: 'series' },
-    itemStyle: {
-      borderRadius: barBorderRadius.value
+  radar: {
+    indicator: indicators.value,
+    center: ['50%', '56%'],
+    radius: '62%',
+    splitNumber: 4,
+    axisName: {
+      color: '#374151'
     },
-    data: rows.value.map((row) => toNumber(row[item.field]))
-  }))
+    splitLine: {
+      lineStyle: {
+        color: '#e5e7eb'
+      }
+    },
+    splitArea: {
+      areaStyle: {
+        color: ['rgba(249, 250, 251, 0.85)', 'rgba(243, 244, 246, 0.7)']
+      }
+    }
+  },
+  series: [
+    {
+      type: 'radar',
+      data: radarSeriesData.value,
+      emphasis: {
+        focus: 'series'
+      }
+    }
+  ]
 }))
 </script>
 
 <template>
   <div class="h-full">
     <p v-if="!hasData" class="text-sm text-gray-500">
-      No bar chart data available yet.
+      No radar chart data available yet.
     </p>
     <div v-else class="h-full min-h-[220px]">
       <EChart :option="chartOption" height="100%" />

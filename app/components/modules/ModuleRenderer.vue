@@ -10,9 +10,11 @@ import HeaderModule from '~/components/modules/HeaderModule.vue'
 import KpiCard from '~/components/modules/KpiCard.vue'
 import OutlierTable from '~/components/modules/OutlierTable.vue'
 import PieChart from '~/components/modules/PieChart.vue'
+import RadarChart from '~/components/modules/RadarChart.vue'
 import ScatterChart from '~/components/modules/ScatterChart.vue'
 import SubheaderModule from '~/components/modules/SubheaderModule.vue'
 import TimeSeriesChart from '~/components/modules/TimeSeriesChart.vue'
+import WaterfallChart from '~/components/modules/WaterfallChart.vue'
 import { useModuleData } from '~/composables/useModuleData'
 
 const props = withDefaults(
@@ -29,6 +31,9 @@ const componentMap = {
   time_series_chart: TimeSeriesChart,
   line_chart: TimeSeriesChart,
   bar_chart: BarChart,
+  stacked_horizontal_bar_chart: BarChart,
+  waterfall_chart: WaterfallChart,
+  radar_chart: RadarChart,
   scatter_chart: ScatterChart,
   pie_chart: PieChart,
   outlier_table: OutlierTable,
@@ -50,6 +55,9 @@ const defaultTitles: Record<ModuleConfig['type'], string> = {
   time_series_chart: 'Time Series',
   line_chart: 'Line Chart',
   bar_chart: 'Bar Chart',
+  stacked_horizontal_bar_chart: 'Stacked Horizontal Bar',
+  waterfall_chart: 'Waterfall Chart',
+  radar_chart: 'Radar Chart',
   scatter_chart: 'Scatter Chart',
   pie_chart: 'Pie Chart',
   outlier_table: 'Outliers',

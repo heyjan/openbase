@@ -8,8 +8,11 @@ import {
   TrendingUp,
   AreaChart,
   BarChart3,
+  ChartBarStacked,
+  ChartNoAxesColumnIncreasing,
   PieChart,
-  ScatterChart
+  ScatterChart,
+  Radar
 } from 'lucide-vue-next'
 import QueryPreviewResult from '~/components/admin/QueryPreviewResult.vue'
 import VizOptionsPanel from '~/components/admin/VizOptionsPanel.vue'
@@ -124,6 +127,9 @@ const visualizationLabel: Record<QueryPreviewVisualization, string> = {
   line: 'Line Chart',
   area: 'Area Chart',
   bar: 'Bar Chart',
+  stacked_horizontal_bar: 'Stacked Horizontal Bar',
+  waterfall: 'Waterfall Chart',
+  radar: 'Radar Chart',
   pie: 'Pie Chart',
   scatter: 'Scatter Chart'
 }
@@ -148,6 +154,21 @@ const visualizationOptions: VisualizationOption[] = [
     id: 'bar',
     label: 'Bar',
     icon: BarChart3
+  },
+  {
+    id: 'stacked_horizontal_bar',
+    label: 'Stacked H Bar',
+    icon: ChartBarStacked
+  },
+  {
+    id: 'waterfall',
+    label: 'Waterfall',
+    icon: ChartNoAxesColumnIncreasing
+  },
+  {
+    id: 'radar',
+    label: 'Radar',
+    icon: Radar
   },
   {
     id: 'pie',
@@ -177,6 +198,15 @@ const mapModuleTypeToVisualization = (visualization: QueryVisualization) => {
   }
   if (visualization.moduleType === 'bar_chart') {
     return 'bar' as const
+  }
+  if (visualization.moduleType === 'stacked_horizontal_bar_chart') {
+    return 'stacked_horizontal_bar' as const
+  }
+  if (visualization.moduleType === 'waterfall_chart') {
+    return 'waterfall' as const
+  }
+  if (visualization.moduleType === 'radar_chart') {
+    return 'radar' as const
   }
   if (visualization.moduleType === 'pie_chart') {
     return 'pie' as const

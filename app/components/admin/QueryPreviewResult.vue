@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { Table2, TrendingUp, AreaChart, BarChart3, PieChart, ScatterChart } from 'lucide-vue-next'
+import {
+  Table2,
+  TrendingUp,
+  AreaChart,
+  BarChart3,
+  ChartBarStacked,
+  ChartNoAxesColumnIncreasing,
+  PieChart,
+  Radar,
+  ScatterChart
+} from 'lucide-vue-next'
 import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import Table from '~/components/ui/Table.vue'
@@ -69,6 +79,24 @@ const visualizationOptions: VisualizationOption[] = [
     label: 'Bar Chart',
     description: 'Compare values by category',
     icon: BarChart3
+  },
+  {
+    id: 'stacked_horizontal_bar',
+    label: 'Stacked Horizontal Bar',
+    description: 'Stacked comparison across horizontal categories',
+    icon: ChartBarStacked
+  },
+  {
+    id: 'waterfall',
+    label: 'Waterfall Chart',
+    description: 'Running contribution analysis with totals',
+    icon: ChartNoAxesColumnIncreasing
+  },
+  {
+    id: 'radar',
+    label: 'Radar Chart',
+    description: 'Multi-metric profile across categories',
+    icon: Radar
   },
   {
     id: 'pie',
@@ -378,8 +406,20 @@ const showArea = computed(() =>
 const yAxisMin = computed(() => readOptionalNumber(['yAxisMin', 'y_axis_min']))
 const yAxisMax = computed(() => readOptionalNumber(['yAxisMax', 'y_axis_max']))
 
-const barHorizontal = computed(() => readBoolean(['horizontal'], false))
-const barStacked = computed(() => readBoolean(['stacked'], false))
+const isBarVisualization = computed(
+  () => props.visualization === 'bar' || props.visualization === 'stacked_horizontal_bar'
+)
+
+const barHorizontal = computed(() =>
+  props.visualization === 'stacked_horizontal_bar'
+    ? true
+    : readBoolean(['horizontal'], false)
+)
+const barStacked = computed(() =>
+  props.visualization === 'stacked_horizontal_bar'
+    ? true
+    : readBoolean(['stacked'], false)
+)
 const barBorderRadius = computed(() => {
   const radius = readNumber(['barBorderRadius', 'bar_border_radius'], 4)
   if (radius < 0) {
@@ -387,6 +427,135 @@ const barBorderRadius = computed(() => {
   }
   return radius > 12 ? 12 : radius
 })
+
+const waterfallCategoryColumn = computed(() => {
+  const configured = readString(['categoryField', 'category_field', 'xField', 'x_field'])
+  if (configured && columns.value.includes(configured)) {
+    return configured
+  }
+  return categoryColumns.value[0] ?? columns.value[0] ?? ''
+})
+
+const waterfallValueColumn = computed(() => {
+  const configured = readString(['valueField', 'value_field'])
+  if (configured && numericColumns.value.includes(configured)) {
+    return configured
+  }
+  return (
+    numericColumns.value.find((column) => column !== waterfallCategoryColumn.value) ??
+    numericColumns.value[0] ??
+    ''
+  )
+})
+
+const waterfallPositiveColor = computed(() =>
+  readString(['positiveColor', 'positive_color'], '#16a34a')
+)
+const waterfallNegativeColor = computed(() =>
+  readString(['negativeColor', 'negative_color'], '#dc2626')
+)
+const waterfallTotalColor = computed(() =>
+  readString(['totalColor', 'total_color'], '#2563eb')
+)
+const waterfallShowLegend = computed(() => readBoolean(['showLegend', 'show_legend'], false))
+
+type WaterfallPoint = {
+  label: string
+  delta: number
+}
+
+const waterfallPoints = computed<WaterfallPoint[]>(() => {
+  if (!waterfallCategoryColumn.value || !waterfallValueColumn.value) {
+    return []
+  }
+
+  return rows.value
+    .map((row, index) => {
+      const label = String(row[waterfallCategoryColumn.value] ?? '').trim() || `Item ${index + 1}`
+      const delta = toNumber(row[waterfallValueColumn.value])
+      if (delta === null) {
+        return null
+      }
+      return { label, delta } satisfies WaterfallPoint
+    })
+    .filter((point): point is WaterfallPoint => point !== null)
+})
+
+const waterfallBreakdown = computed(() => {
+  let runningTotal = 0
+  const bars = waterfallPoints.value.map((point) => {
+    const start = runningTotal
+    runningTotal += point.delta
+    return {
+      ...point,
+      start,
+      totalAfter: runningTotal
+    }
+  })
+
+  return {
+    bars,
+    total: runningTotal
+  }
+})
+
+const waterfallCategories = computed(() => [
+  ...waterfallBreakdown.value.bars.map((item) => item.label),
+  'Total'
+])
+const waterfallBaseSeries = computed(() => [
+  ...waterfallBreakdown.value.bars.map((item) => item.start),
+  0
+])
+const waterfallDeltaSeries = computed(() => [
+  ...waterfallBreakdown.value.bars.map((item) => item.delta),
+  waterfallBreakdown.value.total
+])
+const hasWaterfallData = computed(() => waterfallBreakdown.value.bars.length > 0)
+
+const radarCategoryColumn = computed(() => {
+  const configured = readString(['xField', 'x_field'])
+  if (configured && columns.value.includes(configured)) {
+    return configured
+  }
+  return categoryColumns.value[0] ?? ''
+})
+
+const radarCategories = computed(() =>
+  rows.value.map((row, index) =>
+    String(
+      radarCategoryColumn.value
+        ? (row[radarCategoryColumn.value] ?? index + 1)
+        : index + 1
+    )
+  )
+)
+
+const radarIndicatorValues = computed(() =>
+  radarCategories.value.map((name, index) => {
+    const values = seriesConfig.value
+      .map((series) => toNumber(rows.value[index]?.[series.field]))
+      .filter((value): value is number => value !== null)
+    const maxValue = values.length ? Math.max(...values) : 0
+    const scaleMax = maxValue > 0 ? maxValue * 1.2 : 1
+
+    return {
+      name,
+      max: scaleMax
+    }
+  })
+)
+
+const radarSeriesData = computed(() =>
+  seriesConfig.value.map((series) => ({
+    name: series.label ?? series.field,
+    value: rows.value.map((row) => toNumber(row[series.field]) ?? 0)
+  }))
+)
+
+const hasRadarData = computed(
+  () => radarIndicatorValues.value.length > 2 && radarSeriesData.value.length > 0
+)
 
 const tableOrderedColumns = computed(() =>
   resolveTableColumnOrder(columns.value, config.value)
@@ -613,7 +782,197 @@ const chartOption = computed<EChartsOption>(() => {
     }
   }
 
-  const isBar = props.visualization === 'bar'
+  if (props.visualization === 'waterfall') {
+    return {
+      title: chartTitle.value
+        ? {
+            text: chartTitle.value,
+            left: 'center',
+            top: 0,
+            textStyle: {
+              color: '#111827',
+              fontSize: 14,
+              fontWeight: 600
+            }
+          }
+        : undefined,
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'shadow'
+        },
+        formatter: (params: Array<{ dataIndex: number }>) => {
+          const first = params[0]
+          if (!first) {
+            return ''
+          }
+          const index = first.dataIndex
+          if (index >= waterfallBreakdown.value.bars.length) {
+            return `Total: ${waterfallBreakdown.value.total.toLocaleString()}`
+          }
+
+          const bar = waterfallBreakdown.value.bars[index]
+          if (!bar) {
+            return ''
+          }
+          const sign = bar.delta >= 0 ? '+' : ''
+          return [
+            `${bar.label}`,
+            `Delta: ${sign}${bar.delta.toLocaleString()}`,
+            `Running total: ${bar.totalAfter.toLocaleString()}`
+          ].join('<br/>')
+        }
+      },
+      legend: {
+        show: waterfallShowLegend.value,
+        top: chartTitle.value ? 22 : 0,
+        textStyle: {
+          color: '#4b5563'
+        }
+      },
+      grid: {
+        left: 12,
+        right: 12,
+        top: chartTitle.value ? 62 : 40,
+        bottom: 28,
+        containLabel: true
+      },
+      xAxis: {
+        type: 'category',
+        data: waterfallCategories.value,
+        axisLabel: {
+          color: '#6b7280'
+        },
+        axisLine: {
+          lineStyle: { color: '#d1d5db' }
+        }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          color: '#6b7280'
+        },
+        splitLine: {
+          lineStyle: { color: '#e5e7eb' }
+        }
+      },
+      series: [
+        {
+          name: 'Base',
+          type: 'bar',
+          stack: 'total',
+          data: waterfallBaseSeries.value,
+          silent: true,
+          itemStyle: {
+            color: 'transparent'
+          },
+          emphasis: {
+            disabled: true
+          }
+        },
+        {
+          name: 'Delta',
+          type: 'bar',
+          stack: 'total',
+          data: waterfallDeltaSeries.value,
+          itemStyle: {
+            borderRadius: barBorderRadius.value,
+            color: (params: { dataIndex: number }) => {
+              if (params.dataIndex >= waterfallBreakdown.value.bars.length) {
+                return waterfallTotalColor.value
+              }
+              const bar = waterfallBreakdown.value.bars[params.dataIndex]
+              return bar && bar.delta < 0
+                ? waterfallNegativeColor.value
+                : waterfallPositiveColor.value
+            }
+          },
+          label: {
+            show: true,
+            position: 'top',
+            color: '#374151',
+            formatter: (params: { dataIndex: number }) => {
+              if (params.dataIndex >= waterfallBreakdown.value.bars.length) {
+                return waterfallBreakdown.value.total.toLocaleString()
+              }
+              const bar = waterfallBreakdown.value.bars[params.dataIndex]
+              if (!bar) {
+                return ''
+              }
+              const sign = bar.delta >= 0 ? '+' : ''
+              return `${sign}${bar.delta.toLocaleString()}`
+            }
+          },
+          emphasis: {
+            focus: 'series'
+          }
+        }
+      ]
+    }
+  }
+
+  if (props.visualization === 'radar') {
+    return {
+      title: chartTitle.value
+        ? {
+            text: chartTitle.value,
+            left: 'center',
+            top: 0,
+            textStyle: {
+              color: '#111827',
+              fontSize: 14,
+              fontWeight: 600
+            }
+          }
+        : undefined,
+      color: seriesConfig.value.map((series) => series.color ?? '#2563eb'),
+      tooltip: {
+        trigger: 'item'
+      },
+      legend: {
+        show: showLegend.value,
+        top: chartTitle.value ? 22 : 0,
+        textStyle: {
+          color: '#4b5563'
+        }
+      },
+      radar: {
+        indicator: radarIndicatorValues.value,
+        center: ['50%', '56%'],
+        radius: '62%',
+        splitNumber: 4,
+        axisName: {
+          color: '#374151'
+        },
+        splitLine: {
+          lineStyle: {
+            color: '#e5e7eb'
+          }
+        },
+        splitArea: {
+          areaStyle: {
+            color: ['rgba(249, 250, 251, 0.85)', 'rgba(243, 244, 246, 0.7)']
+          }
+        }
+      },
+      series: [
+        {
+          type: 'radar',
+          data: radarSeriesData.value.map((entry) => ({
+            ...entry,
+            areaStyle: {
+              opacity: 0.08
+            }
+          })),
+          emphasis: {
+            focus: 'series'
+          }
+        }
+      ]
+    }
+  }
+
+  const isBar = isBarVisualization.value
 
   return {
     title: chartTitle.value
@@ -782,6 +1141,26 @@ const chartOption = computed<EChartsOption>(() => {
             | Size: <span class="font-medium text-gray-700">{{ scatterSizeColumn || 'none' }}</span>
           </p>
           <p
+            v-else-if="visualization === 'waterfall'"
+            class="mb-2 text-xs text-gray-500"
+          >
+            Category:
+            <span class="font-medium text-gray-700">{{ waterfallCategoryColumn || 'none' }}</span>
+            | Value:
+            <span class="font-medium text-gray-700">{{ waterfallValueColumn || 'none' }}</span>
+          </p>
+          <p
+            v-else-if="visualization === 'radar'"
+            class="mb-2 text-xs text-gray-500"
+          >
+            Axis:
+            <span class="font-medium text-gray-700">{{ radarCategoryColumn || 'row index' }}</span>
+            | Series:
+            <span class="font-medium text-gray-700">
+              {{ seriesConfig.map((series) => series.label || series.field).join(', ') || 'none' }}
+            </span>
+          </p>
+          <p
             v-else
             class="mb-2 text-xs text-gray-500"
           >
@@ -805,7 +1184,19 @@ const chartOption = computed<EChartsOption>(() => {
             Need at least two numeric columns to render a scatter chart.
           </p>
           <p
-            v-else-if="visualization !== 'pie' && visualization !== 'scatter' && !hasCartesianData"
+            v-else-if="visualization === 'waterfall' && !hasWaterfallData"
+            class="text-sm text-gray-500"
+          >
+            Need one category column and one numeric value column for waterfall rendering.
+          </p>
+          <p
+            v-else-if="visualization === 'radar' && !hasRadarData"
+            class="text-sm text-gray-500"
+          >
+            Need one category axis and at least one numeric series for radar rendering.
+          </p>
+          <p
+            v-else-if="visualization !== 'pie' && visualization !== 'scatter' && visualization !== 'waterfall' && visualization !== 'radar' && !hasCartesianData"
             class="text-sm text-gray-500"
           >
             No numeric series columns found for chart rendering.

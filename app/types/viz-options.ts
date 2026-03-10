@@ -1,4 +1,13 @@
-export type QueryPreviewVisualization = 'table' | 'line' | 'area' | 'bar' | 'pie' | 'scatter'
+export type QueryPreviewVisualization =
+  | 'table'
+  | 'line'
+  | 'area'
+  | 'bar'
+  | 'stacked_horizontal_bar'
+  | 'waterfall'
+  | 'radar'
+  | 'pie'
+  | 'scatter'
 
 export type SortDirection = 'asc' | 'desc'
 
@@ -75,6 +84,31 @@ export type BarVizOptions = SharedVizOptions & {
   barBorderRadius?: number
 }
 
+export type StackedHorizontalBarVizOptions = SharedVizOptions & {
+  xField?: string
+  series?: VizSeriesOption[]
+  stacked?: boolean
+  horizontal?: boolean
+  showLegend?: boolean
+  barBorderRadius?: number
+}
+
+export type WaterfallVizOptions = SharedVizOptions & {
+  categoryField?: string
+  valueField?: string
+  positiveColor?: string
+  negativeColor?: string
+  totalColor?: string
+  showLegend?: boolean
+  barBorderRadius?: number
+}
+
+export type RadarVizOptions = SharedVizOptions & {
+  xField?: string
+  series?: VizSeriesOption[]
+  showLegend?: boolean
+}
+
 export type PieVizOptions = SharedVizOptions & {
   categoryField?: string
   valueField?: string
@@ -99,6 +133,9 @@ export type VizOptionsByType = {
   line: LineVizOptions
   area: AreaVizOptions
   bar: BarVizOptions
+  stacked_horizontal_bar: StackedHorizontalBarVizOptions
+  waterfall: WaterfallVizOptions
+  radar: RadarVizOptions
   pie: PieVizOptions
   scatter: ScatterVizOptions
 }
@@ -108,5 +145,8 @@ export type VizOptions =
   | LineVizOptions
   | AreaVizOptions
   | BarVizOptions
+  | StackedHorizontalBarVizOptions
+  | WaterfallVizOptions
+  | RadarVizOptions
   | PieVizOptions
   | ScatterVizOptions

@@ -239,6 +239,28 @@ const mapVisualizationToModule = (
       config: { ...config } as Record<string, unknown>
     }
   }
+  if (visualization === 'stacked_horizontal_bar') {
+    return {
+      moduleType: 'stacked_horizontal_bar_chart' as ModuleType,
+      config: {
+        ...config,
+        stacked: true,
+        horizontal: true
+      } as Record<string, unknown>
+    }
+  }
+  if (visualization === 'waterfall') {
+    return {
+      moduleType: 'waterfall_chart' as ModuleType,
+      config: { ...config } as Record<string, unknown>
+    }
+  }
+  if (visualization === 'radar') {
+    return {
+      moduleType: 'radar_chart' as ModuleType,
+      config: { ...config } as Record<string, unknown>
+    }
+  }
   if (visualization === 'pie') {
     return {
       moduleType: 'pie_chart' as ModuleType,
