@@ -46,6 +46,15 @@ const containerSize = reactive({ width: 0, height: 0 })
 const fallbackWidth = 320
 let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
+const tooltipCursorOffset = {
+  x: 12,
+  y: 16
+}
+
+type TooltipPositionSize = {
+  contentSize?: number[]
+  viewSize?: number[]
+}
 
 const parsePixelHeight = (value: string) => {
   if (!value.endsWith('px')) {
@@ -54,6 +63,65 @@ const parsePixelHeight = (value: string) => {
   const parsed = Number.parseFloat(value)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max)
+
+const defaultTooltipPosition = (
+  point: number[] | undefined,
+  _params: unknown,
+  _dom: HTMLElement,
+  _rect: unknown,
+  size?: TooltipPositionSize
+) => {
+  const pointerX = Array.isArray(point) && typeof point[0] === 'number' ? point[0] : 0
+  const pointerY = Array.isArray(point) && typeof point[1] === 'number' ? point[1] : 0
+  const contentWidth = Math.max(size?.contentSize?.[0] ?? 0, 0)
+  const contentHeight = Math.max(size?.contentSize?.[1] ?? 0, 0)
+  const viewWidth = Math.max(size?.viewSize?.[0] ?? 0, contentWidth)
+  const viewHeight = Math.max(size?.viewSize?.[1] ?? 0, contentHeight)
+  const desiredX = pointerX + tooltipCursorOffset.x
+  const desiredY = pointerY + tooltipCursorOffset.y
+
+  return [
+    clamp(desiredX, 0, Math.max(viewWidth - contentWidth, 0)),
+    clamp(desiredY, 0, Math.max(viewHeight - contentHeight, 0))
+  ]
+}
+
+const applyTooltipDefaults = (tooltip: unknown): unknown => {
+  if (Array.isArray(tooltip)) {
+    return tooltip.map((entry) => applyTooltipDefaults(entry))
+  }
+
+  if (!tooltip || typeof tooltip !== 'object') {
+    return tooltip
+  }
+
+  const tooltipRecord = tooltip as Record<string, unknown>
+  const hasConfine = Object.prototype.hasOwnProperty.call(tooltipRecord, 'confine')
+  const hasPosition = Object.prototype.hasOwnProperty.call(tooltipRecord, 'position')
+
+  return {
+    ...tooltipRecord,
+    confine: hasConfine ? tooltipRecord.confine : true,
+    position: hasPosition ? tooltipRecord.position : defaultTooltipPosition
+  }
+}
+
+const optionWithTooltipDefaults = computed<EChartsOption>(() => {
+  const optionRecord = props.option as Record<string, unknown>
+  const tooltip = optionRecord.tooltip
+
+  if (tooltip === undefined || tooltip === null || tooltip === false) {
+    return props.option
+  }
+
+  return {
+    ...props.option,
+    tooltip: applyTooltipDefaults(tooltip)
+  } as EChartsOption
+})
 
 const initOptions = computed(() => {
   const measuredWidth = containerRef.value?.clientWidth ?? containerSize.width
@@ -182,7 +250,7 @@ watch(
 )
 
 watch(
-  () => props.option,
+  optionWithTooltipDefaults,
   () => {
     queueResize()
   },
@@ -211,7 +279,7 @@ defineExpose({
         v-if="canRenderChart"
         ref="chartRef"
         class="h-full w-full"
-        :option="props.option"
+        :option="optionWithTooltipDefaults"
         :autoresize="props.autoresize"
         :loading="props.loading"
         :init-options="initOptions"

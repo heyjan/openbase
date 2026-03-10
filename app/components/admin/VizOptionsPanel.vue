@@ -55,6 +55,17 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const draggingColumn = ref('')
 const SELECT_NONE_VALUE = '__none__'
+const sharedSelectProps = {
+  content: {
+    position: 'popper' as const,
+    side: 'bottom' as const,
+    sideOffset: 6,
+    collisionPadding: 12
+  },
+  ui: {
+    content: 'z-[120] bg-white shadow-xl ring-1 ring-gray-200'
+  }
+}
 
 const numericColumns = computed(() => getNumericColumns(props.rows, props.columns))
 const categoryColumns = computed(() => getCategoryColumns(props.columns, numericColumns.value))
@@ -552,6 +563,7 @@ watch(
               Sort column
             </span>
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="[
                 { label: 'None', value: SELECT_NONE_VALUE },
@@ -568,6 +580,7 @@ watch(
               Sort direction
             </span>
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="[
                 { label: 'Ascending', value: 'asc' },
@@ -727,12 +740,14 @@ watch(
               class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-7"
             >
               <USelect
+                v-bind="sharedSelectProps"
                 :items="columns.map((column) => ({ label: column, value: column }))"
                 :model-value="rule.column"
                 @update:model-value="updateRule(index, { column: String($event || '') })"
               />
 
               <USelect
+                v-bind="sharedSelectProps"
                 :items="ruleOperators"
                 :model-value="rule.operator"
                 @update:model-value="updateRule(index, { operator: ($event || 'gt') as ConditionalFormatRule['operator'] })"
@@ -751,6 +766,7 @@ watch(
               <div v-else class="hidden md:block" />
 
               <USelect
+                v-bind="sharedSelectProps"
                 :items="ruleStyles"
                 :model-value="rule.style"
                 @update:model-value="updateRule(index, { style: ($event || 'background') as ConditionalFormatRule['style'] })"
@@ -785,6 +801,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             X-axis field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="[
                 ...categoryColumns.map((column) => ({ label: column, value: column })),
@@ -889,6 +906,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             X-axis field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="[
                 ...categoryColumns.map((column) => ({ label: column, value: column })),
@@ -981,6 +999,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Category field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="columns.map((column) => ({ label: column, value: column }))"
               :model-value="readString('categoryField')"
@@ -991,6 +1010,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Value field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="numericColumns.map((column) => ({ label: column, value: column }))"
               :model-value="readString('valueField')"
@@ -1056,6 +1076,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Axis field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="[
                 ...categoryColumns.map((column) => ({ label: column, value: column })),
@@ -1120,6 +1141,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Category field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="columns.map((column) => ({ label: column, value: column }))"
               :model-value="readString('categoryField')"
@@ -1130,6 +1152,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Value field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="numericColumns.map((column) => ({ label: column, value: column }))"
               :model-value="readString('valueField')"
@@ -1169,6 +1192,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             X field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="numericColumns.map((column) => ({ label: column, value: column }))"
               :model-value="readString('xField')"
@@ -1179,6 +1203,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Y field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="numericColumns.map((column) => ({ label: column, value: column }))"
               :model-value="readString('yField')"
@@ -1189,6 +1214,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Size field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="[
                 { label: 'None', value: SELECT_NONE_VALUE },
@@ -1202,6 +1228,7 @@ watch(
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Label field
             <USelect
+              v-bind="sharedSelectProps"
               class="mt-1"
               :items="[
                 { label: 'None', value: SELECT_NONE_VALUE },
