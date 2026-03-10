@@ -526,7 +526,7 @@ watch(
       </label>
 
       <template v-if="vizType === 'table'">
-        <div class="grid gap-3 md:grid-cols-4">
+        <div class="grid gap-3 sm:grid-cols-2">
           <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2">
             <p class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
               <Search class="h-3.5 w-3.5" />

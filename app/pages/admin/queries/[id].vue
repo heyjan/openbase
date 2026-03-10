@@ -62,6 +62,13 @@ type PersistQueryOptions = {
   showNoChangesToast?: boolean
 }
 
+type SaveQueryPayload = {
+  visualization: QueryPreviewVisualization
+  visualizationName: string
+  visualizationModified: boolean
+  config: Record<string, unknown>
+}
+
 const canPreview = computed(
   () => Boolean(form.value.name.trim() && form.value.dataSourceId && form.value.queryText.trim())
 )
@@ -259,14 +266,89 @@ const mapVisualizationToModule = (
   }
 }
 
-const saveQuery = async () => {
+const upsertVisualizationForQuery = async (input: {
+  savedQueryId: string
+  visualization: QueryPreviewVisualization
+  name: string
+  config: Record<string, unknown>
+}) => {
+  const mapped = mapVisualizationToModule(input.visualization, input.config ?? {})
+  const existing = savedVisualizations.value.find(
+    (visualization) => visualization.moduleType === mapped.moduleType
+  )
+
+  const saved = existing
+    ? await updateVisualization(existing.id, {
+        name: input.name,
+        config: {
+          ...mapped.config
+        }
+      })
+    : await createVisualization({
+        savedQueryId: input.savedQueryId,
+        name: input.name,
+        moduleType: mapped.moduleType,
+        config: {
+          ...mapped.config
+        }
+      })
+
+  savedVisualizations.value = [
+    saved,
+    ...savedVisualizations.value.filter((visualization) => visualization.id !== saved.id)
+  ]
+
+  return {
+    existed: Boolean(existing)
+  }
+}
+
+const saveQuery = async (payload: SaveQueryPayload) => {
   errorMessage.value = ''
   previewResult.value = null
-  await persistQuery({
-    showSuccessToast: true,
+
+  const payloadSignature = getPayloadSignature(buildPayload())
+  const queryWasNew = isNew.value
+  const queryHasChanges = queryWasNew || payloadSignature !== lastSavedSignature.value
+
+  const savedQueryId = await persistQuery({
+    showSuccessToast: false,
     showErrorToast: true,
-    showNoChangesToast: true
+    showNoChangesToast: false
   })
+  if (!savedQueryId) {
+    return
+  }
+
+  let visualizationSaved = false
+  if (payload.visualizationModified) {
+    try {
+      await upsertVisualizationForQuery({
+        savedQueryId,
+        visualization: payload.visualization,
+        name: payload.visualizationName,
+        config: payload.config
+      })
+      visualizationSaved = true
+    } catch (error) {
+      errorMessage.value =
+        error instanceof Error ? error.message : 'Failed to save visualization options'
+      toast.error('Failed to save query', errorMessage.value)
+      return
+    }
+  }
+
+  if (queryHasChanges) {
+    toast.success(queryWasNew ? 'Query created' : 'Query saved')
+    return
+  }
+
+  if (visualizationSaved) {
+    toast.success('Query options saved')
+    return
+  }
+
+  toast.info('No changes to save')
 }
 
 const runPreview = async () => {
@@ -317,34 +399,14 @@ const saveVisualization = async (payload: {
     return
   }
 
-  const mapped = mapVisualizationToModule(payload.visualization, payload.config ?? {})
-
   try {
-    const existing = savedVisualizations.value.find(
-      (visualization) => visualization.moduleType === mapped.moduleType
-    )
-
-    const saved = existing
-      ? await updateVisualization(existing.id, {
-          name,
-          config: {
-            ...mapped.config
-          }
-        })
-      : await createVisualization({
-          savedQueryId,
-          name,
-          moduleType: mapped.moduleType,
-          config: {
-            ...mapped.config
-          }
-        })
-
-    savedVisualizations.value = [
-      saved,
-      ...savedVisualizations.value.filter((visualization) => visualization.id !== saved.id)
-    ]
-    toast.success(existing ? 'Visualization updated' : 'Visualization saved')
+    const result = await upsertVisualizationForQuery({
+      savedQueryId,
+      visualization: payload.visualization,
+      name,
+      config: payload.config
+    })
+    toast.success(result.existed ? 'Visualization updated' : 'Visualization saved')
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : 'Failed to save visualization'

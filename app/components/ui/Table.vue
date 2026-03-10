@@ -250,7 +250,9 @@ const tableColumns = computed(() =>
             role: 'button',
             tabindex: 0,
             class: [
-              'inline-block w-full rounded px-1 py-0.5',
+              style
+                ? 'ob-cell-fill block w-full px-4 py-4'
+                : 'inline-block w-full rounded px-1 py-0.5',
               'cursor-pointer hover:bg-blue-50 hover:ring-1 hover:ring-blue-200',
               isEmpty ? 'text-gray-400' : ''
             ],
@@ -277,7 +279,7 @@ const tableColumns = computed(() =>
       return h(
         'span',
         {
-          class: 'inline-block w-full rounded px-1 py-0.5',
+          class: 'ob-cell-fill block w-full px-4 py-4',
           style
         },
         rendered
@@ -318,6 +320,10 @@ const tableColumns = computed(() =>
 .ob-table :deep(tbody td) {
   border-bottom: 1px solid #e5e7eb;
   white-space: nowrap;
+}
+
+.ob-table :deep(tbody td:has(.ob-cell-fill)) {
+  padding: 0;
 }
 
 .ob-table :deep(tbody tr:last-child td) {

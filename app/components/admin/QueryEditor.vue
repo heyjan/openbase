@@ -40,6 +40,13 @@ type SaveVisualizationPayload = {
   config: Record<string, unknown>
 }
 
+type SaveQueryPayload = {
+  visualization: QueryPreviewVisualization
+  visualizationName: string
+  visualizationModified: boolean
+  config: Record<string, unknown>
+}
+
 type SavedQueryOption = {
   id: string
   name: string
@@ -70,7 +77,7 @@ const emit = defineEmits<{
   (event: 'update:value', value: QueryEditorValue): void
   (event: 'update:query-parameters', value: Record<string, unknown>): void
   (event: 'update:preview-parameters', value: Record<string, unknown>): void
-  (event: 'save'): void
+  (event: 'save', payload: SaveQueryPayload): void
   (event: 'preview'): void
   (event: 'save-visualization', payload: SaveVisualizationPayload): void
 }>()
@@ -523,15 +530,43 @@ const onSelectVisualization = (visualization: QueryPreviewVisualization) => {
   selectedVisualization.value = visualization
 }
 
-const saveVisualization = () => {
+const getVisualizationFallbackName = (visualization: QueryPreviewVisualization) => {
   const queryName = props.value.name.trim() || 'Query'
-  const fallbackName = `${queryName} ${visualizationLabel[selectedVisualization.value]}`
-  const name = visualizationDraftName.value.trim() || fallbackName
-  const config = getConfigForType(selectedVisualization.value)
+  return `${queryName} ${visualizationLabel[visualization]}`
+}
+
+const getVisualizationName = (visualization: QueryPreviewVisualization) => {
+  const draft = visualizationDraftName.value.trim()
+  if (draft) {
+    return draft
+  }
+
+  const savedName = savedVizNameByType.value[visualization]
+  if (savedName?.trim()) {
+    return savedName.trim()
+  }
+
+  return getVisualizationFallbackName(visualization)
+}
+
+const emitSave = () => {
+  const visualization = selectedVisualization.value
+  emit('save', {
+    visualization,
+    visualizationName: getVisualizationName(visualization),
+    visualizationModified: isVizConfigModified.value,
+    config: getConfigForType(visualization)
+  })
+}
+
+const saveVisualization = () => {
+  const visualization = selectedVisualization.value
+  const name = getVisualizationName(visualization)
+  const config = getConfigForType(visualization)
   visualizationDraftName.value = name
   emit('save-visualization', {
     name,
-    visualization: selectedVisualization.value,
+    visualization,
     config
   })
 }
@@ -670,7 +705,7 @@ watch(
             size="sm"
             :disabled="saving"
             :title="saving ? 'Saving...' : 'Save query'"
-            @click="emit('save')"
+            @click="emitSave"
           >
             <Save class="h-4 w-4" />
           </UButton>
@@ -718,7 +753,7 @@ watch(
         <p v-if="errorMessage" class="mt-3 text-sm text-red-600">{{ errorMessage }}</p>
 
         <div class="mt-4 flex flex-col gap-4 lg:flex-row">
-          <aside class="w-full shrink-0 lg:w-[280px] lg:max-h-[calc(100vh-200px)] lg:overflow-y-auto">
+          <aside class="w-full shrink-0 py-2 lg:w-[310px] lg:max-h-[calc(100vh-200px)] lg:overflow-y-auto">
             <div class="grid w-full grid-cols-2 gap-3">
               <SettingsNavCard
                 v-for="option in visualizationOptions"
