@@ -4,6 +4,7 @@ import {
   ArrowUpAZ,
   ArrowUpDown,
   Blend,
+  Calculator,
   Eye,
   EyeOff,
   GripVertical,
@@ -584,6 +585,19 @@ watch(
               @update:model-value="updateInteger('rowLimit', $event, 500)"
             />
           </label>
+
+          <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+            <p class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
+              <Calculator class="h-3.5 w-3.5" />
+              Thousands format
+            </p>
+            <div class="mt-2 flex justify-end">
+              <USwitch
+                :model-value="readBoolean('useThousandsSeparator', false)"
+                @update:model-value="updateBoolean('useThousandsSeparator', $event)"
+              />
+            </div>
+          </div>
         </div>
 
         <div>

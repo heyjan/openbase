@@ -18,6 +18,18 @@ const isStringArray = (value: unknown): value is string[] =>
 
 const DECIMAL_COMMA_PATTERN = /^-?\d+(?:,\d+)?$/
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
+const THOUSANDS_SEPARATOR_FORMATTER = new Intl.NumberFormat('de-DE', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+})
+
+const formatWithThousandsSeparator = (value: unknown) => {
+  const numeric = toNumber(value)
+  if (numeric === null) {
+    return null
+  }
+  return THOUSANDS_SEPARATOR_FORMATTER.format(numeric)
+}
 
 export const toNumber = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -386,6 +398,7 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
       sortDirection: 'asc',
       rowLimit: 500,
       showSearch: false,
+      useThousandsSeparator: false,
       columnColors: {},
       columnGradients: {},
       columnValueFormats: {},
@@ -492,6 +505,11 @@ const sanitizeVizConfigForType = (
     )
     normalized.rowLimit = readConfiguredPositiveInteger(normalized, ['rowLimit', 'row_limit'], 500)
     normalized.showSearch = readConfiguredBoolean(normalized, ['showSearch', 'show_search'], false)
+    normalized.useThousandsSeparator = readConfiguredBoolean(
+      normalized,
+      ['useThousandsSeparator', 'use_thousands_separator'],
+      false
+    )
     normalized.columnColors = resolveColumnColors(columns, normalized)
     normalized.columnGradients = resolveColumnGradients(columns, normalized)
     normalized.columnValueFormats = readConfiguredTableColumnValueFormats(normalized, columns)
@@ -721,18 +739,23 @@ export const getColumnGradientStyle = (
 export const formatTableCellDisplayValue = (
   defaultValue: string,
   columnKey: string,
-  formats: TableColumnValueFormatMap
+  formats: TableColumnValueFormatMap,
+  value?: unknown,
+  useThousandsSeparator = false
 ) => {
-  if (!defaultValue.length) {
-    return defaultValue
+  const normalizedDisplay =
+    useThousandsSeparator ? (formatWithThousandsSeparator(value) ?? defaultValue) : defaultValue
+
+  if (!normalizedDisplay.length) {
+    return normalizedDisplay
   }
 
   const columnFormat = formats[columnKey]
   if (!columnFormat) {
-    return defaultValue
+    return normalizedDisplay
   }
 
-  return `${columnFormat.prefix ?? ''}${defaultValue}${columnFormat.suffix ?? ''}`
+  return `${columnFormat.prefix ?? ''}${normalizedDisplay}${columnFormat.suffix ?? ''}`
 }
 
 const compareValues = (left: unknown, right: unknown) => {

@@ -36,6 +36,17 @@ const showSearch = computed(() => {
   return false
 })
 
+const useThousandsSeparator = computed(() => {
+  const config = props.module.config ?? {}
+  if (typeof config.useThousandsSeparator === 'boolean') {
+    return config.useThousandsSeparator
+  }
+  if (typeof config.use_thousands_separator === 'boolean') {
+    return config.use_thousands_separator
+  }
+  return false
+})
+
 const allRows = computed(() => props.moduleData?.rows ?? [])
 
 const baseColumns = computed(() => {
@@ -144,11 +155,13 @@ const cellStyleResolver = (input: { columnKey: string; value: unknown }) => {
   })
 }
 
-const cellValueFormatter = (input: { columnKey: string; defaultValue: string }) =>
+const cellValueFormatter = (input: { columnKey: string; defaultValue: string; value: unknown }) =>
   formatTableCellDisplayValue(
     input.defaultValue,
     input.columnKey,
-    columnValueFormats.value
+    columnValueFormats.value,
+    input.value,
+    useThousandsSeparator.value
   )
 
 const moduleId = computed(() => props.module.id)

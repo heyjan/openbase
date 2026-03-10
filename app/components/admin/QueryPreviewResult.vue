@@ -400,6 +400,10 @@ const tableShowSearch = computed(() =>
   readBoolean(['showSearch', 'show_search'], false)
 )
 
+const tableUseThousandsSeparator = computed(() =>
+  readBoolean(['useThousandsSeparator', 'use_thousands_separator'], false)
+)
+
 const tableSearchQuery = ref('')
 
 const tableRows = computed(() => applyTableSortAndLimit(rows.value, config.value))
@@ -485,11 +489,13 @@ const tableCellStyleResolver = (input: { columnKey: string; value: unknown }) =>
   })
 }
 
-const tableCellValueFormatter = (input: { columnKey: string; defaultValue: string }) =>
+const tableCellValueFormatter = (input: { columnKey: string; defaultValue: string; value: unknown }) =>
   formatTableCellDisplayValue(
     input.defaultValue,
     input.columnKey,
-    tableColumnValueFormats.value
+    tableColumnValueFormats.value,
+    input.value,
+    tableUseThousandsSeparator.value
   )
 
 const chartRenderKey = computed(
