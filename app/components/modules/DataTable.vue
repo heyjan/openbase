@@ -117,17 +117,6 @@ const columnExtents = computed(() =>
   getColumnNumericExtents(filteredRows.value, visibleColumns.value)
 )
 
-const columnStyleResolver = (input: { columnKey: string }) => {
-  const color = columnColors.value[input.columnKey]
-  if (!color || columnGradients.value[input.columnKey]) {
-    return undefined
-  }
-
-  return {
-    borderLeft: `3px solid ${color}`
-  }
-}
-
 const cellStyleResolver = (input: { columnKey: string; value: unknown }) => {
   const columnColor = columnColors.value[input.columnKey]
   const gradientEnabled = columnGradients.value[input.columnKey] === true
@@ -143,7 +132,7 @@ const cellStyleResolver = (input: { columnKey: string; value: unknown }) => {
   const baseStyle = gradientStyle
     ? { ...gradientStyle }
     : columnColor
-      ? { borderLeft: `3px solid ${columnColor}` }
+      ? { backgroundColor: `${columnColor}20` }
       : undefined
 
   return getConditionalCellStyle({
@@ -206,7 +195,6 @@ const onSaveEdit = () => inlineCellEdit.saveCell(filteredRows.value)
       <Table
         :rows="filteredRows"
         :columns="tableColumns"
-        :column-style-resolver="columnStyleResolver"
         :cell-style-resolver="cellStyleResolver"
         :cell-value-formatter="cellValueFormatter"
         :editing-cell="isInlineEditable ? inlineCellEdit.editingCell.value : null"

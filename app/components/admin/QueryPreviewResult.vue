@@ -458,17 +458,6 @@ const tableColumnExtents = computed(() =>
   getColumnNumericExtents(filteredTableRows.value, tableVisibleColumns.value)
 )
 
-const tableColumnStyleResolver = (input: { columnKey: string }) => {
-  const color = tableColumnColors.value[input.columnKey]
-  if (!color || tableColumnGradients.value[input.columnKey]) {
-    return undefined
-  }
-
-  return {
-    borderLeft: `3px solid ${color}`
-  }
-}
-
 const tableCellStyleResolver = (input: { columnKey: string; value: unknown }) => {
   const columnColor = tableColumnColors.value[input.columnKey]
   const gradientEnabled = tableColumnGradients.value[input.columnKey] === true
@@ -484,7 +473,7 @@ const tableCellStyleResolver = (input: { columnKey: string; value: unknown }) =>
   const baseStyle = gradientStyle
     ? { ...gradientStyle }
     : columnColor
-      ? { borderLeft: `3px solid ${columnColor}` }
+      ? { backgroundColor: `${columnColor}20` }
       : undefined
 
   return getConditionalCellStyle({
@@ -764,7 +753,6 @@ const chartOption = computed<EChartsOption>(() => {
           <Table
             :rows="filteredTableRows"
             :columns="tableColumns"
-            :column-style-resolver="tableColumnStyleResolver"
             :cell-style-resolver="tableCellStyleResolver"
             :cell-value-formatter="tableCellValueFormatter"
             empty-label="No preview rows found."

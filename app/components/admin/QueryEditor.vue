@@ -718,8 +718,8 @@ watch(
         <p v-if="errorMessage" class="mt-3 text-sm text-red-600">{{ errorMessage }}</p>
 
         <div class="mt-4 flex flex-col gap-4 lg:flex-row">
-          <aside class="w-full shrink-0 lg:w-[180px]">
-            <div class="grid grid-cols-2 gap-3 sm:w-[180px]">
+          <aside class="w-full shrink-0 lg:w-[280px] lg:max-h-[calc(100vh-200px)] lg:overflow-y-auto">
+            <div class="grid w-full grid-cols-2 gap-3">
               <SettingsNavCard
                 v-for="option in visualizationOptions"
                 :key="option.id"
@@ -733,12 +733,10 @@ watch(
             <p v-if="visualizationSelectionDisabled" class="mt-3 text-xs text-gray-500">
               Run preview to enable visualization methods.
             </p>
-          </aside>
 
-          <div class="min-w-0 flex-1">
             <VizOptionsPanel
               v-if="previewResult"
-              class="mb-3"
+              class="mt-3"
               :viz-type="selectedVisualization"
               :columns="previewResult.columns"
               :rows="previewResult.rows"
@@ -748,6 +746,9 @@ watch(
               @update:model-value="setVizConfig"
               @reset="resetVizConfig"
             />
+          </aside>
+
+          <div class="min-w-0 flex-1">
             <QueryPreviewResult
               v-if="previewResult"
               :result="previewResult"

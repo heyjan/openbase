@@ -594,117 +594,101 @@ watch(
               :key="`column-${column}`"
               draggable="true"
               :class="[
-                'flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm',
+                'rounded border border-gray-200 bg-gray-50 px-2 py-2 text-sm',
                 isColumnVisible(column) ? 'opacity-100' : 'opacity-50'
               ]"
               @dragstart="onColumnDragStart(column, $event)"
               @dragover.prevent
               @drop="onColumnDrop(column, $event)"
             >
-              <span class="inline-flex min-w-0 items-center gap-2">
-                <GripVertical class="h-3.5 w-3.5 text-gray-400" />
-                <span class="truncate text-gray-700">{{ column }}</span>
-              </span>
+              <div class="flex items-center justify-between gap-2">
+                <span class="inline-flex min-w-0 items-center gap-2">
+                  <GripVertical class="h-3.5 w-3.5 text-gray-400" />
+                  <span class="truncate text-gray-700">{{ column }}</span>
+                </span>
 
-              <span class="inline-flex shrink-0 items-center gap-1">
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  :title="isColumnVisible(column) ? 'Hide column' : 'Show column'"
-                  @click="toggleVisibleColumn(column)"
-                >
-                  <component :is="isColumnVisible(column) ? Eye : EyeOff" class="h-3.5 w-3.5" />
-                </UButton>
-
-                <label
-                  class="relative inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border border-gray-300 bg-white"
-                  title="Column color"
-                >
-                  <input
-                    :value="columnColors[column] ?? '#2563eb'"
-                    type="color"
-                    class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                    @input="updateColumnColor(column, ($event.target as HTMLInputElement).value)"
+                <span class="inline-flex shrink-0 items-center gap-1">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :title="isColumnVisible(column) ? 'Hide column' : 'Show column'"
+                    @click="toggleVisibleColumn(column)"
                   >
-                  <span
+                    <component :is="isColumnVisible(column) ? Eye : EyeOff" class="h-3.5 w-3.5" />
+                  </UButton>
+
+                  <label
+                    class="relative inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border border-gray-300 bg-white"
+                    title="Column color"
+                  >
+                    <input
+                      :value="columnColors[column] ?? '#2563eb'"
+                      type="color"
+                      class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      @input="updateColumnColor(column, ($event.target as HTMLInputElement).value)"
+                    >
+                    <span
+                      v-if="columnColors[column]"
+                      class="h-3.5 w-3.5 rounded border border-gray-300"
+                      :style="{ backgroundColor: columnColors[column] }"
+                    />
+                    <Palette v-else class="h-3.5 w-3.5 text-gray-500" />
+                  </label>
+
+                  <UButton
                     v-if="columnColors[column]"
-                    class="h-3.5 w-3.5 rounded border border-gray-300"
-                    :style="{ backgroundColor: columnColors[column] }"
-                  />
-                  <Palette v-else class="h-3.5 w-3.5 text-gray-500" />
-                </label>
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Clear color"
+                    @click="clearColumnColor(column)"
+                  >
+                    <Trash2 class="h-3.5 w-3.5" />
+                  </UButton>
 
-                <UButton
-                  v-if="columnColors[column]"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  title="Clear color"
-                  @click="clearColumnColor(column)"
-                >
-                  <Trash2 class="h-3.5 w-3.5" />
-                </UButton>
+                  <UButton
+                    v-if="numericColumns.includes(column)"
+                    color="neutral"
+                    :variant="columnGradients[column] ? 'solid' : 'ghost'"
+                    size="xs"
+                    title="Gradient shading"
+                    @click="toggleColumnGradient(column)"
+                  >
+                    <Blend class="h-3.5 w-3.5" />
+                  </UButton>
 
-                <UButton
-                  v-if="numericColumns.includes(column)"
-                  color="neutral"
-                  :variant="columnGradients[column] ? 'solid' : 'ghost'"
-                  size="xs"
-                  title="Gradient shading"
-                  @click="toggleColumnGradient(column)"
-                >
-                  <Blend class="h-3.5 w-3.5" />
-                </UButton>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Move up"
+                    @click="moveColumn(column, -1)"
+                  >↑</UButton>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Move down"
+                    @click="moveColumn(column, 1)"
+                  >↓</UButton>
+                </span>
+              </div>
 
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  title="Move up"
-                  @click="moveColumn(column, -1)"
-                >↑</UButton>
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  title="Move down"
-                  @click="moveColumn(column, 1)"
-                >↓</UButton>
-              </span>
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Value affixes</p>
-          <div class="mt-2 space-y-2">
-            <div
-              v-for="column in orderedColumns"
-              :key="`affix-${column}`"
-              class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[minmax(0,1fr)_140px_140px]"
-            >
-              <p class="text-sm text-gray-700">{{ column }}</p>
-
-              <label class="block text-[11px] font-medium uppercase tracking-wide text-gray-600">
-                Prefix
+              <div class="mt-2 grid grid-cols-2 gap-2">
                 <UInput
-                  class="mt-1"
                   :model-value="columnValueFormats[column]?.prefix ?? ''"
+                  placeholder="Prefix"
                   @update:model-value="updateColumnValueFormat(column, 'prefix', $event)"
                 />
-              </label>
-
-              <label class="block text-[11px] font-medium uppercase tracking-wide text-gray-600">
-                Suffix
                 <UInput
-                  class="mt-1"
                   :model-value="columnValueFormats[column]?.suffix ?? ''"
+                  placeholder="Suffix"
                   @update:model-value="updateColumnValueFormat(column, 'suffix', $event)"
                 />
-              </label>
-            </div>
-          </div>
+              </div>
+            </li>
+          </ul>
         </div>
 
         <div>
