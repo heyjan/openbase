@@ -9,10 +9,13 @@ import {
   applyTableSortAndLimit,
   formatTableCellDisplayValue,
   getCategoryColumns,
+  getColumnGradientStyle,
   getColumnNumericExtents,
   getConditionalCellStyle,
   getNumericColumns,
   parseConditionalFormattingRules,
+  resolveColumnColors,
+  resolveColumnGradients,
   resolveTableColumnOrder,
   resolveTableColumnValueFormats,
   resolveTableVisibleColumns,
@@ -439,6 +442,14 @@ const tableColumnValueFormats = computed(() =>
   resolveTableColumnValueFormats(tableVisibleColumns.value, config.value)
 )
 
+const tableColumnColors = computed(() =>
+  resolveColumnColors(tableVisibleColumns.value, config.value)
+)
+
+const tableColumnGradients = computed(() =>
+  resolveColumnGradients(tableVisibleColumns.value, config.value)
+)
+
 const tableConditionalRules = computed(() =>
   parseConditionalFormattingRules(config.value.conditionalFormatting)
 )
@@ -447,13 +458,43 @@ const tableColumnExtents = computed(() =>
   getColumnNumericExtents(filteredTableRows.value, tableVisibleColumns.value)
 )
 
-const tableCellStyleResolver = (input: { columnKey: string; value: unknown }) =>
-  getConditionalCellStyle({
+const tableColumnStyleResolver = (input: { columnKey: string }) => {
+  const color = tableColumnColors.value[input.columnKey]
+  if (!color || tableColumnGradients.value[input.columnKey]) {
+    return undefined
+  }
+
+  return {
+    borderLeft: `3px solid ${color}`
+  }
+}
+
+const tableCellStyleResolver = (input: { columnKey: string; value: unknown }) => {
+  const columnColor = tableColumnColors.value[input.columnKey]
+  const gradientEnabled = tableColumnGradients.value[input.columnKey] === true
+  const gradientStyle = gradientEnabled
+    ? getColumnGradientStyle(
+        input.columnKey,
+        input.value,
+        tableColumnExtents.value[input.columnKey],
+        columnColor ?? '#2563eb'
+      )
+    : null
+
+  const baseStyle = gradientStyle
+    ? { ...gradientStyle }
+    : columnColor
+      ? { borderLeft: `3px solid ${columnColor}` }
+      : undefined
+
+  return getConditionalCellStyle({
     columnKey: input.columnKey,
     value: input.value,
     rules: tableConditionalRules.value,
-    columnExtents: tableColumnExtents.value
+    columnExtents: tableColumnExtents.value,
+    baseStyle
   })
+}
 
 const tableCellValueFormatter = (input: { columnKey: string; defaultValue: string }) =>
   formatTableCellDisplayValue(
@@ -723,6 +764,7 @@ const chartOption = computed<EChartsOption>(() => {
           <Table
             :rows="filteredTableRows"
             :columns="tableColumns"
+            :column-style-resolver="tableColumnStyleResolver"
             :cell-style-resolver="tableCellStyleResolver"
             :cell-value-formatter="tableCellValueFormatter"
             empty-label="No preview rows found."

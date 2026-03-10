@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, resolveComponent } from 'vue'
+import { h, resolveComponent, type CSSProperties } from 'vue'
 
 type TableRow = Record<string, unknown>
 
@@ -35,7 +35,10 @@ const props = withDefaults(
       columnKey: string
       value: unknown
       rowIndex: number
-    }) => Record<string, string> | undefined
+    }) => CSSProperties | undefined
+    columnStyleResolver?: (input: {
+      columnKey: string
+    }) => CSSProperties | undefined
     cellValueFormatter?: (input: {
       row: TableRow
       columnKey: string
@@ -56,6 +59,7 @@ const props = withDefaults(
     columns: () => [],
     emptyLabel: 'No rows found.',
     cellStyleResolver: undefined,
+    columnStyleResolver: undefined,
     cellValueFormatter: undefined,
     editingCell: null,
     editValue: '',
@@ -97,17 +101,27 @@ const tableColumns = computed(() =>
     header: ({ column: tableColumn }: { column: { getIsSorted: () => false | 'asc' | 'desc'; toggleSorting: (desc?: boolean) => void } }) => {
       const sort = tableColumn.getIsSorted()
       const indicator = sort === 'asc' ? ' ↑' : sort === 'desc' ? ' ↓' : ''
+      const style = props.columnStyleResolver?.({ columnKey: column.key })
 
       return h(
-        UButton,
+        'div',
         {
-          color: 'neutral',
-          variant: 'ghost',
-          size: 'xs',
-          class: '-ml-2 font-semibold text-gray-700',
-          onClick: () => tableColumn.toggleSorting(sort === 'asc')
+          class: 'inline-flex w-full items-center rounded-sm',
+          style
         },
-        () => `${column.label ?? column.key}${indicator}`
+        [
+          h(
+            UButton,
+            {
+              color: 'neutral',
+              variant: 'ghost',
+              size: 'xs',
+              class: '-ml-2 font-semibold text-gray-700',
+              onClick: () => tableColumn.toggleSorting(sort === 'asc')
+            },
+            () => `${column.label ?? column.key}${indicator}`
+          )
+        ]
       )
     },
     cell: ({

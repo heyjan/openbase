@@ -1,4 +1,4 @@
-import type { Ref } from 'vue'
+import type { CSSProperties, Ref } from 'vue'
 import type {
   ConditionalFormatOperator,
   ConditionalFormatRule,
@@ -17,6 +17,7 @@ const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === 'string')
 
 const DECIMAL_COMMA_PATTERN = /^-?\d+(?:,\d+)?$/
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 
 export const toNumber = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -64,6 +65,40 @@ const readConfiguredString = (config: Record<string, unknown>, keys: string[]) =
     }
   }
   return ''
+}
+
+const normalizeHexColor = (value: unknown) => {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!HEX_COLOR_PATTERN.test(trimmed)) {
+    return null
+  }
+
+  if (trimmed.length === 4) {
+    const r = trimmed[1]
+    const g = trimmed[2]
+    const b = trimmed[3]
+    return `#${r}${r}${g}${g}${b}${b}`
+  }
+
+  return trimmed
+}
+
+const hexToRgb = (hex: string) => {
+  const normalized = normalizeHexColor(hex)
+  if (!normalized) {
+    return null
+  }
+
+  const value = normalized.slice(1)
+  return {
+    r: Number.parseInt(value.slice(0, 2), 16),
+    g: Number.parseInt(value.slice(2, 4), 16),
+    b: Number.parseInt(value.slice(4, 6), 16)
+  }
 }
 
 export const columnIsNumeric = (rows: Record<string, unknown>[], column: string) => {
@@ -351,6 +386,8 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
       sortDirection: 'asc',
       rowLimit: 500,
       showSearch: false,
+      columnColors: {},
+      columnGradients: {},
       columnValueFormats: {},
       conditionalFormatting: []
     } as VizOptionsByType[T]
@@ -455,6 +492,8 @@ const sanitizeVizConfigForType = (
     )
     normalized.rowLimit = readConfiguredPositiveInteger(normalized, ['rowLimit', 'row_limit'], 500)
     normalized.showSearch = readConfiguredBoolean(normalized, ['showSearch', 'show_search'], false)
+    normalized.columnColors = resolveColumnColors(columns, normalized)
+    normalized.columnGradients = resolveColumnGradients(columns, normalized)
     normalized.columnValueFormats = readConfiguredTableColumnValueFormats(normalized, columns)
     normalized.conditionalFormatting = parseConditionalFormattingRules(
       normalized.conditionalFormatting
@@ -609,6 +648,75 @@ export const resolveTableColumnValueFormats = (
   config: Record<string, unknown>
 ) =>
   readConfiguredTableColumnValueFormats(config, columns)
+
+export const resolveColumnColors = (columns: string[], config: Record<string, unknown>) => {
+  const raw = readConfiguredValue(config, ['columnColors', 'column_colors'])
+  if (!isRecord(raw)) {
+    return {} as Record<string, string>
+  }
+
+  const allowed = new Set(columns)
+  const next: Record<string, string> = {}
+
+  for (const [column, value] of Object.entries(raw)) {
+    if (!allowed.has(column)) {
+      continue
+    }
+
+    const color = normalizeHexColor(value)
+    if (!color) {
+      continue
+    }
+
+    next[column] = color
+  }
+
+  return next
+}
+
+export const resolveColumnGradients = (columns: string[], config: Record<string, unknown>) => {
+  const raw = readConfiguredValue(config, ['columnGradients', 'column_gradients'])
+  if (!isRecord(raw)) {
+    return {} as Record<string, boolean>
+  }
+
+  const allowed = new Set(columns)
+  const next: Record<string, boolean> = {}
+
+  for (const [column, value] of Object.entries(raw)) {
+    if (!allowed.has(column) || value !== true) {
+      continue
+    }
+    next[column] = true
+  }
+
+  return next
+}
+
+export const getColumnGradientStyle = (
+  column: string,
+  value: unknown,
+  extents: { min: number; max: number } | undefined,
+  baseColor: string
+): CSSProperties | null => {
+  void column
+
+  const numericValue = toNumber(value)
+  if (numericValue === null || !extents) {
+    return null
+  }
+
+  const span = extents.max - extents.min
+  const ratio = span > 0 ? (numericValue - extents.min) / span : 1
+  const clamped = Math.max(0, Math.min(1, ratio))
+  const opacity = 0.1 + clamped * 0.8
+
+  const rgb = hexToRgb(baseColor) ?? { r: 37, g: 99, b: 235 }
+
+  return {
+    backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity.toFixed(3)})`
+  }
+}
 
 export const formatTableCellDisplayValue = (
   defaultValue: string,
@@ -789,8 +897,9 @@ export const getConditionalCellStyle = (input: {
   value: unknown
   rules: ConditionalFormatRule[]
   columnExtents?: Record<string, { min: number; max: number }>
+  baseStyle?: CSSProperties | null
 }) => {
-  const style: Record<string, string> = {}
+  const style: CSSProperties = input.baseStyle ? { ...input.baseStyle } : {}
 
   for (const rule of input.rules) {
     if (rule.column !== input.columnKey) {

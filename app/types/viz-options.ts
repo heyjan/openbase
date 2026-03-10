@@ -46,6 +46,8 @@ export type TableVizOptions = SharedVizOptions & {
   sortDirection?: SortDirection
   rowLimit?: number
   showSearch?: boolean
+  columnColors?: Record<string, string>
+  columnGradients?: Record<string, boolean>
   columnValueFormats?: Record<string, TableColumnValueFormat>
   conditionalFormatting?: ConditionalFormatRule[]
 }

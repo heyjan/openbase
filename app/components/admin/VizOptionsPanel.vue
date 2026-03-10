@@ -1,5 +1,18 @@
 <script setup lang="ts">
-import { GripVertical, RotateCcw, Trash2 } from 'lucide-vue-next'
+import {
+  ArrowDownAZ,
+  ArrowUpAZ,
+  ArrowUpDown,
+  Blend,
+  Eye,
+  EyeOff,
+  GripVertical,
+  Hash,
+  Palette,
+  RotateCcw,
+  Search,
+  Trash2
+} from 'lucide-vue-next'
 import type {
   ConditionalFormatRule,
   QueryPreviewVisualization,
@@ -10,6 +23,8 @@ import {
   getCategoryColumns,
   getNumericColumns,
   parseConditionalFormattingRules,
+  resolveColumnColors,
+  resolveColumnGradients,
   resolveTableColumnOrder,
   resolveTableColumnValueFormats,
   resolveTableVisibleColumns,
@@ -153,6 +168,23 @@ const columnValueFormats = computed(() =>
   resolveTableColumnValueFormats(props.columns, props.modelValue)
 )
 
+const columnColors = computed(() =>
+  resolveColumnColors(orderedColumns.value, props.modelValue)
+)
+
+const columnGradients = computed(() =>
+  resolveColumnGradients(orderedColumns.value, props.modelValue)
+)
+
+const visibleColumnsSet = computed(() => new Set(visibleColumns.value))
+
+const sortDirection = computed<'asc' | 'desc'>(() =>
+  readString('sortDirection', 'asc') === 'desc' ? 'desc' : 'asc'
+)
+
+const isColumnVisible = (column: string) =>
+  visibleColumnsSet.value.has(column)
+
 const moveColumn = (column: string, direction: -1 | 1) => {
   const order = [...orderedColumns.value]
   const index = order.indexOf(column)
@@ -208,16 +240,46 @@ const onColumnDrop = (target: string, event: DragEvent) => {
   })
 }
 
-const toggleVisibleColumn = (column: string, checked: boolean) => {
-  const set = new Set(visibleColumns.value)
-  if (checked) {
-    set.add(column)
-  } else {
+const toggleVisibleColumn = (column: string) => {
+  const set = new Set(visibleColumnsSet.value)
+  if (set.has(column)) {
     set.delete(column)
+  } else {
+    set.add(column)
   }
 
   updateConfig({
     visibleColumns: orderedColumns.value.filter((entry) => set.has(entry))
+  })
+}
+
+const updateColumnColor = (column: string, color: string) => {
+  updateConfig({
+    columnColors: {
+      ...columnColors.value,
+      [column]: color
+    }
+  })
+}
+
+const clearColumnColor = (column: string) => {
+  const next = { ...columnColors.value }
+  delete next[column]
+  updateConfig({
+    columnColors: Object.keys(next).length ? next : undefined
+  })
+}
+
+const toggleColumnGradient = (column: string) => {
+  const next = { ...columnGradients.value }
+  if (next[column]) {
+    delete next[column]
+  } else {
+    next[column] = true
+  }
+
+  updateConfig({
+    columnGradients: Object.keys(next).length ? next : undefined
   })
 }
 
@@ -464,72 +526,25 @@ watch(
       </label>
 
       <template v-if="vizType === 'table'">
-        <div class="grid gap-4 md:grid-cols-2">
-          <div>
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Visible columns</p>
-            <div class="mt-2 grid gap-1">
-              <label
-                v-for="column in orderedColumns"
-                :key="`visible-${column}`"
-                class="inline-flex items-center gap-2 text-sm text-gray-700"
-              >
-                <input
-                  :checked="visibleColumns.includes(column)"
-                  type="checkbox"
-                  class="h-4 w-4 rounded border border-gray-300"
-                  @change="toggleVisibleColumn(column, ($event.target as HTMLInputElement).checked)"
-                >
-                <span>{{ column }}</span>
-              </label>
+        <div class="grid gap-3 md:grid-cols-4">
+          <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+            <p class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
+              <Search class="h-3.5 w-3.5" />
+              Search bar
+            </p>
+            <div class="mt-2 flex justify-end">
+              <USwitch
+                :model-value="readBoolean('showSearch', false)"
+                @update:model-value="updateBoolean('showSearch', $event)"
+              />
             </div>
           </div>
 
-          <div>
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Column order</p>
-            <ul class="mt-2 space-y-1">
-              <li
-                v-for="column in orderedColumns"
-                :key="`order-${column}`"
-                draggable="true"
-                class="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm"
-                @dragstart="onColumnDragStart(column, $event)"
-                @dragover.prevent
-                @drop="onColumnDrop(column, $event)"
-              >
-                <span class="inline-flex items-center gap-2">
-                  <GripVertical class="h-3.5 w-3.5 text-gray-400" />
-                  {{ column }}
-                </span>
-                <span class="inline-flex items-center gap-1">
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    @click="moveColumn(column, -1)"
-                  >↑</UButton>
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    @click="moveColumn(column, 1)"
-                  >↓</UButton>
-                </span>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="grid gap-3 md:grid-cols-4">
-          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
-            Search bar
-            <USwitch
-              :model-value="readBoolean('showSearch', false)"
-              @update:model-value="updateBoolean('showSearch', $event)"
-            />
-          </label>
-
-          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-            Sort column
+          <label class="block rounded border border-gray-200 bg-gray-50 px-3 py-2">
+            <span class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
+              <ArrowUpDown class="h-3.5 w-3.5" />
+              Sort column
+            </span>
             <USelect
               class="mt-1"
               :items="[
@@ -541,21 +556,27 @@ watch(
             />
           </label>
 
-          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-            Sort direction
+          <label class="block rounded border border-gray-200 bg-gray-50 px-3 py-2">
+            <span class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
+              <component :is="sortDirection === 'desc' ? ArrowDownAZ : ArrowUpAZ" class="h-3.5 w-3.5" />
+              Sort direction
+            </span>
             <USelect
               class="mt-1"
               :items="[
                 { label: 'Ascending', value: 'asc' },
                 { label: 'Descending', value: 'desc' }
               ]"
-              :model-value="readString('sortDirection', 'asc')"
+              :model-value="sortDirection"
               @update:model-value="updateConfig({ sortDirection: $event === 'desc' ? 'desc' : 'asc' })"
             />
           </label>
 
-          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
-            Row limit
+          <label class="block rounded border border-gray-200 bg-gray-50 px-3 py-2">
+            <span class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
+              <Hash class="h-3.5 w-3.5" />
+              Row limit
+            </span>
             <UInput
               class="mt-1"
               type="number"
@@ -563,6 +584,96 @@ watch(
               @update:model-value="updateInteger('rowLimit', $event, 500)"
             />
           </label>
+        </div>
+
+        <div>
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Columns</p>
+          <ul class="mt-2 space-y-1.5">
+            <li
+              v-for="column in orderedColumns"
+              :key="`column-${column}`"
+              draggable="true"
+              :class="[
+                'flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm',
+                isColumnVisible(column) ? 'opacity-100' : 'opacity-50'
+              ]"
+              @dragstart="onColumnDragStart(column, $event)"
+              @dragover.prevent
+              @drop="onColumnDrop(column, $event)"
+            >
+              <span class="inline-flex min-w-0 items-center gap-2">
+                <GripVertical class="h-3.5 w-3.5 text-gray-400" />
+                <span class="truncate text-gray-700">{{ column }}</span>
+              </span>
+
+              <span class="inline-flex shrink-0 items-center gap-1">
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  :title="isColumnVisible(column) ? 'Hide column' : 'Show column'"
+                  @click="toggleVisibleColumn(column)"
+                >
+                  <component :is="isColumnVisible(column) ? Eye : EyeOff" class="h-3.5 w-3.5" />
+                </UButton>
+
+                <label
+                  class="relative inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border border-gray-300 bg-white"
+                  title="Column color"
+                >
+                  <input
+                    :value="columnColors[column] ?? '#2563eb'"
+                    type="color"
+                    class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    @input="updateColumnColor(column, ($event.target as HTMLInputElement).value)"
+                  >
+                  <span
+                    v-if="columnColors[column]"
+                    class="h-3.5 w-3.5 rounded border border-gray-300"
+                    :style="{ backgroundColor: columnColors[column] }"
+                  />
+                  <Palette v-else class="h-3.5 w-3.5 text-gray-500" />
+                </label>
+
+                <UButton
+                  v-if="columnColors[column]"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  title="Clear color"
+                  @click="clearColumnColor(column)"
+                >
+                  <Trash2 class="h-3.5 w-3.5" />
+                </UButton>
+
+                <UButton
+                  v-if="numericColumns.includes(column)"
+                  color="neutral"
+                  :variant="columnGradients[column] ? 'solid' : 'ghost'"
+                  size="xs"
+                  title="Gradient shading"
+                  @click="toggleColumnGradient(column)"
+                >
+                  <Blend class="h-3.5 w-3.5" />
+                </UButton>
+
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  title="Move up"
+                  @click="moveColumn(column, -1)"
+                >↑</UButton>
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  title="Move down"
+                  @click="moveColumn(column, 1)"
+                >↓</UButton>
+              </span>
+            </li>
+          </ul>
         </div>
 
         <div>

@@ -6,9 +6,12 @@ import { useInlineCellEdit } from '~/composables/useInlineCellEdit'
 import {
   applyTableSortAndLimit,
   formatTableCellDisplayValue,
+  getColumnGradientStyle,
   getColumnNumericExtents,
   getConditionalCellStyle,
   parseConditionalFormattingRules,
+  resolveColumnColors,
+  resolveColumnGradients,
   resolveTableColumnOrder,
   resolveTableColumnValueFormats,
   resolveTableVisibleColumns
@@ -98,6 +101,14 @@ const columnValueFormats = computed(() =>
   resolveTableColumnValueFormats(visibleColumns.value, props.module.config)
 )
 
+const columnColors = computed(() =>
+  resolveColumnColors(visibleColumns.value, props.module.config)
+)
+
+const columnGradients = computed(() =>
+  resolveColumnGradients(visibleColumns.value, props.module.config)
+)
+
 const conditionalRules = computed(() =>
   parseConditionalFormattingRules(props.module.config.conditionalFormatting)
 )
@@ -106,13 +117,43 @@ const columnExtents = computed(() =>
   getColumnNumericExtents(filteredRows.value, visibleColumns.value)
 )
 
-const cellStyleResolver = (input: { columnKey: string; value: unknown }) =>
-  getConditionalCellStyle({
+const columnStyleResolver = (input: { columnKey: string }) => {
+  const color = columnColors.value[input.columnKey]
+  if (!color || columnGradients.value[input.columnKey]) {
+    return undefined
+  }
+
+  return {
+    borderLeft: `3px solid ${color}`
+  }
+}
+
+const cellStyleResolver = (input: { columnKey: string; value: unknown }) => {
+  const columnColor = columnColors.value[input.columnKey]
+  const gradientEnabled = columnGradients.value[input.columnKey] === true
+  const gradientStyle = gradientEnabled
+    ? getColumnGradientStyle(
+        input.columnKey,
+        input.value,
+        columnExtents.value[input.columnKey],
+        columnColor ?? '#2563eb'
+      )
+    : null
+
+  const baseStyle = gradientStyle
+    ? { ...gradientStyle }
+    : columnColor
+      ? { borderLeft: `3px solid ${columnColor}` }
+      : undefined
+
+  return getConditionalCellStyle({
     columnKey: input.columnKey,
     value: input.value,
     rules: conditionalRules.value,
-    columnExtents: columnExtents.value
+    columnExtents: columnExtents.value,
+    baseStyle
   })
+}
 
 const cellValueFormatter = (input: { columnKey: string; defaultValue: string }) =>
   formatTableCellDisplayValue(
@@ -165,6 +206,7 @@ const onSaveEdit = () => inlineCellEdit.saveCell(filteredRows.value)
       <Table
         :rows="filteredRows"
         :columns="tableColumns"
+        :column-style-resolver="columnStyleResolver"
         :cell-style-resolver="cellStyleResolver"
         :cell-value-formatter="cellValueFormatter"
         :editing-cell="isInlineEditable ? inlineCellEdit.editingCell.value : null"
