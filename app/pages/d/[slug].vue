@@ -2,6 +2,7 @@
 import { Download } from 'lucide-vue-next'
 import DashboardFilterBar from '~/components/dashboard/DashboardFilterBar.vue'
 import DashboardGrid from '~/components/dashboard/DashboardGrid.vue'
+import SharedLinkTopBar from '~/components/shared/SharedLinkTopBar.vue'
 import { useExportPdf } from '~/composables/useExportPdf'
 import type { QueryVariable } from '~/types/query-variable'
 
@@ -176,6 +177,7 @@ const { exporting, exportPdf } = useExportPdf({
 </script>
 
 <template>
+  <SharedLinkTopBar />
   <section
     class="mx-auto px-6 py-10"
     :style="{ maxWidth: canvasWidthMode === 'fixed' ? '1240px' : 'none' }"

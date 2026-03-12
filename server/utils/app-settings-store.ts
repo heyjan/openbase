@@ -9,6 +9,10 @@ type AppSettingsRow = {
   value: unknown
 }
 
+type SharedLinkLogoSettings = {
+  logo?: unknown
+}
+
 let ensureAppSettingsTablePromise: Promise<void> | null = null
 
 const ensureAppSettingsTable = async () => {
@@ -56,5 +60,50 @@ export const saveDesignSettings = async (settings: DesignSettings) => {
      SET value = EXCLUDED.value,
          updated_at = now()`,
     [JSON.stringify(settings)]
+  )
+}
+
+export const getSharedLinkLogo = async (): Promise<string | null> => {
+  await ensureAppSettingsTable()
+
+  const result = await query<AppSettingsRow>(
+    `SELECT value
+     FROM app_settings
+     WHERE key = 'shared_link_logo'
+     LIMIT 1`
+  )
+
+  const row = result.rows[0]
+  if (!row || !row.value || typeof row.value !== 'object') {
+    return null
+  }
+
+  const logo = (row.value as SharedLinkLogoSettings).logo
+  if (typeof logo !== 'string' || !logo.length) {
+    return null
+  }
+
+  return logo
+}
+
+export const saveSharedLinkLogo = async (dataUri: string) => {
+  await ensureAppSettingsTable()
+
+  await query(
+    `INSERT INTO app_settings (key, value, updated_at)
+     VALUES ('shared_link_logo', $1::jsonb, now())
+     ON CONFLICT (key) DO UPDATE
+     SET value = EXCLUDED.value,
+         updated_at = now()`,
+    [JSON.stringify({ logo: dataUri })]
+  )
+}
+
+export const deleteSharedLinkLogo = async () => {
+  await ensureAppSettingsTable()
+
+  await query(
+    `DELETE FROM app_settings
+     WHERE key = 'shared_link_logo'`
   )
 }
