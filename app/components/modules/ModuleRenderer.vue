@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { isTextModuleType, type ModuleConfig } from '~/types/module'
+import type { QueryVariable } from '~/types/query-variable'
 import Badge from '~/components/ui/Badge.vue'
 import Spinner from '~/components/ui/Spinner.vue'
 import AnnotationLog from '~/components/modules/AnnotationLog.vue'
@@ -8,6 +9,7 @@ import DataTable from '~/components/modules/DataTable.vue'
 import FormInput from '~/components/modules/FormInput.vue'
 import HeaderModule from '~/components/modules/HeaderModule.vue'
 import KpiCard from '~/components/modules/KpiCard.vue'
+import ModuleInlineFilters from '~/components/modules/ModuleInlineFilters.vue'
 import OutlierTable from '~/components/modules/OutlierTable.vue'
 import PieChart from '~/components/modules/PieChart.vue'
 import RadarChart from '~/components/modules/RadarChart.vue'
@@ -16,6 +18,7 @@ import SubheaderModule from '~/components/modules/SubheaderModule.vue'
 import TimeSeriesChart from '~/components/modules/TimeSeriesChart.vue'
 import WaterfallChart from '~/components/modules/WaterfallChart.vue'
 import { useModuleData } from '~/composables/useModuleData'
+import { useVariableSelectors } from '~/composables/useVariableSelectors'
 
 const props = withDefaults(
   defineProps<{
@@ -50,6 +53,29 @@ const isTextModule = computed(() => isTextModuleType(props.module.type))
 const route = useRoute()
 const isPublicDashboardRoute = computed(() => route.path.startsWith('/d/'))
 const isEditorRoute = computed(() => route.path.startsWith('/editor/dashboards/'))
+const dashboardSlug = computed(() =>
+  typeof route.params.slug === 'string' ? route.params.slug : ''
+)
+
+const routeQuery = computed<Record<string, string>>(() => {
+  const next: Record<string, string> = {}
+  for (const [key, value] of Object.entries(route.query)) {
+    if (Array.isArray(value)) {
+      if (typeof value[0] === 'string') {
+        next[key] = value[0]
+      }
+      continue
+    }
+    if (typeof value === 'string') {
+      next[key] = value
+      continue
+    }
+    if (typeof value === 'number') {
+      next[key] = String(value)
+    }
+  }
+  return next
+})
 
 const defaultTitles: Record<ModuleConfig['type'], string> = {
   time_series_chart: 'Time Series',
@@ -77,6 +103,93 @@ const showTypeLabel = computed(() => props.module.type !== 'data_table')
 
 const moduleRef = toRef(props, 'module')
 const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
+
+const moduleVariables = ref<QueryVariable[]>([])
+let variablesRequestSeq = 0
+
+const canLoadModuleVariables = computed(() => {
+  if (props.embedded || isTextModule.value || !props.module.id) {
+    return false
+  }
+
+  if (isPublicDashboardRoute.value) {
+    return !!dashboardSlug.value && !!routeQuery.value.token
+  }
+
+  if (isEditorRoute.value) {
+    return !!dashboardSlug.value
+  }
+
+  return false
+})
+
+const variablesEndpoint = computed(() => {
+  if (!canLoadModuleVariables.value) {
+    return ''
+  }
+
+  if (isPublicDashboardRoute.value) {
+    return `/api/dashboards/${dashboardSlug.value}/modules/${props.module.id}/variables`
+  }
+
+  if (isEditorRoute.value) {
+    return `/api/editor/dashboards/${dashboardSlug.value}/modules/${props.module.id}/variables`
+  }
+
+  return ''
+})
+
+const { currentValues: currentVariableValues, updateValue } = useVariableSelectors({
+  mode: 'shared',
+  variables: moduleVariables,
+  routeQuery
+})
+
+const showHeaderControls = computed(
+  () => moduleVariables.value.length > 0 || (!isPublicDashboardRoute.value && canFetch.value)
+)
+
+const loadModuleVariables = async () => {
+  const requestId = ++variablesRequestSeq
+
+  if (!canLoadModuleVariables.value || !variablesEndpoint.value) {
+    moduleVariables.value = []
+    return
+  }
+
+  try {
+    const response = await $fetch<{ variables: QueryVariable[] }>(variablesEndpoint.value, {
+      query: routeQuery.value
+    })
+    if (requestId !== variablesRequestSeq) {
+      return
+    }
+    moduleVariables.value = response.variables ?? []
+  } catch {
+    if (requestId !== variablesRequestSeq) {
+      return
+    }
+    moduleVariables.value = []
+  }
+}
+
+const onFilterChange = (payload: { name: string; value: string }) => {
+  updateValue(payload.name, payload.value)
+}
+
+watch(
+  [
+    () => props.module.id,
+    () => props.module.type,
+    () => props.module.queryVisualizationQueryId,
+    () => route.path,
+    () => route.fullPath
+  ],
+  () => {
+    void loadModuleVariables()
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -91,18 +204,24 @@ const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
     v-else-if="!embedded"
     class="flex h-full flex-col overflow-hidden rounded border border-gray-200 bg-white p-4 shadow-sm"
   >
-    <div class="flex items-start justify-between gap-3">
-      <div>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0">
         <h3 class="text-sm font-semibold text-gray-900">{{ title }}</h3>
         <p v-if="showTypeLabel" class="mt-1 text-xs uppercase tracking-wide text-gray-500">
           {{ module.type.replace(/_/g, ' ') }}
         </p>
       </div>
-      <div v-if="!isPublicDashboardRoute" class="flex items-center gap-2">
+      <div v-if="showHeaderControls" class="ml-auto flex flex-wrap items-center justify-end gap-2">
+        <ModuleInlineFilters
+          v-if="moduleVariables.length"
+          :variables="moduleVariables"
+          :values="currentVariableValues"
+          @change="onFilterChange"
+        />
         <Badge v-if="canFetch">live</Badge>
         <button
           v-if="canFetch"
-          class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:border-gray-300"
+          class="h-7 rounded border border-gray-200 px-2 text-xs text-gray-700 hover:border-gray-300"
           @click="refresh"
         >
           Refresh
