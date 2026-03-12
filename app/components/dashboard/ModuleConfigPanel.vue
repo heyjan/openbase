@@ -69,6 +69,11 @@ const writableTables = ref<Array<{ id: string; tableName: string; dataSourceName
 const writableTablesLoading = ref(false)
 const writableTableError = ref('')
 const selectedWritableTableId = ref('')
+const tabbedEnabled = ref(false)
+const tabGroupSeparator = ref('')
+const tabDefault = ref('')
+const tabSharedColumns = ref<string[]>([])
+const tabSharedColumnsText = ref('')
 const templates = ref<ModuleTemplate[]>([])
 const templatesLoading = ref(false)
 const templateError = ref('')
@@ -121,6 +126,123 @@ const readWritableTableId = (config: Record<string, unknown> | null | undefined)
   }
   const candidate = config.writableTableId ?? config.writable_table_id
   return typeof candidate === 'string' ? candidate.trim() : ''
+}
+
+const readConfigBoolean = (
+  config: Record<string, unknown> | null | undefined,
+  keys: string[],
+  fallback = false
+) => {
+  if (!config) {
+    return fallback
+  }
+
+  for (const key of keys) {
+    const value = config[key]
+    if (typeof value === 'boolean') {
+      return value
+    }
+  }
+
+  return fallback
+}
+
+const readConfigString = (
+  config: Record<string, unknown> | null | undefined,
+  keys: string[]
+) => {
+  if (!config) {
+    return ''
+  }
+
+  for (const key of keys) {
+    const value = config[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const readConfigRawString = (
+  config: Record<string, unknown> | null | undefined,
+  keys: string[]
+) => {
+  if (!config) {
+    return ''
+  }
+
+  for (const key of keys) {
+    const value = config[key]
+    if (typeof value === 'string') {
+      return value
+    }
+  }
+
+  return ''
+}
+
+const readConfigStringArray = (
+  config: Record<string, unknown> | null | undefined,
+  keys: string[]
+) => {
+  if (!config) {
+    return [] as string[]
+  }
+
+  for (const key of keys) {
+    const value = config[key]
+    if (Array.isArray(value) && value.every((entry) => typeof entry === 'string')) {
+      return value as string[]
+    }
+  }
+
+  return [] as string[]
+}
+
+const syncDataTableTabControls = (config: Record<string, unknown> | null | undefined) => {
+  tabbedEnabled.value = readConfigBoolean(config, ['tabbed'], false)
+  tabGroupSeparator.value = readConfigRawString(config, ['tabGroupSeparator', 'tab_group_separator'])
+  tabDefault.value = readConfigString(config, ['tabDefault', 'tab_default'])
+  tabSharedColumns.value = readConfigStringArray(config, ['tabSharedColumns', 'tab_shared_columns'])
+  tabSharedColumnsText.value = tabSharedColumns.value.join(', ')
+}
+
+const tabSharedColumnOptions = computed(() => {
+  const parsed = parseConfigTextSafe()
+  if (!parsed) {
+    return [] as string[]
+  }
+
+  const configuredOrder = readConfigStringArray(parsed, ['columnOrder', 'column_order'])
+  const configuredVisible = readConfigStringArray(parsed, ['visibleColumns', 'visible_columns'])
+  const columns = configuredOrder.length ? configuredOrder : configuredVisible
+
+  return columns.filter(
+    (column, index, source) =>
+      column.trim().length > 0 && source.indexOf(column) === index
+  )
+})
+
+const applyDataTableConfigPatch = (
+  patcher: (config: Record<string, unknown>) => void
+) => {
+  if (!isDataTableModule.value) {
+    return
+  }
+
+  let parsedConfig: Record<string, unknown>
+  try {
+    parsedConfig = parseConfigText()
+  } catch (error) {
+    parseError.value = error instanceof Error ? error.message : 'Invalid module config.'
+    return
+  }
+
+  patcher(parsedConfig)
+  configText.value = JSON.stringify(parsedConfig, null, 2)
+  parseError.value = ''
 }
 
 const normalizeTextConfig = (
@@ -235,6 +357,75 @@ const onWritableTableChange = () => {
   parseError.value = ''
 }
 
+const onTabEnabledChange = () => {
+  applyDataTableConfigPatch((config) => {
+    config.tabbed = tabbedEnabled.value
+  })
+}
+
+const onTabGroupSeparatorChange = () => {
+  applyDataTableConfigPatch((config) => {
+    const nextValue = tabGroupSeparator.value
+    if (nextValue.length) {
+      config.tabGroupSeparator = nextValue
+    } else {
+      delete config.tabGroupSeparator
+    }
+    delete config.tab_group_separator
+  })
+}
+
+const onTabDefaultChange = () => {
+  applyDataTableConfigPatch((config) => {
+    const nextValue = tabDefault.value.trim()
+    if (nextValue) {
+      config.tabDefault = nextValue
+    } else {
+      delete config.tabDefault
+    }
+    delete config.tab_default
+  })
+}
+
+const setTabSharedColumns = (columns: string[]) => {
+  const deduplicated = columns.filter(
+    (column, index, source) =>
+      column.trim().length > 0 && source.indexOf(column) === index
+  )
+
+  tabSharedColumns.value = deduplicated
+  tabSharedColumnsText.value = deduplicated.join(', ')
+
+  applyDataTableConfigPatch((config) => {
+    if (deduplicated.length) {
+      config.tabSharedColumns = deduplicated
+    } else {
+      delete config.tabSharedColumns
+    }
+    delete config.tab_shared_columns
+  })
+}
+
+const onTabSharedColumnsTextChange = () => {
+  const nextColumns = tabSharedColumnsText.value
+    .split(',')
+    .map((column) => column.trim())
+    .filter(Boolean)
+  setTabSharedColumns(nextColumns)
+}
+
+const onToggleTabSharedColumn = (column: string) => {
+  const next = new Set(tabSharedColumns.value)
+  if (next.has(column)) {
+    next.delete(column)
+  } else {
+    next.add(column)
+  }
+  setTabSharedColumns(
+    tabSharedColumnOptions.value.filter((entry) => next.has(entry))
+  )
+}
+
 watch(
   () => props.module,
   (module) => {
@@ -253,6 +444,7 @@ watch(
     draft.gridH = module.gridH
     configText.value = JSON.stringify(module.config ?? {}, null, 2)
     selectedWritableTableId.value = readWritableTableId(module.config)
+    syncDataTableTabControls(module.config)
     parseError.value = ''
     templateError.value = ''
     selectedTemplateId.value = ''
@@ -279,6 +471,11 @@ watch(
   () => {
     if (!isDataTableModule.value) {
       selectedWritableTableId.value = ''
+      tabbedEnabled.value = false
+      tabGroupSeparator.value = ''
+      tabDefault.value = ''
+      tabSharedColumns.value = []
+      tabSharedColumnsText.value = ''
       return
     }
 
@@ -291,6 +488,8 @@ watch(
     if (nextWritableTableId !== selectedWritableTableId.value) {
       selectedWritableTableId.value = nextWritableTableId
     }
+
+    syncDataTableTabControls(parsedConfig)
   }
 )
 
@@ -464,7 +663,7 @@ onMounted(() => {
         </label>
       </div>
 
-      <label
+      <div
         v-else
         class="block text-xs font-medium uppercase tracking-wide text-gray-600"
       >
@@ -490,13 +689,69 @@ onMounted(() => {
           {{ writableTableError }}
         </p>
 
+        <div v-if="isDataTableModule" class="mt-2 space-y-2 rounded border border-gray-200 bg-gray-50 p-3 normal-case">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-medium uppercase tracking-wide text-gray-600">Tabbed</span>
+            <input
+              v-model="tabbedEnabled"
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300"
+              @change="onTabEnabledChange"
+            >
+          </div>
+
+          <div v-if="tabbedEnabled" class="space-y-2">
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+              Separator
+              <input
+                v-model="tabGroupSeparator"
+                class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                @change="onTabGroupSeparatorChange"
+              />
+            </label>
+
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+              Default tab
+              <input
+                v-model="tabDefault"
+                class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                @change="onTabDefaultChange"
+              />
+            </label>
+
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+              Shared columns
+              <input
+                v-model="tabSharedColumnsText"
+                class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                @change="onTabSharedColumnsTextChange"
+              />
+            </label>
+
+            <div v-if="tabSharedColumnOptions.length" class="grid gap-1.5 sm:grid-cols-2">
+              <label
+                v-for="column in tabSharedColumnOptions"
+                :key="`tab-shared-column-${column}`"
+                class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+              >
+                <input
+                  type="checkbox"
+                  :checked="tabSharedColumns.includes(column)"
+                  @change="onToggleTabSharedColumn(column)"
+                >
+                <span class="truncate">{{ column }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
         Config (JSON)
         <textarea
           v-model="configText"
           rows="8"
           class="mt-1 w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs"
         ></textarea>
-      </label>
+      </div>
 
       <p v-if="parseError" class="text-sm text-red-600">{{ parseError }}</p>
 

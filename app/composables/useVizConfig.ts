@@ -431,6 +431,10 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
       rowLimit: 500,
       showSearch: false,
       useThousandsSeparator: false,
+      tabbed: false,
+      tabGroupSeparator: ' ',
+      tabSharedColumns: [],
+      tabDefault: '',
       columnColors: {},
       columnGradients: {},
       columnValueFormats: {},
@@ -592,6 +596,15 @@ const sanitizeVizConfigForType = (
       ['useThousandsSeparator', 'use_thousands_separator'],
       false
     )
+    normalized.tabbed = readConfiguredBoolean(normalized, ['tabbed'], false)
+    const tabSeparator = readConfiguredValue(normalized, [
+      'tabGroupSeparator',
+      'tab_group_separator'
+    ])
+    normalized.tabGroupSeparator =
+      typeof tabSeparator === 'string' && tabSeparator.length ? tabSeparator : ' '
+    normalized.tabSharedColumns = resolveTableTabSharedColumns(ordered, normalized)
+    normalized.tabDefault = readConfiguredString(normalized, ['tabDefault', 'tab_default'])
     normalized.columnColors = resolveColumnColors(columns, normalized)
     normalized.columnGradients = resolveColumnGradients(columns, normalized)
     normalized.columnValueFormats = readConfiguredTableColumnValueFormats(normalized, columns)
@@ -819,6 +832,142 @@ export const resolveTableVisibleColumns = (orderedColumns: string[], config: Rec
   }
 
   return orderedColumns.filter((column) => configuredVisible.includes(column))
+}
+
+export const resolveTableTabbedEnabled = (config: Record<string, unknown>) =>
+  readConfiguredBoolean(config, ['tabbed'], false)
+
+export const resolveTableTabGroupSeparator = (config: Record<string, unknown>) => {
+  const rawValue = readConfiguredValue(config, ['tabGroupSeparator', 'tab_group_separator'])
+  return typeof rawValue === 'string' && rawValue.length ? rawValue : ' '
+}
+
+export const resolveTableTabSharedColumns = (
+  columns: string[],
+  config: Record<string, unknown>
+) =>
+  readConfiguredStringArray(config, ['tabSharedColumns', 'tab_shared_columns'])
+    .filter(
+      (column, index, source) =>
+        columns.includes(column) && source.indexOf(column) === index
+    )
+
+export const resolveTableTabDefault = (config: Record<string, unknown>) =>
+  readConfiguredString(config, ['tabDefault', 'tab_default'])
+
+export const detectTableTabGroups = (
+  columns: string[],
+  separator: string,
+  sharedOverride?: string[]
+) => {
+  const sharedSet = new Set((sharedOverride ?? []).filter((column) => columns.includes(column)))
+  const groups = new Map<string, string[]>()
+
+  if (!separator) {
+    return {
+      shared: [...columns],
+      groups
+    }
+  }
+
+  const candidates = columns.filter((column) => !sharedSet.has(column))
+  const prefixesByColumn = new Map<string, string[]>()
+  const prefixCounts = new Map<string, number>()
+
+  for (const column of candidates) {
+    const segments = column
+      .split(separator)
+      .map((segment) => segment.trim())
+      .filter(Boolean)
+
+    if (segments.length < 2) {
+      sharedSet.add(column)
+      continue
+    }
+
+    const prefixes: string[] = []
+    for (let index = 1; index < segments.length; index += 1) {
+      const prefix = segments.slice(0, index).join(separator).trim()
+      if (!prefix) {
+        continue
+      }
+      prefixes.push(prefix)
+      prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1)
+    }
+
+    if (!prefixes.length) {
+      sharedSet.add(column)
+      continue
+    }
+
+    prefixesByColumn.set(column, prefixes)
+  }
+
+  for (const column of candidates) {
+    if (sharedSet.has(column)) {
+      continue
+    }
+
+    const prefixes = prefixesByColumn.get(column)
+    if (!prefixes?.length) {
+      sharedSet.add(column)
+      continue
+    }
+
+    let selectedPrefix = ''
+    for (let index = prefixes.length - 1; index >= 0; index -= 1) {
+      const candidatePrefix = prefixes[index]
+      if ((prefixCounts.get(candidatePrefix) ?? 0) >= 2) {
+        selectedPrefix = candidatePrefix
+        break
+      }
+    }
+
+    if (!selectedPrefix) {
+      sharedSet.add(column)
+      continue
+    }
+
+    const existing = groups.get(selectedPrefix) ?? []
+    existing.push(column)
+    groups.set(selectedPrefix, existing)
+  }
+
+  for (const [groupName, groupedColumns] of [...groups.entries()]) {
+    if (groupedColumns.length >= 2) {
+      continue
+    }
+    groupedColumns.forEach((column) => sharedSet.add(column))
+    groups.delete(groupName)
+  }
+
+  return {
+    shared: columns.filter((column) => sharedSet.has(column)),
+    groups: new Map(
+      [...groups.entries()].map(([groupName, groupedColumns]) => [
+        groupName,
+        columns.filter((column) => groupedColumns.includes(column))
+      ])
+    )
+  }
+}
+
+export const stripTableTabGroupPrefix = (
+  column: string,
+  groupName: string,
+  separator: string
+) => {
+  if (!groupName || !separator) {
+    return column
+  }
+
+  const prefix = `${groupName}${separator}`
+  if (!column.startsWith(prefix)) {
+    return column
+  }
+
+  const nextLabel = column.slice(prefix.length).trim()
+  return nextLabel || column
 }
 
 export const resolveTableColumnValueFormats = (

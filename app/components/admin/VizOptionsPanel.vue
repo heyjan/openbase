@@ -21,6 +21,7 @@ import type {
   VizSeriesOption
 } from '~/types/viz-options'
 import {
+  detectTableTabGroups,
   getCategoryColumns,
   getNumericColumns,
   parseConditionalFormattingRules,
@@ -28,6 +29,9 @@ import {
   resolveColumnGradients,
   resolveTableColumnOrder,
   resolveTableColumnValueFormats,
+  resolveTableTabDefault,
+  resolveTableTabGroupSeparator,
+  resolveTableTabSharedColumns,
   resolveTableVisibleColumns,
   toNumber
 } from '~/composables/useVizConfig'
@@ -94,6 +98,28 @@ const updateString = (key: string, value: unknown) => {
   updateConfig({
     [key]: typeof value === 'string' ? value : String(value ?? '')
   })
+}
+
+const updateOptionalString = (key: string, value: unknown) => {
+  const text = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  const next = { ...props.modelValue }
+  if (text) {
+    next[key] = text
+  } else {
+    delete next[key]
+  }
+  emitNext(next)
+}
+
+const updateOptionalRawString = (key: string, value: unknown) => {
+  const text = typeof value === 'string' ? value : String(value ?? '')
+  const next = { ...props.modelValue }
+  if (text.length > 0) {
+    next[key] = text
+  } else {
+    delete next[key]
+  }
+  emitNext(next)
 }
 
 const updateOptionalNumber = (key: string, value: unknown) => {
@@ -177,6 +203,30 @@ const orderedColumns = computed(() =>
 
 const visibleColumns = computed(() =>
   resolveTableVisibleColumns(orderedColumns.value, props.modelValue)
+)
+
+const tableTabbedEnabled = computed(() =>
+  readBoolean('tabbed', false)
+)
+
+const tableTabGroupSeparator = computed(() =>
+  resolveTableTabGroupSeparator(props.modelValue)
+)
+
+const tableTabSharedColumns = computed(() =>
+  resolveTableTabSharedColumns(orderedColumns.value, props.modelValue)
+)
+
+const tableTabDefault = computed(() =>
+  resolveTableTabDefault(props.modelValue)
+)
+
+const tableTabGroups = computed(() =>
+  [...detectTableTabGroups(
+    orderedColumns.value,
+    tableTabGroupSeparator.value,
+    tableTabSharedColumns.value
+  ).groups.keys()]
 )
 
 const columnValueFormats = computed(() =>
@@ -266,6 +316,27 @@ const toggleVisibleColumn = (column: string) => {
   updateConfig({
     visibleColumns: orderedColumns.value.filter((entry) => set.has(entry))
   })
+}
+
+const toggleTabSharedColumn = (column: string) => {
+  const next = new Set(tableTabSharedColumns.value)
+  if (next.has(column)) {
+    next.delete(column)
+  } else {
+    next.add(column)
+  }
+
+  const nextColumns = orderedColumns.value.filter((entry) => next.has(entry))
+  const nextConfig = { ...props.modelValue }
+
+  if (nextColumns.length) {
+    nextConfig.tabSharedColumns = nextColumns
+  } else {
+    delete nextConfig.tabSharedColumns
+  }
+
+  delete nextConfig.tab_shared_columns
+  emitNext(nextConfig)
 }
 
 const updateColumnColor = (column: string, color: string) => {
@@ -617,6 +688,62 @@ watch(
                 :model-value="readBoolean('useThousandsSeparator', false)"
                 @update:model-value="updateBoolean('useThousandsSeparator', $event)"
               />
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded border border-gray-200 bg-gray-50 p-3">
+          <div class="flex items-center justify-between">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Tabbed</p>
+            <USwitch
+              :model-value="tableTabbedEnabled"
+              @update:model-value="updateBoolean('tabbed', $event)"
+            />
+          </div>
+
+          <div v-if="tableTabbedEnabled" class="mt-3 space-y-3">
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+              Separator
+              <UInput
+                class="mt-1"
+                :model-value="typeof modelValue.tabGroupSeparator === 'string' ? modelValue.tabGroupSeparator : ''"
+                @update:model-value="updateOptionalRawString('tabGroupSeparator', $event)"
+              />
+            </label>
+
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+              Default tab
+              <UInput
+                class="mt-1"
+                :model-value="tableTabDefault"
+                list="table-tab-defaults"
+                @update:model-value="updateOptionalString('tabDefault', $event)"
+              />
+              <datalist id="table-tab-defaults">
+                <option
+                  v-for="tab in tableTabGroups"
+                  :key="`tab-option-${tab}`"
+                  :value="tab"
+                />
+              </datalist>
+            </label>
+
+            <div>
+              <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Shared columns</p>
+              <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                <label
+                  v-for="column in orderedColumns"
+                  :key="`tab-shared-${column}`"
+                  class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="tableTabSharedColumns.includes(column)"
+                    @change="toggleTabSharedColumn(column)"
+                  >
+                  <span class="truncate">{{ column }}</span>
+                </label>
+              </div>
             </div>
           </div>
         </div>

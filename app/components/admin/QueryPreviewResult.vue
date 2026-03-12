@@ -17,6 +17,7 @@ import type { SavedQueryPreviewResult } from '~/types/query'
 import type { QueryPreviewVisualization, VizSeriesOption } from '~/types/viz-options'
 import {
   applyTableSortAndLimit,
+  detectTableTabGroups,
   formatTableCellDisplayValue,
   getCategoryColumns,
   getColumnGradientStyle,
@@ -28,7 +29,12 @@ import {
   resolveColumnGradients,
   resolveTableColumnOrder,
   resolveTableColumnValueFormats,
+  resolveTableTabDefault,
+  resolveTableTabGroupSeparator,
+  resolveTableTabSharedColumns,
+  resolveTableTabbedEnabled,
   resolveTableVisibleColumns,
+  stripTableTabGroupPrefix,
   toNumber
 } from '~/composables/useVizConfig'
 
@@ -629,6 +635,47 @@ const tableVisibleColumns = computed(() =>
   resolveTableVisibleColumns(tableOrderedColumns.value, config.value)
 )
 
+const tableTabbedEnabled = computed(() =>
+  resolveTableTabbedEnabled(config.value)
+)
+
+const tableTabGroupSeparator = computed(() =>
+  resolveTableTabGroupSeparator(config.value)
+)
+
+const tableTabSharedColumns = computed(() =>
+  resolveTableTabSharedColumns(tableVisibleColumns.value, config.value)
+)
+
+const tableTabDefault = computed(() =>
+  resolveTableTabDefault(config.value)
+)
+
+const tableTabGrouping = computed(() =>
+  detectTableTabGroups(
+    tableVisibleColumns.value,
+    tableTabGroupSeparator.value,
+    tableTabSharedColumns.value
+  )
+)
+
+const tableTabGroups = computed(() =>
+  [...tableTabGrouping.value.groups.entries()].map(([name, columns]) => ({
+    name,
+    columns
+  }))
+)
+
+const tableSharedColumns = computed(() => tableTabGrouping.value.shared)
+const tableShouldUseTabs = computed(() =>
+  tableTabbedEnabled.value && tableTabGroups.value.length > 0
+)
+const tableShowTabBar = computed(() =>
+  tableShouldUseTabs.value && tableTabGroups.value.length > 1
+)
+
+const tableActiveTab = ref('')
+
 const tableShowSearch = computed(() =>
   readBoolean(['showSearch', 'show_search'], false)
 )
@@ -668,10 +715,65 @@ const filteredTableRows = computed(() => {
   )
 })
 
+watch(
+  [tableTabGroups, tableTabDefault],
+  ([groups, defaultTab]) => {
+    if (!groups.length) {
+      tableActiveTab.value = ''
+      return
+    }
+
+    if (defaultTab && groups.some((group) => group.name === defaultTab)) {
+      tableActiveTab.value = defaultTab
+      return
+    }
+
+    if (groups.some((group) => group.name === tableActiveTab.value)) {
+      return
+    }
+
+    tableActiveTab.value = groups[0]?.name ?? ''
+  },
+  { immediate: true }
+)
+
+const tableActiveTabGroup = computed(() => {
+  if (!tableTabGroups.value.length) {
+    return null
+  }
+  return (
+    tableTabGroups.value.find((group) => group.name === tableActiveTab.value) ??
+    tableTabGroups.value[0]
+  )
+})
+
+const tableActiveTabGroupColumns = computed(() =>
+  new Set(tableActiveTabGroup.value?.columns ?? [])
+)
+
+const tableActiveColumns = computed(() => {
+  if (!tableShouldUseTabs.value) {
+    return tableVisibleColumns.value
+  }
+
+  const selected = new Set([
+    ...tableSharedColumns.value,
+    ...(tableActiveTabGroup.value?.columns ?? [])
+  ])
+  return tableVisibleColumns.value.filter((column) => selected.has(column))
+})
+
 const tableColumns = computed(() =>
-  tableVisibleColumns.value.map((column) => ({
+  tableActiveColumns.value.map((column) => ({
     key: column,
-    label: column
+    label:
+      tableShouldUseTabs.value && tableActiveTabGroupColumns.value.has(column)
+        ? stripTableTabGroupPrefix(
+            column,
+            tableActiveTabGroup.value?.name ?? '',
+            tableTabGroupSeparator.value
+          )
+        : column
   }))
 )
 
@@ -1178,6 +1280,24 @@ const chartOption = computed<EChartsOption>(() => {
               placeholder="Search rows"
               class="w-full max-w-xs"
             />
+          </div>
+          <div
+            v-if="tableShowTabBar"
+            class="flex flex-wrap gap-1 border-b border-gray-200 p-3"
+          >
+            <button
+              v-for="group in tableTabGroups"
+              :key="group.name"
+              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              :class="
+                tableActiveTab === group.name
+                  ? 'bg-brand-primary text-white'
+                  : 'border border-gray-200 text-gray-600 hover:border-gray-300'
+              "
+              @click="tableActiveTab = group.name"
+            >
+              {{ group.name }}
+            </button>
           </div>
           <Table
             :rows="filteredTableRows"

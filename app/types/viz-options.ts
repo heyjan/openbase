@@ -57,6 +57,10 @@ export type TableVizOptions = SharedVizOptions & {
   rowLimit?: number
   showSearch?: boolean
   useThousandsSeparator?: boolean
+  tabbed?: boolean
+  tabGroupSeparator?: string
+  tabSharedColumns?: string[]
+  tabDefault?: string
   columnColors?: Record<string, string>
   columnGradients?: Record<string, boolean>
   columnValueFormats?: Record<string, TableColumnValueFormat>
