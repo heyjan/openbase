@@ -2,6 +2,7 @@
 import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import type { ModuleDataResult } from '~/composables/useModuleData'
+import { useChartTooltip } from '~/composables/useChartTooltip'
 import type { ModuleConfig } from '~/types/module'
 
 type SeriesConfig = {
@@ -14,6 +15,7 @@ const props = defineProps<{
   module: ModuleConfig
   moduleData?: ModuleDataResult
 }>()
+const { renderLabelValueRows } = useChartTooltip()
 
 const palette = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
 
@@ -126,6 +128,7 @@ const radarSeriesData = computed(() =>
   series.value.map((item) => ({
     name: item.label,
     value: rows.value.map((row) => toNumber(row[item.field]) ?? 0),
+    rawValues: rows.value.map((row) => row[item.field]),
     areaStyle: {
       opacity: 0.08
     }
@@ -134,10 +137,32 @@ const radarSeriesData = computed(() =>
 
 const hasData = computed(() => indicators.value.length > 2 && series.value.length > 0)
 
+const formatRadarTooltip = (params: unknown) => {
+  if (!params || typeof params !== 'object') {
+    return ''
+  }
+
+  const record = params as Record<string, unknown>
+  const dataRecord =
+    record.data && typeof record.data === 'object' ? (record.data as Record<string, unknown>) : null
+  const values = Array.isArray(dataRecord?.value) ? dataRecord.value : []
+  const rawValues = Array.isArray(dataRecord?.rawValues) ? dataRecord.rawValues : []
+  const headerLabel = String(record.seriesName ?? dataRecord?.name ?? '')
+  return renderLabelValueRows({
+    header: headerLabel || undefined,
+    rows: values.map((value, index) => ({
+      label: categories.value[index] ?? `Item ${index + 1}`,
+      value,
+      rawValue: rawValues[index]
+    }))
+  })
+}
+
 const chartOption = computed<EChartsOption>(() => ({
   color: series.value.map((item) => item.color),
   tooltip: {
-    trigger: 'item'
+    trigger: 'item',
+    formatter: formatRadarTooltip
   },
   legend: {
     show: showLegend.value,

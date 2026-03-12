@@ -2,6 +2,7 @@
 import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import type { ModuleDataResult } from '~/composables/useModuleData'
+import { useChartTooltip } from '~/composables/useChartTooltip'
 import type { ModuleConfig } from '~/types/module'
 
 type SeriesConfig = {
@@ -14,6 +15,7 @@ const props = defineProps<{
   module: ModuleConfig
   moduleData?: ModuleDataResult
 }>()
+const { renderAxisTooltip } = useChartTooltip()
 
 const palette = ['#2563eb', '#16a34a', '#dc2626', '#ea580c', '#9333ea', '#0f766e']
 const rows = computed(() => (props.moduleData?.rows ?? []).slice(0, 80).reverse())
@@ -132,99 +134,13 @@ const barBorderRadius = computed(() => {
   return value > 12 ? 12 : value
 })
 
-const toTooltipValue = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value
-  }
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return toTooltipValue((value as Record<string, unknown>).value)
-  }
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : 0
-  }
-  if (Array.isArray(value)) {
-    return toTooltipValue(value[value.length - 1])
-  }
-  return 0
-}
-
-const readFractionDigits = (rawValue: unknown) => {
-  if (typeof rawValue !== 'string') {
-    return null
-  }
-  const value = rawValue.trim()
-  if (!value) {
-    return null
-  }
-
-  const plainMatch = value.match(/^[-+]?\d+([.,](\d+))?$/)
-  if (plainMatch) {
-    return plainMatch[2]?.length ?? 0
-  }
-
-  const enThousandsMatch = value.match(/^[-+]?\d{1,3}(,\d{3})+(\.(\d+))?$/)
-  if (enThousandsMatch) {
-    return enThousandsMatch[3]?.length ?? 0
-  }
-
-  const deThousandsMatch = value.match(/^[-+]?\d{1,3}(\.\d{3})+(,(\d+))?$/)
-  if (deThousandsMatch) {
-    return deThousandsMatch[3]?.length ?? 0
-  }
-
-  return null
-}
-
-const formatTooltipValue = (value: unknown, rawValue: unknown) => {
-  const numeric = toTooltipValue(value)
-  const fractionDigits = readFractionDigits(rawValue)
-  if (fractionDigits === null) {
-    return numeric.toLocaleString()
-  }
-  return numeric.toLocaleString(undefined, {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits
-  })
-}
-
-const formatSortedTooltip = (params: unknown) => {
-  if (!Array.isArray(params) || !params.length) {
-    return ''
-  }
-
-  const items = (params as Array<Record<string, unknown>>).map((item) => ({
-    seriesName: String(item.seriesName ?? ''),
-    value: item.value,
-    rawValue:
-      item.data && typeof item.data === 'object' ? (item.data as Record<string, unknown>).rawValue : null,
-    color: String(item.color ?? '#6b7280'),
-    axisValueLabel: String(item.axisValueLabel ?? '')
-  }))
-
-  const sorted = [...items].sort((left, right) => toTooltipValue(right.value) - toTooltipValue(left.value))
-  const header = sorted[0]?.axisValueLabel
-    ? `<div style="font-weight:600;margin-bottom:4px">${sorted[0].axisValueLabel}</div>`
-    : ''
-  const rows = sorted
-    .map((item) => {
-      return `<div style="display:flex;align-items:center;gap:6px;line-height:1.6">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${item.color}"></span>
-        <span>${item.seriesName}</span>
-        <span style="margin-left:auto;font-weight:500">${formatTooltipValue(item.value, item.rawValue)}</span>
-      </div>`
-    })
-    .join('')
-
-  return header + rows
-}
-
 const chartOption = computed<EChartsOption>(() => ({
   color: series.value.map((item) => item.color),
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'shadow' },
-    formatter: stackedBars.value ? formatSortedTooltip : undefined
+    formatter: (params: unknown) =>
+      renderAxisTooltip(params, { sortByValue: stackedBars.value })
   },
   legend: {
     show: showLegend.value,

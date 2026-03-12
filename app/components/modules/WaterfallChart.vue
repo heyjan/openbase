@@ -2,17 +2,22 @@
 import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import type { ModuleDataResult } from '~/composables/useModuleData'
+import { useChartTooltip } from '~/composables/useChartTooltip'
 import type { ModuleConfig } from '~/types/module'
+import { readFractionDigits } from '~/utils/chart-number-format'
 
 type WaterfallPoint = {
   label: string
   delta: number
+  rawDelta: unknown
+  fractionDigits: number | null
 }
 
 const props = defineProps<{
   module: ModuleConfig
   moduleData?: ModuleDataResult
 }>()
+const { formatTooltipValue, formatTooltipValueWithDigits } = useChartTooltip()
 
 const rows = computed(() => (props.moduleData?.rows ?? []).slice(0, 80))
 const columns = computed(() => {
@@ -126,7 +131,12 @@ const points = computed<WaterfallPoint[]>(() => {
         return null
       }
 
-      return { label, delta } satisfies WaterfallPoint
+      return {
+        label,
+        delta,
+        rawDelta: row[valueField.value],
+        fractionDigits: readFractionDigits(row[valueField.value])
+      } satisfies WaterfallPoint
     })
     .filter((point): point is WaterfallPoint => point !== null)
 })
@@ -143,9 +153,20 @@ const breakdown = computed(() => {
     }
   })
 
+  const maxFractionDigits = bars.reduce<number | null>((current, bar) => {
+    if (bar.fractionDigits === null) {
+      return current
+    }
+    if (current === null) {
+      return bar.fractionDigits
+    }
+    return Math.max(current, bar.fractionDigits)
+  }, null)
+
   return {
     bars,
-    total: runningTotal
+    total: runningTotal,
+    maxFractionDigits
   }
 })
 
@@ -175,7 +196,7 @@ const chartOption = computed<EChartsOption>(() => ({
       const index = first.dataIndex
 
       if (index >= breakdown.value.bars.length) {
-        return `Total: ${breakdown.value.total.toLocaleString()}`
+        return `Total: ${formatTooltipValueWithDigits(breakdown.value.total, breakdown.value.maxFractionDigits)}`
       }
 
       const bar = breakdown.value.bars[index]
@@ -185,8 +206,8 @@ const chartOption = computed<EChartsOption>(() => ({
       const sign = bar.delta >= 0 ? '+' : ''
       return [
         `${bar.label}`,
-        `Delta: ${sign}${bar.delta.toLocaleString()}`,
-        `Running total: ${bar.totalAfter.toLocaleString()}`
+        `Delta: ${sign}${formatTooltipValue(bar.delta, bar.rawDelta, breakdown.value.maxFractionDigits)}`,
+        `Running total: ${formatTooltipValueWithDigits(bar.totalAfter, breakdown.value.maxFractionDigits)}`
       ].join('<br/>')
     }
   },
@@ -256,14 +277,14 @@ const chartOption = computed<EChartsOption>(() => ({
         color: '#374151',
         formatter: (params: { dataIndex: number }) => {
           if (params.dataIndex >= breakdown.value.bars.length) {
-            return breakdown.value.total.toLocaleString()
+            return formatTooltipValueWithDigits(breakdown.value.total, breakdown.value.maxFractionDigits)
           }
           const bar = breakdown.value.bars[params.dataIndex]
           if (!bar) {
             return ''
           }
           const sign = bar.delta >= 0 ? '+' : ''
-          return `${sign}${bar.delta.toLocaleString()}`
+          return `${sign}${formatTooltipValue(bar.delta, bar.rawDelta, breakdown.value.maxFractionDigits)}`
         }
       },
       emphasis: {

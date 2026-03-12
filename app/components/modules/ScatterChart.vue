@@ -2,10 +2,12 @@
 import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import type { ModuleDataResult } from '~/composables/useModuleData'
+import { useChartTooltip } from '~/composables/useChartTooltip'
 import type { ModuleConfig } from '~/types/module'
 
 type ScatterPoint = {
   value: [number, number, number]
+  rawValue: [unknown, unknown, unknown]
   name?: string
 }
 
@@ -13,6 +15,7 @@ const props = defineProps<{
   module: ModuleConfig
   moduleData?: ModuleDataResult
 }>()
+const { renderLabelValueRows } = useChartTooltip()
 
 const rows = computed(() => (props.moduleData?.rows ?? []).slice(0, 200))
 const columns = computed(() => {
@@ -136,6 +139,7 @@ const scatterData = computed<ScatterPoint[]>(() => {
 
       return {
         value: [x, y, size],
+        rawValue: [row[xField.value], row[yField.value], row[sizeField.value] ?? row[yField.value]],
         name: labelText.trim() || undefined
       }
     })
@@ -175,9 +179,43 @@ const dynamicSymbolSize = (value: unknown) => {
 
 const hasData = computed(() => scatterData.value.length > 0)
 
+const formatScatterTooltip = (params: unknown) => {
+  if (!params || typeof params !== 'object') {
+    return ''
+  }
+
+  const record = params as Record<string, unknown>
+  const dataRecord =
+    record.data && typeof record.data === 'object' ? (record.data as Record<string, unknown>) : null
+  const values = Array.isArray(dataRecord?.value) ? dataRecord.value : []
+  const rawValues = Array.isArray(dataRecord?.rawValue) ? dataRecord.rawValue : []
+  const name = String(dataRecord?.name ?? '')
+  return renderLabelValueRows({
+    header: name || undefined,
+    rows: [
+      {
+        label: xField.value || 'X',
+        value: values[0],
+        rawValue: rawValues[0]
+      },
+      {
+        label: yField.value || 'Y',
+        value: values[1],
+        rawValue: rawValues[1]
+      },
+      {
+        label: sizeField.value || 'Size',
+        value: values[2],
+        rawValue: rawValues[2]
+      }
+    ]
+  })
+}
+
 const chartOption = computed<EChartsOption>(() => ({
   tooltip: {
-    trigger: 'item'
+    trigger: 'item',
+    formatter: formatScatterTooltip
   },
   grid: {
     left: 14,

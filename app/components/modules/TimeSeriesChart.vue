@@ -2,6 +2,7 @@
 import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import type { ModuleDataResult } from '~/composables/useModuleData'
+import { useChartTooltip } from '~/composables/useChartTooltip'
 import type { ModuleConfig } from '~/types/module'
 
 type SeriesConfig = {
@@ -14,6 +15,7 @@ const props = defineProps<{
   module: ModuleConfig
   moduleData?: ModuleDataResult
 }>()
+const { renderAxisTooltip } = useChartTooltip()
 
 const palette = ['#1f2937', '#2563eb', '#dc2626', '#16a34a', '#9333ea', '#ea580c']
 
@@ -140,7 +142,8 @@ const yAxisMax = computed(() => {
 const chartOption = computed<EChartsOption>(() => ({
   color: series.value.map((item) => item.color),
   tooltip: {
-    trigger: 'axis'
+    trigger: 'axis',
+    formatter: (params: unknown) => renderAxisTooltip(params)
   },
   legend: {
     show: showLegend.value,
@@ -184,7 +187,16 @@ const chartOption = computed<EChartsOption>(() => ({
     emphasis: {
       focus: 'series'
     },
-    data: rows.value.map((row) => toNumber(row[item.field]))
+    data: rows.value.map((row) => {
+      const value = toNumber(row[item.field])
+      if (value === null) {
+        return null
+      }
+      return {
+        value,
+        rawValue: row[item.field]
+      }
+    })
   }))
 }))
 </script>

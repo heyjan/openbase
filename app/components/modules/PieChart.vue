@@ -2,12 +2,15 @@
 import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import type { ModuleDataResult } from '~/composables/useModuleData'
+import { useChartTooltip } from '~/composables/useChartTooltip'
 import type { ModuleConfig } from '~/types/module'
+import { readFractionDigits } from '~/utils/chart-number-format'
 
 const props = defineProps<{
   module: ModuleConfig
   moduleData?: ModuleDataResult
 }>()
+const { formatTooltipValueWithDigits } = useChartTooltip()
 
 const rows = computed(() => props.moduleData?.rows ?? [])
 
@@ -65,23 +68,37 @@ const topN = computed(() => {
   return 8
 })
 
+const mergeFractionDigits = (left: number | null, right: number | null) => {
+  if (left === null) {
+    return right
+  }
+  if (right === null) {
+    return left
+  }
+  return Math.max(left, right)
+}
+
 const pieData = computed(() => {
   if (!categoryField.value || !valueField.value) {
-    return [] as Array<{ name: string; value: number }>
+    return [] as Array<{ name: string; value: number; fractionDigits: number | null }>
   }
 
-  const totals = new Map<string, number>()
+  const totals = new Map<string, { value: number; fractionDigits: number | null }>()
   for (const row of rows.value) {
     const name = String(row[categoryField.value] ?? '').trim() || 'Unknown'
     const numeric = toNumber(row[valueField.value])
     if (numeric === null) {
       continue
     }
-    totals.set(name, (totals.get(name) ?? 0) + numeric)
+    const current = totals.get(name) ?? { value: 0, fractionDigits: null }
+    totals.set(name, {
+      value: current.value + numeric,
+      fractionDigits: mergeFractionDigits(current.fractionDigits, readFractionDigits(row[valueField.value]))
+    })
   }
 
   return Array.from(totals.entries())
-    .map(([name, value]) => ({ name, value }))
+    .map(([name, value]) => ({ name, value: value.value, fractionDigits: value.fractionDigits }))
     .sort((a, b) => b.value - a.value)
     .slice(0, topN.value)
 })
@@ -103,10 +120,32 @@ const showLegend = computed(() => {
   return typeof value === 'boolean' ? value : true
 })
 
+const formatPieTooltip = (params: unknown) => {
+  if (!params || typeof params !== 'object') {
+    return ''
+  }
+
+  const record = params as Record<string, unknown>
+  const dataRecord =
+    record.data && typeof record.data === 'object' ? (record.data as Record<string, unknown>) : null
+  const name = String(record.name ?? '')
+  const fractionDigits =
+    typeof dataRecord?.fractionDigits === 'number' && Number.isFinite(dataRecord.fractionDigits)
+      ? dataRecord.fractionDigits
+      : null
+  const value = formatTooltipValueWithDigits(record.value, fractionDigits)
+  const percent =
+    typeof record.percent === 'number' && Number.isFinite(record.percent)
+      ? record.percent.toLocaleString(undefined, { maximumFractionDigits: 2 })
+      : ''
+
+  return percent ? `${name}: ${value} (${percent}%)` : `${name}: ${value}`
+}
+
 const chartOption = computed<EChartsOption>(() => ({
   tooltip: {
     trigger: 'item',
-    formatter: '{b}: {c} ({d}%)'
+    formatter: formatPieTooltip
   },
   legend: {
     show: showLegend.value,
