@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { isTextModuleType, type ModuleConfig } from '~/types/module'
 import type { QueryVariable, SelectorMode } from '~/types/query-variable'
-import Badge from '~/components/ui/Badge.vue'
 import Spinner from '~/components/ui/Spinner.vue'
 import AnnotationLog from '~/components/modules/AnnotationLog.vue'
 import BarChart from '~/components/modules/BarChart.vue'
@@ -50,17 +49,6 @@ const componentMap = {
 
 const component = computed(() => componentMap[props.module.type] ?? KpiCard)
 const isTextModule = computed(() => isTextModuleType(props.module.type))
-const chartModuleTypes = new Set<ModuleConfig['type']>([
-  'time_series_chart',
-  'line_chart',
-  'bar_chart',
-  'stacked_horizontal_bar_chart',
-  'waterfall_chart',
-  'radar_chart',
-  'scatter_chart',
-  'pie_chart'
-])
-const isChartModule = computed(() => chartModuleTypes.has(props.module.type))
 const route = useRoute()
 const isPublicDashboardRoute = computed(() => route.path.startsWith('/d/'))
 const isEditorRoute = computed(() => route.path.startsWith('/editor/dashboards/'))
@@ -117,9 +105,18 @@ const title = computed(() => {
   return moduleTitle || defaultTitles[props.module.type]
 })
 const showTypeLabel = computed(() => props.module.type !== 'data_table')
+const showModuleTitle = computed(() => {
+  const config = props.module.config
+  if (!config || typeof config !== 'object') {
+    return true
+  }
+
+  const candidate = config.showTitle ?? config.show_title
+  return typeof candidate === 'boolean' ? candidate : true
+})
 
 const moduleRef = toRef(props, 'module')
-const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
+const { data, pending, error, refresh } = useModuleData(moduleRef)
 
 const moduleVariables = ref<QueryVariable[]>([])
 let variablesRequestSeq = 0
@@ -192,8 +189,7 @@ const effectiveVariableValues = computed(() =>
   isAdminEditRoute.value ? adminDashboardVariableValues.value : currentVariableValues.value
 )
 
-const showLiveControls = computed(() => canFetch.value && !isChartModule.value)
-const showHeaderControls = computed(() => moduleVariables.value.length > 0 || showLiveControls.value)
+const showHeaderControls = computed(() => moduleVariables.value.length > 0)
 
 const moduleVariablesQuery = computed<Record<string, string>>(() => {
   if (isAdminEditRoute.value) {
@@ -274,8 +270,14 @@ watch(
   >
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
-        <h3 class="text-sm font-semibold text-gray-900">{{ title }}</h3>
-        <p v-if="showTypeLabel" class="mt-1 text-xs uppercase tracking-wide text-gray-500">
+        <h3 v-if="showModuleTitle" class="text-sm font-semibold text-gray-900">{{ title }}</h3>
+        <p
+          v-if="showTypeLabel"
+          :class="[
+            'text-xs uppercase tracking-wide text-gray-500',
+            showModuleTitle ? 'mt-1' : ''
+          ]"
+        >
           {{ module.type.replace(/_/g, ' ') }}
         </p>
       </div>
@@ -286,14 +288,6 @@ watch(
           :values="effectiveVariableValues"
           @change="onFilterChange"
         />
-        <Badge v-if="showLiveControls">live</Badge>
-        <button
-          v-if="showLiveControls"
-          class="h-7 rounded border border-gray-200 px-2 text-xs text-gray-700 hover:border-gray-300"
-          @click="refresh"
-        >
-          Refresh
-        </button>
       </div>
     </div>
 
@@ -331,14 +325,6 @@ watch(
         :values="effectiveVariableValues"
         @change="onFilterChange"
       />
-      <Badge v-if="showLiveControls">live</Badge>
-      <button
-        v-if="showLiveControls"
-        class="h-7 rounded border border-gray-200 px-2 text-xs text-gray-700 hover:border-gray-300"
-        @click="refresh"
-      >
-        Refresh
-      </button>
     </div>
     <div v-if="pending" class="flex items-center gap-2 text-sm text-gray-500">
       <Spinner />

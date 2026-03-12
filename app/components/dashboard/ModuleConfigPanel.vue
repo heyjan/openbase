@@ -68,6 +68,7 @@ const parseError = ref('')
 const writableTables = ref<Array<{ id: string; tableName: string; dataSourceName?: string }>>([])
 const writableTablesLoading = ref(false)
 const writableTableError = ref('')
+const showTitle = ref(true)
 const selectedWritableTableId = ref('')
 const tabbedEnabled = ref(false)
 const tabGroupSeparator = ref('')
@@ -200,6 +201,9 @@ const readConfigStringArray = (
 
   return [] as string[]
 }
+
+const readShowTitleConfig = (config: Record<string, unknown> | null | undefined) =>
+  readConfigBoolean(config, ['showTitle', 'show_title'], true)
 
 const syncDataTableTabControls = (config: Record<string, unknown> | null | undefined) => {
   tabbedEnabled.value = readConfigBoolean(config, ['tabbed'], false)
@@ -357,6 +361,31 @@ const onWritableTableChange = () => {
   parseError.value = ''
 }
 
+const onShowTitleChange = () => {
+  if (!props.module || isTextModuleType(props.module.type)) {
+    return
+  }
+
+  let parsedConfig: Record<string, unknown>
+  try {
+    parsedConfig = parseConfigText()
+  } catch (error) {
+    parseError.value = error instanceof Error ? error.message : 'Invalid module config.'
+    showTitle.value = readShowTitleConfig(props.module?.config)
+    return
+  }
+
+  if (showTitle.value) {
+    delete parsedConfig.showTitle
+  } else {
+    parsedConfig.showTitle = false
+  }
+  delete parsedConfig.show_title
+
+  configText.value = JSON.stringify(parsedConfig, null, 2)
+  parseError.value = ''
+}
+
 const onTabEnabledChange = () => {
   applyDataTableConfigPatch((config) => {
     config.tabbed = tabbedEnabled.value
@@ -443,6 +472,7 @@ watch(
     draft.gridW = module.gridW
     draft.gridH = module.gridH
     configText.value = JSON.stringify(module.config ?? {}, null, 2)
+    showTitle.value = readShowTitleConfig(module.config)
     selectedWritableTableId.value = readWritableTableId(module.config)
     syncDataTableTabControls(module.config)
     parseError.value = ''
@@ -467,9 +497,10 @@ watch(
 )
 
 watch(
-  () => [configText.value, isDataTableModule.value] as const,
+  () => [configText.value, isDataTableModule.value, isTextModule.value] as const,
   () => {
-    if (!isDataTableModule.value) {
+    if (isTextModule.value) {
+      showTitle.value = true
       selectedWritableTableId.value = ''
       tabbedEnabled.value = false
       tabGroupSeparator.value = ''
@@ -480,6 +511,23 @@ watch(
     }
 
     const parsedConfig = parseConfigTextSafe()
+    if (parsedConfig) {
+      const nextShowTitle = readShowTitleConfig(parsedConfig)
+      if (nextShowTitle !== showTitle.value) {
+        showTitle.value = nextShowTitle
+      }
+    }
+
+    if (!isDataTableModule.value) {
+      selectedWritableTableId.value = ''
+      tabbedEnabled.value = false
+      tabGroupSeparator.value = ''
+      tabDefault.value = ''
+      tabSharedColumns.value = []
+      tabSharedColumnsText.value = ''
+      return
+    }
+
     if (!parsedConfig) {
       return
     }
@@ -608,6 +656,19 @@ onMounted(() => {
           v-model="draft.title"
           class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
         />
+      </label>
+
+      <label
+        v-if="!isTextModule"
+        class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600"
+      >
+        <input
+          v-model="showTitle"
+          type="checkbox"
+          class="h-4 w-4 rounded border-gray-300"
+          @change="onShowTitleChange"
+        >
+        Show Title
       </label>
 
       <div v-if="isTextModule" class="space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
