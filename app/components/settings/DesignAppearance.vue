@@ -43,9 +43,28 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / 1024).toFixed(1)} KB`
 }
 
+const readFileAsDataUri = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onload = () => {
+      if (typeof reader.result !== 'string' || !reader.result.length) {
+        reject(new Error('Failed to read image'))
+        return
+      }
+
+      resolve(reader.result)
+    }
+
+    reader.onerror = () => {
+      reject(new Error('Failed to read image'))
+    }
+
+    reader.readAsDataURL(file)
+  })
+
 const resizeLogoToDataUri = (file: File) =>
   new Promise<string>((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file)
     const image = new Image()
 
     image.onload = () => {
@@ -87,17 +106,20 @@ const resizeLogoToDataUri = (file: File) =>
         resolve(canvas.toDataURL('image/png', 0.9))
       } catch (error) {
         reject(error instanceof Error ? error : new Error('Failed to resize image'))
-      } finally {
-        URL.revokeObjectURL(objectUrl)
       }
     }
 
     image.onerror = () => {
-      URL.revokeObjectURL(objectUrl)
       reject(new Error('Failed to load image'))
     }
 
-    image.src = objectUrl
+    readFileAsDataUri(file)
+      .then((dataUri) => {
+        image.src = dataUri
+      })
+      .catch((error) => {
+        reject(error instanceof Error ? error : new Error('Failed to load image'))
+      })
   })
 
 const openLogoPicker = () => {
