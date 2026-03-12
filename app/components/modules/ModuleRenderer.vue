@@ -104,7 +104,9 @@ const title = computed(() => {
   const moduleTitle = props.module.title?.trim()
   return moduleTitle || defaultTitles[props.module.type]
 })
-const showTypeLabel = computed(() => props.module.type !== 'data_table')
+const showTypeLabel = computed(
+  () => props.module.type !== 'data_table' && !isPublicDashboardRoute.value
+)
 const showModuleTitle = computed(() => {
   const config = props.module.config
   if (!config || typeof config !== 'object') {

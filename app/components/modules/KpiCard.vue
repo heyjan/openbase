@@ -118,11 +118,11 @@ const displayValue = computed(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col justify-center">
-    <p class="text-xs uppercase tracking-wide text-gray-500">
+  <div class="flex h-full flex-col items-center justify-center gap-1 text-center">
+    <p class="text-xs font-bold uppercase tracking-wide text-gray-500">
       {{ label }}
     </p>
-    <p class="mt-2 text-3xl font-semibold leading-tight" :style="{ color: valueColor }">
+    <p class="text-3xl font-semibold leading-tight" :style="{ color: valueColor }">
       {{ displayValue }}
     </p>
   </div>
