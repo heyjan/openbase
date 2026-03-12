@@ -136,6 +136,9 @@ const toTooltipValue = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value
   }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return toTooltipValue((value as Record<string, unknown>).value)
+  }
   if (typeof value === 'string' && value.trim()) {
     const parsed = Number(value)
     return Number.isFinite(parsed) ? parsed : 0
@@ -146,7 +149,44 @@ const toTooltipValue = (value: unknown) => {
   return 0
 }
 
-const formatTooltipValue = (value: unknown) => toTooltipValue(value).toLocaleString()
+const readFractionDigits = (rawValue: unknown) => {
+  if (typeof rawValue !== 'string') {
+    return null
+  }
+  const value = rawValue.trim()
+  if (!value) {
+    return null
+  }
+
+  const plainMatch = value.match(/^[-+]?\d+([.,](\d+))?$/)
+  if (plainMatch) {
+    return plainMatch[2]?.length ?? 0
+  }
+
+  const enThousandsMatch = value.match(/^[-+]?\d{1,3}(,\d{3})+(\.(\d+))?$/)
+  if (enThousandsMatch) {
+    return enThousandsMatch[3]?.length ?? 0
+  }
+
+  const deThousandsMatch = value.match(/^[-+]?\d{1,3}(\.\d{3})+(,(\d+))?$/)
+  if (deThousandsMatch) {
+    return deThousandsMatch[3]?.length ?? 0
+  }
+
+  return null
+}
+
+const formatTooltipValue = (value: unknown, rawValue: unknown) => {
+  const numeric = toTooltipValue(value)
+  const fractionDigits = readFractionDigits(rawValue)
+  if (fractionDigits === null) {
+    return numeric.toLocaleString()
+  }
+  return numeric.toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
+  })
+}
 
 const formatSortedTooltip = (params: unknown) => {
   if (!Array.isArray(params) || !params.length) {
@@ -156,6 +196,8 @@ const formatSortedTooltip = (params: unknown) => {
   const items = (params as Array<Record<string, unknown>>).map((item) => ({
     seriesName: String(item.seriesName ?? ''),
     value: item.value,
+    rawValue:
+      item.data && typeof item.data === 'object' ? (item.data as Record<string, unknown>).rawValue : null,
     color: String(item.color ?? '#6b7280'),
     axisValueLabel: String(item.axisValueLabel ?? '')
   }))
@@ -169,7 +211,7 @@ const formatSortedTooltip = (params: unknown) => {
       return `<div style="display:flex;align-items:center;gap:6px;line-height:1.6">
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${item.color}"></span>
         <span>${item.seriesName}</span>
-        <span style="margin-left:auto;font-weight:500">${formatTooltipValue(item.value)}</span>
+        <span style="margin-left:auto;font-weight:500">${formatTooltipValue(item.value, item.rawValue)}</span>
       </div>`
     })
     .join('')
@@ -228,7 +270,16 @@ const chartOption = computed<EChartsOption>(() => ({
     itemStyle: {
       borderRadius: barBorderRadius.value
     },
-    data: rows.value.map((row) => toNumber(row[item.field]))
+    data: rows.value.map((row) => {
+      const value = toNumber(row[item.field])
+      if (value === null) {
+        return null
+      }
+      return {
+        value,
+        rawValue: row[item.field]
+      }
+    })
   }))
 }))
 </script>
