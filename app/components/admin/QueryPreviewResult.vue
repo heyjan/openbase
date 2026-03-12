@@ -63,6 +63,12 @@ const visualizationOptions: VisualizationOption[] = [
     icon: Table2
   },
   {
+    id: 'kpi',
+    label: 'KPI Card',
+    description: 'Single value with label',
+    icon: TrendingUp
+  },
+  {
     id: 'line',
     label: 'Line Chart',
     description: 'Trend over category axis',
@@ -120,6 +126,8 @@ const activeVisualizationLabel = computed(
 )
 
 const config = computed(() => props.vizConfig ?? {})
+const KPI_VALUE_FORMATTER = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 })
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 
 const readString = (keys: string[], fallback = '') => {
   for (const key of keys) {
@@ -129,6 +137,30 @@ const readString = (keys: string[], fallback = '') => {
     }
   }
   return fallback
+}
+
+const readText = (keys: string[], fallback = '') => {
+  for (const key of keys) {
+    const value = config.value[key]
+    if (typeof value === 'string') {
+      return value
+    }
+  }
+  return fallback
+}
+
+const normalizeHexColor = (value: string) => {
+  const trimmed = value.trim()
+  if (!HEX_COLOR_PATTERN.test(trimmed)) {
+    return null
+  }
+  if (trimmed.length === 4) {
+    const r = trimmed[1]
+    const g = trimmed[2]
+    const b = trimmed[3]
+    return `#${r}${r}${g}${g}${b}${b}`
+  }
+  return trimmed
 }
 
 const readBoolean = (keys: string[], fallback: boolean) => {
@@ -235,6 +267,38 @@ const categories = computed(() =>
 
 const chartTitle = computed(() => readString(['titleOverride']))
 const showLegend = computed(() => readBoolean(['showLegend', 'show_legend'], true))
+const kpiValueField = computed(() => {
+  const configured = readString(['valueField', 'value_field', 'metricField', 'metric_field'])
+  if (configured && columns.value.includes(configured)) {
+    return configured
+  }
+  return numericColumns.value[0] ?? columns.value[0] ?? ''
+})
+const kpiLabel = computed(() => readString(['label']) || chartTitle.value || kpiValueField.value || 'KPI')
+const kpiPrefix = computed(() => readText(['prefix', 'valuePrefix', 'value_prefix']))
+const kpiPostfix = computed(() => readText(['postfix', 'suffix', 'valuePostfix', 'value_postfix']))
+const kpiValueColor = computed(
+  () =>
+    normalizeHexColor(readText(['valueColor', 'value_color', 'textColor', 'text_color'])) ??
+    '#111827'
+)
+const kpiRawValue = computed(() => {
+  if (!kpiValueField.value || !rows.value.length) {
+    return null
+  }
+  return rows.value[0]?.[kpiValueField.value]
+})
+const kpiDisplayValue = computed(() => {
+  const raw = kpiRawValue.value
+  if (raw === null || raw === undefined || raw === '') {
+    return 'No data'
+  }
+  const numeric = toNumber(raw)
+  if (numeric !== null) {
+    return `${kpiPrefix.value}${KPI_VALUE_FORMATTER.format(numeric)}${kpiPostfix.value}`
+  }
+  return `${kpiPrefix.value}${String(raw)}${kpiPostfix.value}`
+})
 
 const pieCategoryColumn = computed(() => {
   const configured = readString(['categoryField', 'category_field'])
@@ -1122,6 +1186,18 @@ const chartOption = computed<EChartsOption>(() => {
             :cell-value-formatter="tableCellValueFormatter"
             empty-label="No preview rows found."
           />
+        </div>
+
+        <div v-else-if="visualization === 'kpi'" class="p-4">
+          <p class="text-xs uppercase tracking-wide text-gray-500">
+            {{ kpiLabel }}
+          </p>
+          <p
+            class="mt-2 text-3xl font-semibold"
+            :style="{ color: kpiValueColor }"
+          >
+            {{ kpiDisplayValue }}
+          </p>
         </div>
 
         <div v-else class="p-3">

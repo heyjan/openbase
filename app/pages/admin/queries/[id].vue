@@ -233,6 +233,12 @@ const mapVisualizationToModule = (
       config: { ...config } as Record<string, unknown>
     }
   }
+  if (visualization === 'kpi') {
+    return {
+      moduleType: 'kpi_card' as ModuleType,
+      config: { ...config } as Record<string, unknown>
+    }
+  }
   if (visualization === 'bar') {
     return {
       moduleType: 'bar_chart' as ModuleType,

@@ -1,5 +1,6 @@
 export type QueryPreviewVisualization =
   | 'table'
+  | 'kpi'
   | 'line'
   | 'area'
   | 'bar'
@@ -60,6 +61,14 @@ export type TableVizOptions = SharedVizOptions & {
   columnGradients?: Record<string, boolean>
   columnValueFormats?: Record<string, TableColumnValueFormat>
   conditionalFormatting?: ConditionalFormatRule[]
+}
+
+export type KpiVizOptions = SharedVizOptions & {
+  label?: string
+  valueField?: string
+  prefix?: string
+  postfix?: string
+  valueColor?: string
 }
 
 export type LineVizOptions = SharedVizOptions & {
@@ -130,6 +139,7 @@ export type ScatterVizOptions = SharedVizOptions & {
 
 export type VizOptionsByType = {
   table: TableVizOptions
+  kpi: KpiVizOptions
   line: LineVizOptions
   area: AreaVizOptions
   bar: BarVizOptions
@@ -142,6 +152,7 @@ export type VizOptionsByType = {
 
 export type VizOptions =
   | TableVizOptions
+  | KpiVizOptions
   | LineVizOptions
   | AreaVizOptions
   | BarVizOptions

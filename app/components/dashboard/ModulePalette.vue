@@ -23,7 +23,7 @@ const items: PaletteItem[] = [
   {
     type: 'kpi_card',
     label: 'KPI Card',
-    description: 'Single metric with trend context'
+    description: 'Single metric with label and value'
   },
   {
     type: 'line_chart',

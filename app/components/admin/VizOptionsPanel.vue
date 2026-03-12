@@ -69,6 +69,9 @@ const sharedSelectProps = {
 
 const numericColumns = computed(() => getNumericColumns(props.rows, props.columns))
 const categoryColumns = computed(() => getCategoryColumns(props.columns, numericColumns.value))
+const kpiValueFieldOptions = computed(() =>
+  numericColumns.value.length ? numericColumns.value : props.columns
+)
 
 const sharedTitle = computed(() =>
   typeof props.modelValue.titleOverride === 'string' ? props.modelValue.titleOverride : ''
@@ -793,6 +796,60 @@ watch(
               </div>
             </div>
           </div>
+        </div>
+      </template>
+
+      <template v-else-if="vizType === 'kpi'">
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Label
+            <UInput
+              class="mt-1"
+              :model-value="readString('label')"
+              @update:model-value="updateString('label', $event)"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Value field
+            <USelect
+              v-bind="sharedSelectProps"
+              class="mt-1"
+              :items="kpiValueFieldOptions.map((column) => ({ label: column, value: column }))"
+              :model-value="readString('valueField')"
+              @update:model-value="updateConfig({ valueField: String($event || '') })"
+            />
+          </label>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-3">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Prefix
+            <UInput
+              class="mt-1"
+              :model-value="readString('prefix')"
+              @update:model-value="updateString('prefix', $event)"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Postfix
+            <UInput
+              class="mt-1"
+              :model-value="readString('postfix')"
+              @update:model-value="updateString('postfix', $event)"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Value color
+            <input
+              :value="readString('valueColor', '#111827')"
+              type="color"
+              class="mt-1 h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+              @input="updateConfig({ valueColor: ($event.target as HTMLInputElement).value })"
+            >
+          </label>
         </div>
       </template>
 

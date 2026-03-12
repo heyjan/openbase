@@ -124,6 +124,7 @@ const getParameterSignature = (parameters: Record<string, unknown>) =>
 
 const visualizationLabel: Record<QueryPreviewVisualization, string> = {
   table: 'Table',
+  kpi: 'KPI Card',
   line: 'Line Chart',
   area: 'Area Chart',
   bar: 'Bar Chart',
@@ -139,6 +140,11 @@ const visualizationOptions: VisualizationOption[] = [
     id: 'table',
     label: 'Table',
     icon: Table2
+  },
+  {
+    id: 'kpi',
+    label: 'KPI',
+    icon: TrendingUp
   },
   {
     id: 'line',
@@ -189,6 +195,9 @@ const visualizationSelectionDisabled = computed(
 const mapModuleTypeToVisualization = (visualization: QueryVisualization) => {
   if (visualization.moduleType === 'data_table') {
     return 'table' as const
+  }
+  if (visualization.moduleType === 'kpi_card') {
+    return 'kpi' as const
   }
   if (visualization.moduleType === 'line_chart') {
     return 'line' as const

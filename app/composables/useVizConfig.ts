@@ -11,6 +11,7 @@ import type {
 const DEFAULT_PALETTE = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
 const VISUALIZATION_TYPES: QueryPreviewVisualization[] = [
   'table',
+  'kpi',
   'line',
   'area',
   'bar',
@@ -94,6 +95,20 @@ const readConfiguredString = (config: Record<string, unknown>, keys: string[]) =
     }
   }
   return ''
+}
+
+const readConfiguredText = (
+  config: Record<string, unknown>,
+  keys: string[],
+  fallback = ''
+) => {
+  for (const key of keys) {
+    const value = config[key]
+    if (typeof value === 'string') {
+      return value
+    }
+  }
+  return fallback
 }
 
 const normalizeHexColor = (value: unknown) => {
@@ -423,6 +438,18 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
     } as VizOptionsByType[T]
   }
 
+  if (visualization === 'kpi') {
+    const valueField = numericColumns[0] ?? columns[0] ?? ''
+    return {
+      titleOverride: baseTitle,
+      label: baseTitle,
+      valueField,
+      prefix: '',
+      postfix: '',
+      valueColor: '#111827'
+    } as VizOptionsByType[T]
+  }
+
   if (visualization === 'line' || visualization === 'area') {
     return {
       titleOverride: baseTitle,
@@ -571,6 +598,31 @@ const sanitizeVizConfigForType = (
     normalized.conditionalFormatting = parseConditionalFormattingRules(
       normalized.conditionalFormatting
     )
+    return normalized
+  }
+
+  if (visualization === 'kpi') {
+    normalized.label = readConfiguredString(normalized, ['label']) || queryName.trim() || 'KPI'
+    normalized.valueField = readConfiguredField(
+      normalized,
+      ['valueField', 'value_field', 'metricField', 'metric_field'],
+      columns,
+      typeof defaults.valueField === 'string' ? defaults.valueField : ''
+    )
+    normalized.prefix = readConfiguredText(
+      normalized,
+      ['prefix', 'valuePrefix', 'value_prefix'],
+      ''
+    )
+    normalized.postfix = readConfiguredText(
+      normalized,
+      ['postfix', 'suffix', 'valuePostfix', 'value_postfix'],
+      ''
+    )
+    normalized.valueColor =
+      normalizeHexColor(
+        readConfiguredValue(normalized, ['valueColor', 'value_color', 'textColor', 'text_color'])
+      ) ?? '#111827'
     return normalized
   }
 
@@ -1084,6 +1136,7 @@ export const useVizConfig = (input: {
 
     return {
       table: buildAutoVizConfig('table', columns, rows, queryName),
+      kpi: buildAutoVizConfig('kpi', columns, rows, queryName),
       line: buildAutoVizConfig('line', columns, rows, queryName),
       area: buildAutoVizConfig('area', columns, rows, queryName),
       bar: buildAutoVizConfig('bar', columns, rows, queryName),
