@@ -50,6 +50,17 @@ const componentMap = {
 
 const component = computed(() => componentMap[props.module.type] ?? KpiCard)
 const isTextModule = computed(() => isTextModuleType(props.module.type))
+const chartModuleTypes = new Set<ModuleConfig['type']>([
+  'time_series_chart',
+  'line_chart',
+  'bar_chart',
+  'stacked_horizontal_bar_chart',
+  'waterfall_chart',
+  'radar_chart',
+  'scatter_chart',
+  'pie_chart'
+])
+const isChartModule = computed(() => chartModuleTypes.has(props.module.type))
 const route = useRoute()
 const isPublicDashboardRoute = computed(() => route.path.startsWith('/d/'))
 const isEditorRoute = computed(() => route.path.startsWith('/editor/dashboards/'))
@@ -181,7 +192,8 @@ const effectiveVariableValues = computed(() =>
   isAdminEditRoute.value ? adminDashboardVariableValues.value : currentVariableValues.value
 )
 
-const showHeaderControls = computed(() => moduleVariables.value.length > 0 || canFetch.value)
+const showLiveControls = computed(() => canFetch.value && !isChartModule.value)
+const showHeaderControls = computed(() => moduleVariables.value.length > 0 || showLiveControls.value)
 
 const moduleVariablesQuery = computed<Record<string, string>>(() => {
   if (isAdminEditRoute.value) {
@@ -274,9 +286,9 @@ watch(
           :values="effectiveVariableValues"
           @change="onFilterChange"
         />
-        <Badge v-if="canFetch">live</Badge>
+        <Badge v-if="showLiveControls">live</Badge>
         <button
-          v-if="canFetch"
+          v-if="showLiveControls"
           class="h-7 rounded border border-gray-200 px-2 text-xs text-gray-700 hover:border-gray-300"
           @click="refresh"
         >
@@ -319,9 +331,9 @@ watch(
         :values="effectiveVariableValues"
         @change="onFilterChange"
       />
-      <Badge v-if="canFetch">live</Badge>
+      <Badge v-if="showLiveControls">live</Badge>
       <button
-        v-if="canFetch"
+        v-if="showLiveControls"
         class="h-7 rounded border border-gray-200 px-2 text-xs text-gray-700 hover:border-gray-300"
         @click="refresh"
       >
