@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { QueryVariable, QueryVariableValues } from '~/types/query-variable'
+import ModuleInlineDateRange from '~/components/modules/ModuleInlineDateRange.vue'
 
 const props = defineProps<{
   variables: QueryVariable[]
@@ -70,33 +71,41 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex flex-wrap items-center justify-end gap-2">
-    <label
-      v-for="variable in variables"
-      :key="`module-inline-filter-${variable.name}`"
-      class="inline-flex items-center gap-1 text-xs text-gray-600"
-    >
-      <span class="text-gray-500">{{ variable.label }}:</span>
-      <select
-        v-if="variable.inputType === 'select'"
+    <template v-for="variable in variables" :key="`module-inline-filter-${variable.name}`">
+      <ModuleInlineDateRange
+        v-if="variable.inputType === 'date_range'"
+        :label="variable.label"
         :value="values[variable.name] ?? ''"
-        class="h-7 min-w-24 rounded border border-gray-300 bg-white px-2 text-xs"
-        @change="onSelectChange($event, variable.name)"
-      >
-        <option
-          v-for="option in variable.options"
-          :key="`${variable.name}:${option.value}`"
-          :value="option.value"
-        >
-          {{ option.label }}
-        </option>
-      </select>
-      <input
-        v-else
-        :value="draftValues[variable.name] ?? values[variable.name] ?? ''"
-        :type="variable.inputType"
-        class="h-7 min-w-24 rounded border border-gray-300 bg-white px-2 text-xs"
-        @input="onInput($event, variable.name)"
+        :config="variable.dateRangeConfig"
+        @change="(value) => emitChange(variable.name, value)"
       />
-    </label>
+      <label
+        v-else
+        class="inline-flex items-center gap-1 text-xs text-gray-600"
+      >
+        <span class="text-gray-500">{{ variable.label }}:</span>
+        <select
+          v-if="variable.inputType === 'select'"
+          :value="values[variable.name] ?? ''"
+          class="h-7 min-w-24 rounded border border-gray-300 bg-white px-2 text-xs"
+          @change="onSelectChange($event, variable.name)"
+        >
+          <option
+            v-for="option in variable.options"
+            :key="`${variable.name}:${option.value}`"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+        <input
+          v-else
+          :value="draftValues[variable.name] ?? values[variable.name] ?? ''"
+          :type="variable.inputType"
+          class="h-7 min-w-24 rounded border border-gray-300 bg-white px-2 text-xs"
+          @input="onInput($event, variable.name)"
+        />
+      </label>
+    </template>
   </div>
 </template>

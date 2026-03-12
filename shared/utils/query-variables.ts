@@ -1,4 +1,4 @@
-export type VariableType = 'text' | 'number' | 'select' | 'query_list'
+export type VariableType = 'text' | 'number' | 'select' | 'query_list' | 'date_range'
 
 export type VariableOption = {
   label: string
@@ -15,6 +15,12 @@ export type VariableDefinition = {
   sourceQueryId?: string
   valueColumn?: string
   labelColumn?: string
+  dateRangeConfig?: {
+    minYear?: number
+    maxYear?: number
+    defaultFrom?: string
+    defaultTo?: string
+  }
 }
 
 export type QueryParameterConfig = Record<string, unknown> & {
@@ -36,6 +42,7 @@ const isProvidedValue = (value: unknown) => {
 
 const variableNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/
 const variableTokenPattern = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g
+const yearMonthPattern = /^\d{4}-(0[1-9]|1[0-2])$/
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -75,7 +82,8 @@ const parseVariableDefinition = (value: unknown): VariableDefinition => {
     type !== 'text' &&
     type !== 'number' &&
     type !== 'select' &&
-    type !== 'query_list'
+    type !== 'query_list' &&
+    type !== 'date_range'
   ) {
     throw new Error(`Invalid variable type for "${name}"`)
   }
@@ -103,6 +111,40 @@ const parseVariableDefinition = (value: unknown): VariableDefinition => {
   if (value.labelColumn !== undefined && typeof value.labelColumn !== 'string') {
     throw new Error(`Invalid variable labelColumn for "${name}"`)
   }
+  if (value.dateRangeConfig !== undefined && value.dateRangeConfig !== null) {
+    if (!isRecord(value.dateRangeConfig)) {
+      throw new Error(`Invalid variable dateRangeConfig for "${name}"`)
+    }
+    const dateRangeConfig = value.dateRangeConfig as Record<string, unknown>
+    if (
+      dateRangeConfig.minYear !== undefined &&
+      (typeof dateRangeConfig.minYear !== 'number' ||
+        !Number.isInteger(dateRangeConfig.minYear))
+    ) {
+      throw new Error(`Invalid variable minYear for "${name}"`)
+    }
+    if (
+      dateRangeConfig.maxYear !== undefined &&
+      (typeof dateRangeConfig.maxYear !== 'number' ||
+        !Number.isInteger(dateRangeConfig.maxYear))
+    ) {
+      throw new Error(`Invalid variable maxYear for "${name}"`)
+    }
+    if (
+      dateRangeConfig.defaultFrom !== undefined &&
+      (typeof dateRangeConfig.defaultFrom !== 'string' ||
+        !yearMonthPattern.test(dateRangeConfig.defaultFrom))
+    ) {
+      throw new Error(`Invalid variable defaultFrom for "${name}"`)
+    }
+    if (
+      dateRangeConfig.defaultTo !== undefined &&
+      (typeof dateRangeConfig.defaultTo !== 'string' ||
+        !yearMonthPattern.test(dateRangeConfig.defaultTo))
+    ) {
+      throw new Error(`Invalid variable defaultTo for "${name}"`)
+    }
+  }
 
   const options =
     value.options === undefined
@@ -112,6 +154,28 @@ const parseVariableDefinition = (value: unknown): VariableDefinition => {
         : (() => {
             throw new Error(`Invalid variable options for "${name}"`)
           })()
+
+  const dateRangeConfig =
+    value.dateRangeConfig && isRecord(value.dateRangeConfig)
+      ? {
+          minYear:
+            typeof value.dateRangeConfig.minYear === 'number'
+              ? value.dateRangeConfig.minYear
+              : undefined,
+          maxYear:
+            typeof value.dateRangeConfig.maxYear === 'number'
+              ? value.dateRangeConfig.maxYear
+              : undefined,
+          defaultFrom:
+            typeof value.dateRangeConfig.defaultFrom === 'string'
+              ? value.dateRangeConfig.defaultFrom
+              : undefined,
+          defaultTo:
+            typeof value.dateRangeConfig.defaultTo === 'string'
+              ? value.dateRangeConfig.defaultTo
+              : undefined
+        }
+      : undefined
 
   return {
     name,
@@ -128,7 +192,15 @@ const parseVariableDefinition = (value: unknown): VariableDefinition => {
     valueColumn:
       typeof value.valueColumn === 'string' ? value.valueColumn.trim() || undefined : undefined,
     labelColumn:
-      typeof value.labelColumn === 'string' ? value.labelColumn.trim() || undefined : undefined
+      typeof value.labelColumn === 'string' ? value.labelColumn.trim() || undefined : undefined,
+    dateRangeConfig:
+      dateRangeConfig &&
+      (dateRangeConfig.minYear !== undefined ||
+        dateRangeConfig.maxYear !== undefined ||
+        dateRangeConfig.defaultFrom !== undefined ||
+        dateRangeConfig.defaultTo !== undefined)
+        ? dateRangeConfig
+        : undefined
   }
 }
 
@@ -167,6 +239,60 @@ export const prepareQueryVariables = (input: {
   const definitions = parseVariableDefinitions(input.queryParameters)
   const definitionsByName = new Map(definitions.map((definition) => [definition.name, definition]))
   const variables = extractVariables(input.queryText)
+
+  for (const definition of definitions) {
+    if (definition.type !== 'date_range') {
+      continue
+    }
+
+    const hasRuntimeValue =
+      hasOwn(runtimeParameters, definition.name) && isProvidedValue(runtimeParameters[definition.name])
+    if (hasRuntimeValue) {
+      continue
+    }
+
+    const defaultFrom = definition.dateRangeConfig?.defaultFrom
+    const defaultTo = definition.dateRangeConfig?.defaultTo
+    if (defaultFrom && defaultTo) {
+      runtimeParameters[definition.name] = `${defaultFrom}|${defaultTo}`
+    }
+  }
+
+  for (const definition of definitions) {
+    if (definition.type !== 'date_range') {
+      continue
+    }
+
+    const rawValue = runtimeParameters[definition.name]
+    const parsedRawValue =
+      typeof rawValue === 'string' && rawValue.includes('|') ? rawValue.split('|') : null
+
+    if (parsedRawValue?.length === 2) {
+      const from = parsedRawValue[0]?.trim()
+      const to = parsedRawValue[1]?.trim()
+      if (from && to && yearMonthPattern.test(from) && yearMonthPattern.test(to)) {
+        const [fromYear, fromMonth] = from.split('-').map(Number)
+        const [toYear, toMonth] = to.split('-').map(Number)
+        const fromKey = fromYear * 100 + fromMonth
+        const toKey = toYear * 100 + toMonth
+        const start =
+          fromKey <= toKey
+            ? { year: fromYear, month: fromMonth }
+            : { year: toYear, month: toMonth }
+        const end =
+          fromKey <= toKey
+            ? { year: toYear, month: toMonth }
+            : { year: fromYear, month: fromMonth }
+
+        runtimeParameters[`${definition.name}_from_month`] = start.month
+        runtimeParameters[`${definition.name}_from_year`] = start.year
+        runtimeParameters[`${definition.name}_to_month`] = end.month
+        runtimeParameters[`${definition.name}_to_year`] = end.year
+      }
+    }
+
+    delete runtimeParameters[definition.name]
+  }
 
   for (const variableName of variables) {
     const hasRuntimeValue =

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { isTextModuleType, type ModuleConfig } from '~/types/module'
-import type { QueryVariable } from '~/types/query-variable'
+import type { QueryVariable, SelectorMode } from '~/types/query-variable'
 import Badge from '~/components/ui/Badge.vue'
 import Spinner from '~/components/ui/Spinner.vue'
 import AnnotationLog from '~/components/modules/AnnotationLog.vue'
@@ -53,8 +53,14 @@ const isTextModule = computed(() => isTextModuleType(props.module.type))
 const route = useRoute()
 const isPublicDashboardRoute = computed(() => route.path.startsWith('/d/'))
 const isEditorRoute = computed(() => route.path.startsWith('/editor/dashboards/'))
+const isAdminEditRoute = computed(
+  () => route.path.startsWith('/admin/dashboards/') && route.path.endsWith('/edit')
+)
 const dashboardSlug = computed(() =>
   typeof route.params.slug === 'string' ? route.params.slug : ''
+)
+const adminDashboardId = computed(() =>
+  typeof route.params.id === 'string' ? route.params.id : ''
 )
 
 const routeQuery = computed<Record<string, string>>(() => {
@@ -106,9 +112,23 @@ const { data, pending, error, refresh, canFetch } = useModuleData(moduleRef)
 
 const moduleVariables = ref<QueryVariable[]>([])
 let variablesRequestSeq = 0
+const adminDashboardVariableValues = useState<Record<string, string>>(
+  'admin-dashboard-variable-values',
+  () => ({})
+)
+const adminDashboardVariableValuesKey = computed(() =>
+  Object.entries(adminDashboardVariableValues.value)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => `${name}:${value}`)
+    .join('|')
+)
 
 const canLoadModuleVariables = computed(() => {
-  if (props.embedded || isTextModule.value || !props.module.id) {
+  if (isTextModule.value || !props.module.id) {
+    return false
+  }
+
+  if (props.embedded && !isAdminEditRoute.value) {
     return false
   }
 
@@ -118,6 +138,10 @@ const canLoadModuleVariables = computed(() => {
 
   if (isEditorRoute.value) {
     return !!dashboardSlug.value
+  }
+
+  if (isAdminEditRoute.value) {
+    return !!adminDashboardId.value
   }
 
   return false
@@ -136,18 +160,43 @@ const variablesEndpoint = computed(() => {
     return `/api/editor/dashboards/${dashboardSlug.value}/modules/${props.module.id}/variables`
   }
 
+  if (isAdminEditRoute.value) {
+    return `/api/admin/dashboards/${adminDashboardId.value}/modules/${props.module.id}/variables`
+  }
+
   return ''
 })
 
+const selectorMode = computed<SelectorMode>(() =>
+  isAdminEditRoute.value ? 'admin' : 'shared'
+)
+
 const { currentValues: currentVariableValues, updateValue } = useVariableSelectors({
-  mode: 'shared',
+  mode: selectorMode,
   variables: moduleVariables,
   routeQuery
 })
 
-const showHeaderControls = computed(
-  () => moduleVariables.value.length > 0 || (!isPublicDashboardRoute.value && canFetch.value)
+const effectiveVariableValues = computed(() =>
+  isAdminEditRoute.value ? adminDashboardVariableValues.value : currentVariableValues.value
 )
+
+const showHeaderControls = computed(() => moduleVariables.value.length > 0 || canFetch.value)
+
+const moduleVariablesQuery = computed<Record<string, string>>(() => {
+  if (isAdminEditRoute.value) {
+    const next: Record<string, string> = {}
+    for (const [name, value] of Object.entries(adminDashboardVariableValues.value)) {
+      if (!value) {
+        continue
+      }
+      next[name] = value
+    }
+    return next
+  }
+
+  return routeQuery.value
+})
 
 const loadModuleVariables = async () => {
   const requestId = ++variablesRequestSeq
@@ -159,7 +208,7 @@ const loadModuleVariables = async () => {
 
   try {
     const response = await $fetch<{ variables: QueryVariable[] }>(variablesEndpoint.value, {
-      query: routeQuery.value
+      query: moduleVariablesQuery.value
     })
     if (requestId !== variablesRequestSeq) {
       return
@@ -175,6 +224,12 @@ const loadModuleVariables = async () => {
 
 const onFilterChange = (payload: { name: string; value: string }) => {
   updateValue(payload.name, payload.value)
+  if (isAdminEditRoute.value) {
+    adminDashboardVariableValues.value = {
+      ...adminDashboardVariableValues.value,
+      [payload.name]: payload.value
+    }
+  }
 }
 
 watch(
@@ -183,7 +238,8 @@ watch(
     () => props.module.type,
     () => props.module.queryVisualizationQueryId,
     () => route.path,
-    () => route.fullPath
+    () => route.fullPath,
+    () => adminDashboardVariableValuesKey.value
   ],
   () => {
     void loadModuleVariables()
@@ -215,7 +271,7 @@ watch(
         <ModuleInlineFilters
           v-if="moduleVariables.length"
           :variables="moduleVariables"
-          :values="currentVariableValues"
+          :values="effectiveVariableValues"
           @change="onFilterChange"
         />
         <Badge v-if="canFetch">live</Badge>
@@ -253,6 +309,25 @@ watch(
   </div>
 
   <div v-else class="h-full">
+    <div
+      v-if="showHeaderControls"
+      class="mb-2 flex flex-wrap items-center justify-end gap-2"
+    >
+      <ModuleInlineFilters
+        v-if="moduleVariables.length"
+        :variables="moduleVariables"
+        :values="effectiveVariableValues"
+        @change="onFilterChange"
+      />
+      <Badge v-if="canFetch">live</Badge>
+      <button
+        v-if="canFetch"
+        class="h-7 rounded border border-gray-200 px-2 text-xs text-gray-700 hover:border-gray-300"
+        @click="refresh"
+      >
+        Refresh
+      </button>
+    </div>
     <div v-if="pending" class="flex items-center gap-2 text-sm text-gray-500">
       <Spinner />
       Loading module data...

@@ -265,10 +265,12 @@ const {
 const variableTypeOptions: Array<{ value: VariableType; label: string }> = [
   { value: 'text', label: 'Text' },
   { value: 'number', label: 'Number' },
-  { value: 'query_list', label: 'Query list' }
+  { value: 'query_list', label: 'Query list' },
+  { value: 'date_range', label: 'Date range' }
 ]
 
 const detectedVariables = computed(() => extractVariables(props.value.queryText))
+const dateRangePartPattern = /^(.*)_(from_month|from_year|to_month|to_year)$/
 
 const parseDefinitionsSafe = (parameters: unknown) => {
   try {
@@ -288,6 +290,12 @@ const normalizedDefinition = (definition: VariableDefinition) => ({
   sourceQueryId: definition.sourceQueryId?.trim() || undefined,
   valueColumn: definition.valueColumn?.trim() || undefined,
   labelColumn: definition.labelColumn?.trim() || undefined,
+  dateRangeConfig: {
+    minYear: definition.dateRangeConfig?.minYear,
+    maxYear: definition.dateRangeConfig?.maxYear,
+    defaultFrom: definition.dateRangeConfig?.defaultFrom,
+    defaultTo: definition.dateRangeConfig?.defaultTo
+  },
   options: definition.options ?? []
 })
 
@@ -298,10 +306,70 @@ const definitionsEqual = (left: VariableDefinition[], right: VariableDefinition[
 const variableDefinitions = computed<VariableDefinition[]>(() => {
   const existing = parseDefinitionsSafe(props.queryParameters ?? {})
   const mapByName = new Map(existing.map((definition) => [definition.name, definition]))
+  const completeDateRangeBases = new Set<string>()
+  const partsByBase = new Map<string, Set<string>>()
 
-  return detectedVariables.value.map((name) => {
+  for (const name of detectedVariables.value) {
+    const match = name.match(dateRangePartPattern)
+    if (!match) {
+      continue
+    }
+    const baseName = match[1]
+    const part = match[2]
+    const parts = partsByBase.get(baseName) ?? new Set<string>()
+    parts.add(part)
+    partsByBase.set(baseName, parts)
+  }
+
+  for (const [baseName, parts] of partsByBase.entries()) {
+    if (
+      parts.has('from_month') &&
+      parts.has('from_year') &&
+      parts.has('to_month') &&
+      parts.has('to_year')
+    ) {
+      completeDateRangeBases.add(baseName)
+    }
+  }
+
+  const configVariableNames: string[] = []
+  const seenConfigNames = new Set<string>()
+
+  for (const name of detectedVariables.value) {
+    const match = name.match(dateRangePartPattern)
+    if (match && completeDateRangeBases.has(match[1])) {
+      continue
+    }
+    if (seenConfigNames.has(name)) {
+      continue
+    }
+    seenConfigNames.add(name)
+    configVariableNames.push(name)
+  }
+
+  for (const baseName of completeDateRangeBases) {
+    if (seenConfigNames.has(baseName)) {
+      continue
+    }
+    seenConfigNames.add(baseName)
+    configVariableNames.push(baseName)
+  }
+
+  for (const definition of existing) {
+    if (definition.type !== 'date_range' || seenConfigNames.has(definition.name)) {
+      continue
+    }
+    seenConfigNames.add(definition.name)
+    configVariableNames.push(definition.name)
+  }
+
+  return configVariableNames.map((name) => {
     const matched = mapByName.get(name)
-    const hasDefaultValue = isProvidedParameterValue(matched?.defaultValue)
+    const hasDateRangeDefaults =
+      matched?.type === 'date_range' &&
+      isProvidedParameterValue(matched.dateRangeConfig?.defaultFrom) &&
+      isProvidedParameterValue(matched.dateRangeConfig?.defaultTo)
+    const hasDefaultValue = hasDateRangeDefaults || isProvidedParameterValue(matched?.defaultValue)
     return {
       name,
       label: matched?.label,
@@ -311,7 +379,8 @@ const variableDefinitions = computed<VariableDefinition[]>(() => {
       options: matched?.options,
       sourceQueryId: matched?.sourceQueryId,
       valueColumn: matched?.valueColumn,
-      labelColumn: matched?.labelColumn
+      labelColumn: matched?.labelColumn,
+      dateRangeConfig: matched?.dateRangeConfig
     }
   })
 })
@@ -331,8 +400,16 @@ const previewParameterPayload = computed(() => {
   return next
 })
 
-const hasVariableDefaultValue = (definition: VariableDefinition) =>
-  isProvidedParameterValue(definition.defaultValue)
+const hasVariableDefaultValue = (definition: VariableDefinition) => {
+  if (definition.type === 'date_range') {
+    return (
+      isProvidedParameterValue(definition.dateRangeConfig?.defaultFrom) &&
+      isProvidedParameterValue(definition.dateRangeConfig?.defaultTo)
+    )
+  }
+
+  return isProvidedParameterValue(definition.defaultValue)
+}
 
 const isRequiredToggleDisabled = (definition: VariableDefinition) =>
   definition.required !== true && !hasVariableDefaultValue(definition)
@@ -433,7 +510,89 @@ const onVariableTypeChange = (event: Event, variableName: string) => {
       next.labelColumn = undefined
     }
 
+    if (value !== 'date_range') {
+      next.dateRangeConfig = undefined
+    } else {
+      next.defaultValue = undefined
+    }
+
     return next
+  })
+}
+
+const normalizeYearValue = (value: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return undefined
+  }
+
+  const parsed = Number(trimmed)
+  if (!Number.isInteger(parsed)) {
+    return undefined
+  }
+
+  return parsed
+}
+
+const normalizeMonthValue = (value: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return undefined
+  }
+
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(trimmed) ? trimmed : undefined
+}
+
+const onDateRangeConfigInput = (
+  event: Event,
+  variableName: string,
+  key: 'minYear' | 'maxYear' | 'defaultFrom' | 'defaultTo'
+) => {
+  const target = event.target as HTMLInputElement | null
+  const rawValue = target?.value ?? ''
+
+  updateVariableDefinition(variableName, (definition) => {
+    const nextConfig = {
+      ...(definition.dateRangeConfig ?? {})
+    }
+
+    if (key === 'minYear' || key === 'maxYear') {
+      nextConfig[key] = normalizeYearValue(rawValue)
+    } else {
+      nextConfig[key] = normalizeMonthValue(rawValue)
+    }
+
+    if (
+      typeof nextConfig.minYear === 'number' &&
+      typeof nextConfig.maxYear === 'number' &&
+      nextConfig.minYear > nextConfig.maxYear
+    ) {
+      const minYear = nextConfig.minYear
+      nextConfig.minYear = nextConfig.maxYear
+      nextConfig.maxYear = minYear
+    }
+
+    if (
+      typeof nextConfig.defaultFrom === 'string' &&
+      typeof nextConfig.defaultTo === 'string' &&
+      nextConfig.defaultFrom > nextConfig.defaultTo
+    ) {
+      const defaultFrom = nextConfig.defaultFrom
+      nextConfig.defaultFrom = nextConfig.defaultTo
+      nextConfig.defaultTo = defaultFrom
+    }
+
+    const hasConfigValue =
+      nextConfig.minYear !== undefined ||
+      nextConfig.maxYear !== undefined ||
+      nextConfig.defaultFrom !== undefined ||
+      nextConfig.defaultTo !== undefined
+
+    return {
+      ...definition,
+      dateRangeConfig: hasConfigValue ? nextConfig : undefined,
+      defaultValue: undefined
+    }
   })
 }
 
@@ -891,7 +1050,10 @@ watch(
                   </select>
                 </label>
 
-                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                <label
+                  v-if="definition.type !== 'date_range'"
+                  class="block text-xs font-medium uppercase tracking-wide text-gray-600"
+                >
                   Default value
                   <input
                     :value="definition.defaultValue === undefined || definition.defaultValue === null ? '' : String(definition.defaultValue)"
@@ -912,6 +1074,51 @@ watch(
                 />
                 Require a value
               </label>
+
+              <div
+                v-if="definition.type === 'date_range'"
+                class="mt-3 grid gap-3"
+              >
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Min year
+                  <input
+                    :value="definition.dateRangeConfig?.minYear ?? ''"
+                    type="number"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @input="onDateRangeConfigInput($event, definition.name, 'minYear')"
+                  />
+                </label>
+
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Max year
+                  <input
+                    :value="definition.dateRangeConfig?.maxYear ?? ''"
+                    type="number"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @input="onDateRangeConfigInput($event, definition.name, 'maxYear')"
+                  />
+                </label>
+
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Default from
+                  <input
+                    :value="definition.dateRangeConfig?.defaultFrom ?? ''"
+                    type="month"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @input="onDateRangeConfigInput($event, definition.name, 'defaultFrom')"
+                  />
+                </label>
+
+                <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                  Default to
+                  <input
+                    :value="definition.dateRangeConfig?.defaultTo ?? ''"
+                    type="month"
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm normal-case tracking-normal"
+                    @input="onDateRangeConfigInput($event, definition.name, 'defaultTo')"
+                  />
+                </label>
+              </div>
 
               <div
                 v-if="definition.type === 'query_list'"

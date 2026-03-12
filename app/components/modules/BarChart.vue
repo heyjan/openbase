@@ -132,11 +132,57 @@ const barBorderRadius = computed(() => {
   return value > 12 ? 12 : value
 })
 
+const toTooltipValue = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  if (Array.isArray(value)) {
+    return toTooltipValue(value[value.length - 1])
+  }
+  return 0
+}
+
+const formatTooltipValue = (value: unknown) => toTooltipValue(value).toLocaleString()
+
+const formatSortedTooltip = (params: unknown) => {
+  if (!Array.isArray(params) || !params.length) {
+    return ''
+  }
+
+  const items = (params as Array<Record<string, unknown>>).map((item) => ({
+    seriesName: String(item.seriesName ?? ''),
+    value: item.value,
+    color: String(item.color ?? '#6b7280'),
+    axisValueLabel: String(item.axisValueLabel ?? '')
+  }))
+
+  const sorted = [...items].sort((left, right) => toTooltipValue(right.value) - toTooltipValue(left.value))
+  const header = sorted[0]?.axisValueLabel
+    ? `<div style="font-weight:600;margin-bottom:4px">${sorted[0].axisValueLabel}</div>`
+    : ''
+  const rows = sorted
+    .map((item) => {
+      return `<div style="display:flex;align-items:center;gap:6px;line-height:1.6">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${item.color}"></span>
+        <span>${item.seriesName}</span>
+        <span style="margin-left:auto;font-weight:500">${formatTooltipValue(item.value)}</span>
+      </div>`
+    })
+    .join('')
+
+  return header + rows
+}
+
 const chartOption = computed<EChartsOption>(() => ({
   color: series.value.map((item) => item.color),
   tooltip: {
     trigger: 'axis',
-    axisPointer: { type: 'shadow' }
+    axisPointer: { type: 'shadow' },
+    formatter: stackedBars.value ? formatSortedTooltip : undefined
   },
   legend: {
     show: showLegend.value,

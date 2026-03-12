@@ -1,6 +1,6 @@
 export type SelectorMode = 'admin' | 'shared'
 
-export type QueryVariableInputType = 'text' | 'number' | 'select'
+export type QueryVariableInputType = 'text' | 'number' | 'select' | 'date_range'
 
 export interface QueryVariableOption {
   label: string
@@ -13,6 +13,10 @@ export interface QueryVariable {
   inputType: QueryVariableInputType
   options: QueryVariableOption[]
   defaultValue?: string
+  dateRangeConfig?: {
+    minYear?: number
+    maxYear?: number
+  }
 }
 
 export type QueryVariableValues = Record<string, string>

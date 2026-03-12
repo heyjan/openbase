@@ -2,7 +2,6 @@
 import { Link2, Settings } from 'lucide-vue-next'
 import CanvasToolbar from '~/components/dashboard/CanvasToolbar.vue'
 import DashboardEditor from '~/components/dashboard/DashboardEditor.vue'
-import DashboardFilterBar from '~/components/dashboard/DashboardFilterBar.vue'
 import DashboardMetadataModal from '~/components/dashboard/DashboardMetadataModal.vue'
 import ModuleConfigPanel from '~/components/dashboard/ModuleConfigPanel.vue'
 import Breadcrumbs from '~/components/ui/Breadcrumbs.vue'
@@ -147,6 +146,25 @@ const syncDashboardVariables = async () => {
           continue
         }
 
+        if (definition.type === 'date_range') {
+          const defaultFrom = definition.dateRangeConfig?.defaultFrom
+          const defaultTo = definition.dateRangeConfig?.defaultTo
+
+          controlsByName.set(definition.name, {
+            name: definition.name,
+            label: definition.label?.trim() || toTitleLabel(definition.name),
+            inputType: 'date_range',
+            options: [],
+            defaultValue:
+              defaultFrom && defaultTo ? `${defaultFrom}|${defaultTo}` : undefined,
+            dateRangeConfig: {
+              minYear: definition.dateRangeConfig?.minYear,
+              maxYear: definition.dateRangeConfig?.maxYear
+            }
+          })
+          continue
+        }
+
         const inputType: QueryVariable['inputType'] =
           definition.type === 'number'
             ? 'number'
@@ -212,10 +230,6 @@ const syncDashboardVariables = async () => {
   }
 }
 
-const onDashboardVariableInput = (payload: { name: string; value: string }) => {
-  updateDashboardVariableValue(payload.name, payload.value)
-}
-
 const { data: dashboard, pending, error, refresh } = await useAsyncData(
   dashboardAsyncKey,
   () => getById(dashboardId.value),
@@ -266,7 +280,6 @@ const routeQuery = computed<Record<string, string>>(() => {
 })
 const {
   currentValues: dashboardVariableValues,
-  updateValue: updateDashboardVariableValue,
   resetToDefaults
 } = useVariableSelectors({
   mode: 'admin',
@@ -940,15 +953,6 @@ watch(dashboardId, () => {
         "
       >
         <div class="space-y-2">
-          <ClientOnly>
-            <DashboardFilterBar
-              mode="admin"
-              :variables="dashboardVariables"
-              :values="dashboardVariableValues"
-              @change="onDashboardVariableInput"
-            />
-          </ClientOnly>
-
           <DashboardEditor
             :modules="modules"
             :selected-module-id="selectedModuleId"

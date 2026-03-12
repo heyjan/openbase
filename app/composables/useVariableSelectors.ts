@@ -46,7 +46,7 @@ const resolveCurrentValue = (
 }
 
 export const useVariableSelectors = (options: {
-  mode: SelectorMode
+  mode: SelectorMode | Ref<SelectorMode>
   variables: Ref<QueryVariable[]>
   routeQuery: Ref<Record<string, string>>
 }) => {
@@ -56,10 +56,11 @@ export const useVariableSelectors = (options: {
 
   const currentValues = computed<QueryVariableValues>(() => {
     const next: QueryVariableValues = {}
+    const mode = unref(options.mode)
 
     for (const variable of options.variables.value) {
       const sourceValue =
-        options.mode === 'shared'
+        mode === 'shared'
           ? options.routeQuery.value[variable.name]
           : localValues.value[variable.name]
       next[variable.name] = resolveCurrentValue(variable, sourceValue)
@@ -91,7 +92,7 @@ export const useVariableSelectors = (options: {
   }
 
   const updateValue = (name: string, value: string) => {
-    if (options.mode === 'shared') {
+    if (unref(options.mode) === 'shared') {
       setSharedQueryValues({
         ...currentValues.value,
         [name]: value
@@ -111,7 +112,7 @@ export const useVariableSelectors = (options: {
       defaults[variable.name] = resolveDefaultValue(variable)
     }
 
-    if (options.mode === 'shared') {
+    if (unref(options.mode) === 'shared') {
       setSharedQueryValues(defaults)
       return
     }

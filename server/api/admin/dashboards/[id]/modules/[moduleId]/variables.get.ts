@@ -1,6 +1,5 @@
 import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3'
-import { getDashboardBySlug, listModules } from '~~/server/utils/dashboard-store'
-import { canEditorViewDashboard } from '~~/server/utils/permission-store'
+import { listModules } from '~~/server/utils/dashboard-store'
 import { getSavedQueryById } from '~~/server/utils/query-store'
 import { runSavedQueryById } from '~~/server/utils/query-runner'
 import {
@@ -9,7 +8,7 @@ import {
   type VariableOption
 } from '~~/shared/utils/query-variables'
 
-type EditorVariableControl = {
+type AdminVariableControl = {
   name: string
   label: string
   inputType: 'text' | 'number' | 'select' | 'date_range'
@@ -73,27 +72,16 @@ const parseSourceQueryParameters = (query: Record<string, unknown>) => {
 }
 
 export default defineEventHandler(async (event) => {
-  const slug = getRouterParam(event, 'slug')
+  const dashboardId = getRouterParam(event, 'id')
   const moduleId = getRouterParam(event, 'moduleId')
-  if (!slug) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing dashboard slug' })
+  if (!dashboardId) {
+    throw createError({ statusCode: 400, statusMessage: 'Missing dashboard id' })
   }
   if (!moduleId) {
     throw createError({ statusCode: 400, statusMessage: 'Missing module id' })
   }
 
-  const editor = event.context.editor
-  if (!editor) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
-
-  const dashboard = await getDashboardBySlug(slug)
-  const canView = await canEditorViewDashboard(editor.id, dashboard.id)
-  if (!canView) {
-    throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
-  }
-
-  const modules = await listModules(dashboard.id)
+  const modules = await listModules(dashboardId)
   const module = modules.find((item) => item.id === moduleId)
   if (!module) {
     throw createError({ statusCode: 404, statusMessage: 'Module not found' })
@@ -101,7 +89,7 @@ export default defineEventHandler(async (event) => {
 
   const savedQueryId = module.queryVisualizationQueryId?.trim() ?? ''
   if (!savedQueryId) {
-    return { variables: [] as EditorVariableControl[] }
+    return { variables: [] as AdminVariableControl[] }
   }
 
   const savedQuery = await getSavedQueryById(savedQueryId)
@@ -112,7 +100,7 @@ export default defineEventHandler(async (event) => {
   }))
   const definitions = configuredDefinitions.length ? configuredDefinitions : fallbackDefinitions
   const sourceQueryParameters = parseSourceQueryParameters(getQuery(event) as Record<string, unknown>)
-  const variables: EditorVariableControl[] = []
+  const variables: AdminVariableControl[] = []
 
   for (const definition of definitions) {
     if (definition.type === 'date_range') {

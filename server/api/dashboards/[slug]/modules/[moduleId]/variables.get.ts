@@ -12,9 +12,13 @@ import { requireSharedDashboardAccess } from '~~/server/utils/share-access'
 type PublicVariableControl = {
   name: string
   label: string
-  inputType: 'text' | 'number' | 'select'
+  inputType: 'text' | 'number' | 'select' | 'date_range'
   defaultValue?: string
   options: VariableOption[]
+  dateRangeConfig?: {
+    minYear?: number
+    maxYear?: number
+  }
 }
 
 const toTitleLabel = (name: string) =>
@@ -112,6 +116,24 @@ export default defineEventHandler(async (event) => {
   const variables: PublicVariableControl[] = []
 
   for (const definition of definitions) {
+    if (definition.type === 'date_range') {
+      const defaultFrom = definition.dateRangeConfig?.defaultFrom
+      const defaultTo = definition.dateRangeConfig?.defaultTo
+
+      variables.push({
+        name: definition.name,
+        label: definition.label?.trim() || toTitleLabel(definition.name),
+        inputType: 'date_range',
+        defaultValue: defaultFrom && defaultTo ? `${defaultFrom}|${defaultTo}` : undefined,
+        options: [],
+        dateRangeConfig: {
+          minYear: definition.dateRangeConfig?.minYear,
+          maxYear: definition.dateRangeConfig?.maxYear
+        }
+      })
+      continue
+    }
+
     if (definition.type === 'select') {
       variables.push({
         name: definition.name,
