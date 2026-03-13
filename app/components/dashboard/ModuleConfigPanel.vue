@@ -7,6 +7,7 @@ import {
 import type { ModuleTemplate } from '~/types/template'
 
 type FontSizePreset = 'M' | 'L' | 'XL'
+type BarLabelRotation = 0 | 45 | 90
 
 const props = defineProps<{
   module?: ModuleConfig | null
@@ -24,6 +25,7 @@ const { list: listWritableTables } = useWritableTables()
 const toast = useAppToast()
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/
 const fontSizePresets: FontSizePreset[] = ['M', 'L', 'XL']
+const BAR_LABEL_ROTATION_OPTIONS: BarLabelRotation[] = [0, 45, 90]
 
 const textModuleDefaults: Record<
   TextModuleType,
@@ -69,6 +71,7 @@ const writableTables = ref<Array<{ id: string; tableName: string; dataSourceName
 const writableTablesLoading = ref(false)
 const writableTableError = ref('')
 const showTitle = ref(true)
+const barCategoryLabelRotation = ref<BarLabelRotation>(0)
 const selectedWritableTableId = ref('')
 const tabbedEnabled = ref(false)
 const tabGroupSeparator = ref('')
@@ -86,6 +89,9 @@ const isTextModule = computed(
   () => !!props.module && isTextModuleType(props.module.type)
 )
 const isDataTableModule = computed(() => props.module?.type === 'data_table')
+const isBarChartModule = computed(
+  () => props.module?.type === 'bar_chart' || props.module?.type === 'stacked_horizontal_bar_chart'
+)
 
 const colorHexWithoutHash = computed({
   get: () =>
@@ -202,8 +208,51 @@ const readConfigStringArray = (
   return [] as string[]
 }
 
+const readConfigNumber = (
+  config: Record<string, unknown> | null | undefined,
+  keys: string[]
+) => {
+  if (!config) {
+    return null
+  }
+
+  for (const key of keys) {
+    const value = config[key]
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) {
+        return parsed
+      }
+    }
+  }
+
+  return null
+}
+
 const readShowTitleConfig = (config: Record<string, unknown> | null | undefined) =>
   readConfigBoolean(config, ['showTitle', 'show_title'], true)
+
+const normalizeBarLabelRotation = (value: number | null): BarLabelRotation => {
+  if (value === 45 || value === 90) {
+    return value
+  }
+  return 0
+}
+
+const readBarCategoryLabelRotation = (config: Record<string, unknown> | null | undefined) =>
+  normalizeBarLabelRotation(
+    readConfigNumber(config, [
+      'xAxisLabelRotation',
+      'x_axis_label_rotation',
+      'categoryLabelRotation',
+      'category_label_rotation',
+      'axisLabelRotate',
+      'axis_label_rotate'
+    ])
+  )
 
 const syncDataTableTabControls = (config: Record<string, unknown> | null | undefined) => {
   tabbedEnabled.value = readConfigBoolean(config, ['tabbed'], false)
@@ -386,6 +435,36 @@ const onShowTitleChange = () => {
   parseError.value = ''
 }
 
+const onBarCategoryLabelRotationChange = () => {
+  if (!isBarChartModule.value) {
+    return
+  }
+
+  let parsedConfig: Record<string, unknown>
+  try {
+    parsedConfig = parseConfigText()
+  } catch (error) {
+    parseError.value = error instanceof Error ? error.message : 'Invalid module config.'
+    barCategoryLabelRotation.value = readBarCategoryLabelRotation(props.module?.config)
+    return
+  }
+
+  if (barCategoryLabelRotation.value === 0) {
+    delete parsedConfig.xAxisLabelRotation
+  } else {
+    parsedConfig.xAxisLabelRotation = barCategoryLabelRotation.value
+  }
+
+  delete parsedConfig.x_axis_label_rotation
+  delete parsedConfig.categoryLabelRotation
+  delete parsedConfig.category_label_rotation
+  delete parsedConfig.axisLabelRotate
+  delete parsedConfig.axis_label_rotate
+
+  configText.value = JSON.stringify(parsedConfig, null, 2)
+  parseError.value = ''
+}
+
 const onTabEnabledChange = () => {
   applyDataTableConfigPatch((config) => {
     config.tabbed = tabbedEnabled.value
@@ -473,6 +552,7 @@ watch(
     draft.gridH = module.gridH
     configText.value = JSON.stringify(module.config ?? {}, null, 2)
     showTitle.value = readShowTitleConfig(module.config)
+    barCategoryLabelRotation.value = readBarCategoryLabelRotation(module.config)
     selectedWritableTableId.value = readWritableTableId(module.config)
     syncDataTableTabControls(module.config)
     parseError.value = ''
@@ -497,10 +577,11 @@ watch(
 )
 
 watch(
-  () => [configText.value, isDataTableModule.value, isTextModule.value] as const,
+  () => [configText.value, isDataTableModule.value, isTextModule.value, isBarChartModule.value] as const,
   () => {
     if (isTextModule.value) {
       showTitle.value = true
+      barCategoryLabelRotation.value = 0
       selectedWritableTableId.value = ''
       tabbedEnabled.value = false
       tabGroupSeparator.value = ''
@@ -516,6 +597,17 @@ watch(
       if (nextShowTitle !== showTitle.value) {
         showTitle.value = nextShowTitle
       }
+
+      if (isBarChartModule.value) {
+        const nextRotation = readBarCategoryLabelRotation(parsedConfig)
+        if (nextRotation !== barCategoryLabelRotation.value) {
+          barCategoryLabelRotation.value = nextRotation
+        }
+      }
+    }
+
+    if (!isBarChartModule.value && barCategoryLabelRotation.value !== 0) {
+      barCategoryLabelRotation.value = 0
     }
 
     if (!isDataTableModule.value) {
@@ -670,6 +762,26 @@ onMounted(() => {
         >
         Show Title
       </label>
+
+      <span
+        v-if="isBarChartModule"
+        class="block text-xs font-medium uppercase tracking-wide text-gray-600"
+      >
+        Label Rotation
+        <select
+          v-model.number="barCategoryLabelRotation"
+          class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+          @change="onBarCategoryLabelRotationChange"
+        >
+          <option
+            v-for="rotation in BAR_LABEL_ROTATION_OPTIONS"
+            :key="`bar-label-rotation-${rotation}`"
+            :value="rotation"
+          >
+            {{ rotation }}°
+          </option>
+        </select>
+      </span>
 
       <div v-if="isTextModule" class="space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
         <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">

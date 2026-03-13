@@ -134,6 +134,32 @@ const barBorderRadius = computed(() => {
   return value > 12 ? 12 : value
 })
 
+const categoryLabelRotation = computed(() => {
+  const rawValue =
+    props.module.config.x_axis_label_rotation ??
+    props.module.config.xAxisLabelRotation ??
+    props.module.config.category_label_rotation ??
+    props.module.config.categoryLabelRotation ??
+    props.module.config.axis_label_rotate ??
+    props.module.config.axisLabelRotate
+
+  const parsed =
+    typeof rawValue === 'string' && rawValue.trim() ? Number(rawValue) : rawValue
+
+  if (parsed === 45 || parsed === 90) {
+    return parsed
+  }
+
+  return 0
+})
+
+const categoryAxisLabel = computed(() => ({
+  color: '#6b7280',
+  rotate: categoryLabelRotation.value,
+  interval: categoryLabelRotation.value > 0 ? 0 : undefined,
+  hideOverlap: categoryLabelRotation.value > 0 ? false : undefined
+}))
+
 const chartOption = computed<EChartsOption>(() => ({
   color: series.value.map((item) => item.color),
   tooltip: {
@@ -163,14 +189,14 @@ const chartOption = computed<EChartsOption>(() => ({
     : {
         type: 'category',
         data: categories.value,
-        axisLabel: { color: '#6b7280' },
+        axisLabel: categoryAxisLabel.value,
         axisLine: { lineStyle: { color: '#d1d5db' } }
       },
   yAxis: horizontal.value
     ? {
         type: 'category',
         data: categories.value,
-        axisLabel: { color: '#6b7280' },
+        axisLabel: categoryAxisLabel.value,
         axisLine: { lineStyle: { color: '#d1d5db' } }
       }
     : {
