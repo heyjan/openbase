@@ -1,6 +1,4 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-import tailwindcss from '@tailwindcss/vite'
-
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
@@ -19,8 +17,5 @@ export default defineNuxtConfig({
     display: 'swap',
     preload: true
   },
-  css: ['~/assets/css/main.css', '~/assets/css/gridstack.css'],
-  vite: {
-    plugins: [tailwindcss()]
-  }
+  css: ['~/assets/css/main.css', '~/assets/css/gridstack.css']
 })
