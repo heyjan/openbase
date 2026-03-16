@@ -45,7 +45,7 @@ const resolveRule = (event: H3Event) => {
     const keyPart = sessionToken || buildIpKey(event)
     return {
       key: `admin-api:${keyPart}`,
-      maxRequests: 120,
+      maxRequests: 180,
       windowMs: ONE_MINUTE_MS
     }
   }
