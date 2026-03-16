@@ -3,6 +3,8 @@ import type {
   ConditionalFormatOperator,
   ConditionalFormatRule,
   QueryPreviewVisualization,
+  ScatterCompareSeriesOption,
+  ScatterVizMode,
   TableColumnValueFormat,
   VizOptionsByType,
   VizSeriesOption
@@ -241,6 +243,17 @@ const getDefaultSeries = (
     color: DEFAULT_PALETTE[index % DEFAULT_PALETTE.length]
   }))
 
+const getDefaultScatterCompareSeries = (
+  fields: string[],
+  limit = 2
+): ScatterCompareSeriesOption[] =>
+  fields.slice(0, limit).map((field, index) => ({
+    field,
+    label: field,
+    color: DEFAULT_PALETTE[(index + 1) % DEFAULT_PALETTE.length],
+    sizeField: field
+  }))
+
 const clone = <T>(value: T): T => {
   if (value === undefined || value === null) {
     return value
@@ -357,6 +370,53 @@ const parseSeries = (
     .filter((entry): entry is VizSeriesOption => entry !== null)
 
   return parsed.length ? parsed : getDefaultSeries(fallbackFields, limit)
+}
+
+const parseScatterMode = (value: unknown): ScatterVizMode =>
+  value === 'category_compare' ? 'category_compare' : 'numeric'
+
+const parseScatterCompareSeries = (
+  value: unknown,
+  fallbackFields: string[],
+  limit = 6
+): ScatterCompareSeriesOption[] => {
+  if (!Array.isArray(value)) {
+    return getDefaultScatterCompareSeries(fallbackFields, Math.min(limit, 2))
+  }
+
+  const parsed = value
+    .map((entry, index) => {
+      if (!isRecord(entry)) {
+        return null
+      }
+
+      const field = typeof entry.field === 'string' ? entry.field.trim() : ''
+      if (!field || !fallbackFields.includes(field)) {
+        return null
+      }
+
+      const label =
+        typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : field
+      const color = normalizeHexColor(entry.color) ?? DEFAULT_PALETTE[index % DEFAULT_PALETTE.length]
+      const configuredSizeField =
+        typeof entry.sizeField === 'string' && entry.sizeField.trim()
+          ? entry.sizeField.trim()
+          : ''
+      const sizeField = fallbackFields.includes(configuredSizeField) ? configuredSizeField : field
+
+      return {
+        field,
+        label,
+        color,
+        sizeField
+      } satisfies ScatterCompareSeriesOption
+    })
+    .filter((entry): entry is ScatterCompareSeriesOption => entry !== null)
+    .slice(0, limit)
+
+  return parsed.length
+    ? parsed
+    : getDefaultScatterCompareSeries(fallbackFields, Math.min(limit, 2))
 }
 
 const readConfiguredField = (
@@ -537,16 +597,21 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
   const sizeField =
     numericColumns.find((column) => column !== xField && column !== yField) ?? yField
   const labelField = categoryColumns[0] ?? ''
+  const categoryField = categoryColumns[0] ?? columns[0] ?? ''
 
   return {
     titleOverride: baseTitle,
+    mode: 'numeric',
     xField,
     yField,
     sizeField,
     labelField,
+    categoryField,
+    series: getDefaultScatterCompareSeries(numericColumns, 2),
     minSymbolSize: 10,
     maxSymbolSize: 42,
-    showLabels: false
+    showLabels: false,
+    yAxisInverse: false
   } as VizOptionsByType[T]
 }
 
@@ -762,6 +827,9 @@ const sanitizeVizConfigForType = (
     return normalized
   }
 
+  normalized.mode = parseScatterMode(
+    readConfiguredValue(normalized, ['mode', 'scatterMode', 'scatter_mode'])
+  )
   normalized.xField = readConfiguredField(
     normalized,
     ['xField', 'x_field'],
@@ -797,6 +865,20 @@ const sanitizeVizConfigForType = (
     42
   )
   normalized.showLabels = readConfiguredBoolean(normalized, ['showLabels', 'show_labels'], false)
+  normalized.yAxisMin = readConfiguredOptionalNumber(normalized, ['yAxisMin', 'y_axis_min'])
+  normalized.yAxisMax = readConfiguredOptionalNumber(normalized, ['yAxisMax', 'y_axis_max'])
+  normalized.yAxisInverse = readConfiguredBoolean(
+    normalized,
+    ['yAxisInverse', 'y_axis_inverse'],
+    false
+  )
+  normalized.categoryField = readConfiguredField(
+    normalized,
+    ['categoryField', 'category_field', 'xField', 'x_field'],
+    columns,
+    typeof defaults.categoryField === 'string' ? defaults.categoryField : ''
+  )
+  normalized.series = parseScatterCompareSeries(normalized.series, numericColumns, 6)
   return normalized
 }
 

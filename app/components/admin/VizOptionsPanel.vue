@@ -17,6 +17,8 @@ import {
 import type {
   ConditionalFormatRule,
   QueryPreviewVisualization,
+  ScatterCompareSeriesOption,
+  ScatterVizMode,
   TableColumnValueFormat,
   VizSeriesOption
 } from '~/types/viz-options'
@@ -59,6 +61,7 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const draggingColumn = ref('')
 const SELECT_NONE_VALUE = '__none__'
+const DEFAULT_SERIES_COLORS = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
 const sharedSelectProps = {
   content: {
     position: 'popper' as const,
@@ -465,7 +468,7 @@ const toggleSeriesField = (field: string, checked: boolean) => {
         return {
           field: candidate,
           label: existing?.label ?? candidate,
-          color: existing?.color ?? ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed'][index % 6]
+          color: existing?.color ?? DEFAULT_SERIES_COLORS[index % DEFAULT_SERIES_COLORS.length]
         }
       })
   })
@@ -473,6 +476,114 @@ const toggleSeriesField = (field: string, checked: boolean) => {
 
 const updateSeries = (index: number, patch: Partial<VizSeriesOption>) => {
   const next = [...currentSeries.value]
+  const current = next[index]
+  if (!current) {
+    return
+  }
+
+  next[index] = {
+    ...current,
+    ...patch
+  }
+
+  updateConfig({
+    series: next
+  })
+}
+
+const scatterMode = computed<ScatterVizMode>(() =>
+  readString('mode') === 'category_compare' ? 'category_compare' : 'numeric'
+)
+
+const scatterSeriesCandidateFields = computed(() => numericColumns.value)
+
+const scatterCompareSeries = computed<ScatterCompareSeriesOption[]>(() => {
+  const raw = props.modelValue.series
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .map((entry, index) => {
+      if (!entry || typeof entry !== 'object') {
+        return null
+      }
+
+      const record = entry as Record<string, unknown>
+      const field = typeof record.field === 'string' ? record.field.trim() : ''
+      if (!field || !scatterSeriesCandidateFields.value.includes(field)) {
+        return null
+      }
+
+      const label =
+        typeof record.label === 'string' && record.label.trim() ? record.label.trim() : field
+      const color =
+        typeof record.color === 'string' && record.color.trim()
+          ? record.color.trim()
+          : DEFAULT_SERIES_COLORS[index % DEFAULT_SERIES_COLORS.length]
+      const sizeField =
+        typeof record.sizeField === 'string' &&
+        record.sizeField.trim() &&
+        scatterSeriesCandidateFields.value.includes(record.sizeField.trim())
+          ? record.sizeField.trim()
+          : field
+
+      return {
+        field,
+        label,
+        color,
+        sizeField
+      } satisfies ScatterCompareSeriesOption
+    })
+    .filter((entry): entry is ScatterCompareSeriesOption => entry !== null)
+})
+
+const setScatterMode = (value: unknown) => {
+  updateConfig({
+    mode: value === 'category_compare' ? 'category_compare' : 'numeric'
+  })
+}
+
+const toggleScatterSeriesField = (field: string, checked: boolean) => {
+  const byField = new Map(scatterCompareSeries.value.map((entry) => [entry.field, entry]))
+
+  if (checked) {
+    if (!byField.has(field)) {
+      byField.set(field, {
+        field,
+        label: field,
+        color: '#2563eb',
+        sizeField: field
+      })
+    }
+  } else {
+    byField.delete(field)
+  }
+
+  updateConfig({
+    series: scatterSeriesCandidateFields.value
+      .filter((candidate) => byField.has(candidate))
+      .map((candidate, index) => {
+        const existing = byField.get(candidate)
+        const fallbackSizeField = scatterSeriesCandidateFields.value.includes(candidate)
+          ? candidate
+          : scatterSeriesCandidateFields.value[0] ?? candidate
+
+        return {
+          field: candidate,
+          label: existing?.label ?? candidate,
+          color: existing?.color ?? DEFAULT_SERIES_COLORS[index % DEFAULT_SERIES_COLORS.length],
+          sizeField:
+            existing?.sizeField && scatterSeriesCandidateFields.value.includes(existing.sizeField)
+              ? existing.sizeField
+              : fallbackSizeField
+        } satisfies ScatterCompareSeriesOption
+      })
+  })
+}
+
+const updateScatterSeries = (index: number, patch: Partial<ScatterCompareSeriesOption>) => {
+  const next = [...scatterCompareSeries.value]
   const current = next[index]
   if (!current) {
     return
@@ -1374,6 +1485,27 @@ watch(
       <template v-else-if="vizType === 'scatter'">
         <div class="grid gap-3 md:grid-cols-2">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Scatter mode
+            <USelect
+              v-bind="sharedSelectProps"
+              class="mt-1"
+              :items="[
+                { label: 'Numeric relation', value: 'numeric' },
+                { label: 'Category compare (bubble)', value: 'category_compare' }
+              ]"
+              :model-value="scatterMode"
+              @update:model-value="setScatterMode($event)"
+            />
+          </label>
+
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            Show labels
+            <USwitch :model-value="readBoolean('showLabels', false)" @update:model-value="updateBoolean('showLabels', $event)" />
+          </label>
+        </div>
+
+        <div v-if="scatterMode === 'numeric'" class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             X field
             <USelect
               v-bind="sharedSelectProps"
@@ -1422,7 +1554,66 @@ watch(
               @update:model-value="updateConfig({ labelField: fromSelectValue($event) })"
             />
           </label>
+        </div>
 
+        <div v-else class="grid gap-3 md:grid-cols-2">
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Category field
+            <USelect
+              v-bind="sharedSelectProps"
+              class="mt-1"
+              :items="columns.map((column) => ({ label: column, value: column }))"
+              :model-value="readString('categoryField')"
+              @update:model-value="updateConfig({ categoryField: String($event || '') })"
+            />
+          </label>
+        </div>
+
+        <div v-if="scatterMode === 'category_compare'">
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Series fields</p>
+          <div class="mt-2 grid gap-1 md:grid-cols-3">
+            <label
+              v-for="field in scatterSeriesCandidateFields"
+              :key="`scatter-series-${field}`"
+              class="inline-flex items-center gap-2 text-sm text-gray-700"
+            >
+              <input
+                :checked="scatterCompareSeries.some((entry) => entry.field === field)"
+                type="checkbox"
+                class="h-4 w-4 rounded border border-gray-300"
+                @change="toggleScatterSeriesField(field, ($event.target as HTMLInputElement).checked)"
+              >
+              <span>{{ field }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div v-if="scatterMode === 'category_compare' && scatterCompareSeries.length" class="space-y-2">
+          <div
+            v-for="(series, index) in scatterCompareSeries"
+            :key="`scatter-series-options-${series.field}`"
+            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[1fr_120px_1fr]"
+          >
+            <UInput
+              :model-value="series.label ?? series.field"
+              @update:model-value="updateScatterSeries(index, { label: String($event || '') })"
+            />
+            <input
+              :value="series.color ?? '#2563eb'"
+              type="color"
+              class="h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+              @input="updateScatterSeries(index, { color: ($event.target as HTMLInputElement).value })"
+            >
+            <USelect
+              v-bind="sharedSelectProps"
+              :items="numericColumns.map((column) => ({ label: column, value: column }))"
+              :model-value="series.sizeField ?? series.field"
+              @update:model-value="updateScatterSeries(index, { sizeField: String($event || series.field) })"
+            />
+          </div>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-2">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Min bubble size
             <USlider
@@ -1447,9 +1638,29 @@ watch(
             />
           </label>
 
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Y-axis min
+            <UInput
+              class="mt-1"
+              type="number"
+              :model-value="readOptionalNumericText('yAxisMin')"
+              @update:model-value="updateOptionalNumber('yAxisMin', $event)"
+            />
+          </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Y-axis max
+            <UInput
+              class="mt-1"
+              type="number"
+              :model-value="readOptionalNumericText('yAxisMax')"
+              @update:model-value="updateOptionalNumber('yAxisMax', $event)"
+            />
+          </label>
+
           <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
-            Show labels
-            <USwitch :model-value="readBoolean('showLabels', false)" @update:model-value="updateBoolean('showLabels', $event)" />
+            Invert Y-axis
+            <USwitch :model-value="readBoolean('yAxisInverse', false)" @update:model-value="updateBoolean('yAxisInverse', $event)" />
           </label>
         </div>
       </template>

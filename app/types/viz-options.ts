@@ -131,14 +131,29 @@ export type PieVizOptions = SharedVizOptions & {
   showLegend?: boolean
 }
 
+export type ScatterVizMode = 'numeric' | 'category_compare'
+
+export type ScatterCompareSeriesOption = {
+  field: string
+  label?: string
+  color?: string
+  sizeField?: string
+}
+
 export type ScatterVizOptions = SharedVizOptions & {
+  mode?: ScatterVizMode
   xField?: string
   yField?: string
   sizeField?: string
   labelField?: string
+  categoryField?: string
+  series?: ScatterCompareSeriesOption[]
   minSymbolSize?: number
   maxSymbolSize?: number
   showLabels?: boolean
+  yAxisMin?: number
+  yAxisMax?: number
+  yAxisInverse?: boolean
 }
 
 export type VizOptionsByType = {

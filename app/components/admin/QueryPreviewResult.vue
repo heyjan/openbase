@@ -14,7 +14,12 @@ import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import Table from '~/components/ui/Table.vue'
 import type { SavedQueryPreviewResult } from '~/types/query'
-import type { QueryPreviewVisualization, VizSeriesOption } from '~/types/viz-options'
+import type {
+  QueryPreviewVisualization,
+  ScatterCompareSeriesOption,
+  ScatterVizMode,
+  VizSeriesOption
+} from '~/types/viz-options'
 import {
   applyTableSortAndLimit,
   detectTableTabGroups,
@@ -356,6 +361,11 @@ const pieData = computed(() => {
 const hasPieData = computed(() => pieData.value.length > 0)
 const pieDonut = computed(() => readBoolean(['donut'], true))
 const pieShowLabels = computed(() => readBoolean(['showLabels', 'show_labels'], false))
+const scatterMode = computed<ScatterVizMode>(() =>
+  readString(['mode', 'scatterMode', 'scatter_mode']) === 'category_compare'
+    ? 'category_compare'
+    : 'numeric'
+)
 
 const scatterXColumn = computed(() => {
   const configured = readString(['xField', 'x_field'])
@@ -394,9 +404,9 @@ const scatterLabelColumn = computed(() => {
   return categoryColumns.value[0] ?? ''
 })
 
-const scatterData = computed(() => {
+const scatterNumericData = computed(() => {
   if (!scatterXColumn.value || !scatterYColumn.value) {
-    return [] as Array<{ value: [number, number, number]; name?: string }>
+    return [] as Array<{ value: [number, number, number]; rawValue: [unknown, unknown, unknown]; name?: string }>
   }
 
   return rows.value
@@ -421,14 +431,135 @@ const scatterData = computed(() => {
 
       return {
         value: [x, y, size] as [number, number, number],
+        rawValue: [row[scatterXColumn.value], row[scatterYColumn.value], row[scatterSizeColumn.value]],
         name: label || undefined
       }
     })
-    .filter((entry): entry is { value: [number, number, number]; name?: string } => entry !== null)
+    .filter((entry): entry is { value: [number, number, number]; rawValue: [unknown, unknown, unknown]; name?: string } => entry !== null)
 })
 
+const scatterCategoryColumn = computed(() => {
+  const configured = readString(['categoryField', 'category_field', 'xField', 'x_field'])
+  if (configured && columns.value.includes(configured)) {
+    return configured
+  }
+  return categoryColumns.value[0] ?? columns.value[0] ?? ''
+})
+
+const scatterCompareSeries = computed<ScatterCompareSeriesOption[]>(() => {
+  const raw = config.value.series
+  if (!Array.isArray(raw)) {
+    return numericColumns.value.slice(0, 2).map((field, index) => ({
+      field,
+      label: field,
+      color: palette[(index + 1) % palette.length],
+      sizeField: field
+    }))
+  }
+
+  const parsed = raw
+    .map((entry, index) => {
+      if (!entry || typeof entry !== 'object') {
+        return null
+      }
+
+      const record = entry as Record<string, unknown>
+      const field = typeof record.field === 'string' ? record.field.trim() : ''
+      if (!field || !numericColumns.value.includes(field)) {
+        return null
+      }
+
+      const label =
+        typeof record.label === 'string' && record.label.trim() ? record.label.trim() : field
+      const color =
+        typeof record.color === 'string' && record.color.trim()
+          ? record.color.trim()
+          : palette[index % palette.length]
+      const sizeField =
+        typeof record.sizeField === 'string' &&
+        record.sizeField.trim() &&
+        numericColumns.value.includes(record.sizeField.trim())
+          ? record.sizeField.trim()
+          : field
+
+      return {
+        field,
+        label,
+        color,
+        sizeField
+      } satisfies ScatterCompareSeriesOption
+    })
+    .filter((entry): entry is ScatterCompareSeriesOption => entry !== null)
+
+  if (parsed.length) {
+    return parsed
+  }
+
+  return numericColumns.value.slice(0, 2).map((field, index) => ({
+    field,
+    label: field,
+    color: palette[(index + 1) % palette.length],
+    sizeField: field
+  }))
+})
+
+const scatterCategories = computed(() => {
+  if (!scatterCategoryColumn.value) {
+    return [] as string[]
+  }
+
+  const values: string[] = []
+  const seen = new Set<string>()
+  for (let index = 0; index < rows.value.length; index += 1) {
+    const row = rows.value[index]
+    const category = String(row[scatterCategoryColumn.value] ?? `Item ${index + 1}`).trim() || `Item ${index + 1}`
+    if (seen.has(category)) {
+      continue
+    }
+    seen.add(category)
+    values.push(category)
+  }
+  return values
+})
+
+const scatterCompareSeriesData = computed(() =>
+  scatterCompareSeries.value
+    .map((series) => ({
+      ...series,
+      points: rows.value
+        .map((row, rowIndex) => {
+          const category = String(row[scatterCategoryColumn.value] ?? `Item ${rowIndex + 1}`).trim() || `Item ${rowIndex + 1}`
+          const y = toNumber(row[series.field])
+          const size = toNumber(row[series.sizeField ?? series.field]) ?? y
+
+          if (y === null || size === null) {
+            return null
+          }
+
+          return {
+            value: [category, y, size] as [string, number, number],
+            rawValue: [row[scatterCategoryColumn.value], row[series.field], row[series.sizeField ?? series.field]],
+            name: category,
+            sizeField: series.sizeField ?? series.field
+          }
+        })
+        .filter(
+          (point): point is {
+            value: [string, number, number]
+            rawValue: [unknown, unknown, unknown]
+            name: string
+            sizeField: string
+          } => point !== null
+        )
+    }))
+    .filter((series) => series.points.length > 0)
+)
+
 const scatterSizeExtent = computed(() => {
-  const sizes = scatterData.value.map((item) => item.value[2])
+  const sizes =
+    scatterMode.value === 'category_compare'
+      ? scatterCompareSeriesData.value.flatMap((series) => series.points.map((point) => point.value[2]))
+      : scatterNumericData.value.map((item) => item.value[2])
   if (!sizes.length) {
     return { min: 0, max: 0 }
   }
@@ -441,6 +572,10 @@ const scatterSizeExtent = computed(() => {
 const scatterMinSymbolSize = computed(() => readNumber(['minSymbolSize', 'min_symbol_size'], 10))
 const scatterMaxSymbolSize = computed(() => readNumber(['maxSymbolSize', 'max_symbol_size'], 42))
 const scatterShowLabels = computed(() => readBoolean(['showLabels', 'show_labels'], false))
+const scatterYAxisInverse = computed(() => readBoolean(['yAxisInverse', 'y_axis_inverse'], false))
+const scatterLegendVisible = computed(
+  () => scatterMode.value === 'category_compare' && scatterCompareSeriesData.value.length > 1
+)
 
 const scaleScatterSymbolSize = (value: unknown) => {
   if (!Array.isArray(value)) {
@@ -465,7 +600,11 @@ const scaleScatterSymbolSize = (value: unknown) => {
   return min + clamped * (max - min)
 }
 
-const hasScatterData = computed(() => scatterData.value.length > 0)
+const hasScatterData = computed(() =>
+  scatterMode.value === 'category_compare'
+    ? scatterCompareSeriesData.value.length > 0
+    : scatterNumericData.value.length > 0
+)
 
 const hasCartesianData = computed(() => rows.value.length > 0 && seriesConfig.value.length > 0)
 const smoothLines = computed(() => readBoolean(['smooth'], true))
@@ -888,6 +1027,103 @@ const chartOption = computed<EChartsOption>(() => {
   }
 
   if (props.visualization === 'scatter') {
+    if (scatterMode.value === 'category_compare') {
+      return {
+        title: chartTitle.value
+          ? {
+              text: chartTitle.value,
+              left: 'center',
+              top: 0,
+              textStyle: {
+                color: '#111827',
+                fontSize: 14,
+                fontWeight: 600
+              }
+            }
+          : undefined,
+        color: scatterCompareSeriesData.value.map((series) => series.color ?? '#2563eb'),
+        tooltip: {
+          trigger: 'item',
+          formatter: (params: unknown) => {
+            if (!params || typeof params !== 'object') {
+              return ''
+            }
+
+            const record = params as Record<string, unknown>
+            const dataRecord =
+              record.data && typeof record.data === 'object'
+                ? (record.data as Record<string, unknown>)
+                : null
+            const values = Array.isArray(dataRecord?.value) ? dataRecord.value : []
+            const rawValues = Array.isArray(dataRecord?.rawValue) ? dataRecord.rawValue : []
+            const category = String(values[0] ?? '')
+            const seriesName = String(record.seriesName ?? '')
+            const value = rawValues[1] ?? values[1]
+            const size = rawValues[2] ?? values[2]
+            const sizeField =
+              typeof dataRecord?.sizeField === 'string' && dataRecord.sizeField.trim()
+                ? dataRecord.sizeField.trim()
+                : 'Size'
+
+            return [
+              category,
+              `${seriesName}: ${String(value ?? '')}`,
+              `${sizeField}: ${String(size ?? '')}`
+            ].join('<br/>')
+          }
+        },
+        legend: {
+          show: scatterLegendVisible.value,
+          top: chartTitle.value ? 22 : 0,
+          textStyle: { color: '#4b5563' }
+        },
+        grid: {
+          left: 12,
+          right: 12,
+          top: chartTitle.value ? 62 : scatterLegendVisible.value ? 40 : 18,
+          bottom: 28,
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: scatterCategories.value,
+          name: scatterCategoryColumn.value || 'Category',
+          nameGap: 20,
+          axisLabel: { color: '#6b7280' },
+          axisLine: { lineStyle: { color: '#d1d5db' } }
+        },
+        yAxis: {
+          type: 'value',
+          name: 'Value',
+          nameGap: 30,
+          min: yAxisMin.value,
+          max: yAxisMax.value,
+          inverse: scatterYAxisInverse.value,
+          axisLabel: { color: '#6b7280' },
+          splitLine: { lineStyle: { color: '#e5e7eb' } }
+        },
+        series: scatterCompareSeriesData.value.map((series) => ({
+          type: 'scatter',
+          name: series.label ?? series.field,
+          data: series.points,
+          symbolSize: scaleScatterSymbolSize,
+          itemStyle: {
+            color: series.color ?? '#2563eb',
+            opacity: 0.78
+          },
+          label: {
+            show: scatterShowLabels.value,
+            position: 'top',
+            color: '#374151',
+            formatter: (params: { data?: { name?: string } }) => params.data?.name ?? ''
+          },
+          emphasis: {
+            focus: 'series'
+          }
+        }))
+      }
+    }
+
     return {
       title: chartTitle.value
         ? {
@@ -922,13 +1158,16 @@ const chartOption = computed<EChartsOption>(() => {
         type: 'value',
         name: scatterYColumn.value || 'Y',
         nameGap: 30,
+        min: yAxisMin.value,
+        max: yAxisMax.value,
+        inverse: scatterYAxisInverse.value,
         axisLabel: { color: '#6b7280' },
         splitLine: { lineStyle: { color: '#e5e7eb' } }
       },
       series: [
         {
           type: 'scatter',
-          data: scatterData.value,
+          data: scatterNumericData.value,
           symbolSize: scaleScatterSymbolSize,
           itemStyle: {
             color: '#2563eb',
@@ -1332,9 +1571,19 @@ const chartOption = computed<EChartsOption>(() => {
             v-else-if="visualization === 'scatter'"
             class="mb-2 text-xs text-gray-500"
           >
-            X: <span class="font-medium text-gray-700">{{ scatterXColumn || 'none' }}</span>
-            | Y: <span class="font-medium text-gray-700">{{ scatterYColumn || 'none' }}</span>
-            | Size: <span class="font-medium text-gray-700">{{ scatterSizeColumn || 'none' }}</span>
+            <template v-if="scatterMode === 'category_compare'">
+              Category:
+              <span class="font-medium text-gray-700">{{ scatterCategoryColumn || 'none' }}</span>
+              | Series:
+              <span class="font-medium text-gray-700">
+                {{ scatterCompareSeriesData.map((series) => series.label || series.field).join(', ') || 'none' }}
+              </span>
+            </template>
+            <template v-else>
+              X: <span class="font-medium text-gray-700">{{ scatterXColumn || 'none' }}</span>
+              | Y: <span class="font-medium text-gray-700">{{ scatterYColumn || 'none' }}</span>
+              | Size: <span class="font-medium text-gray-700">{{ scatterSizeColumn || 'none' }}</span>
+            </template>
           </p>
           <p
             v-else-if="visualization === 'waterfall'"
@@ -1377,7 +1626,11 @@ const chartOption = computed<EChartsOption>(() => {
             v-else-if="visualization === 'scatter' && !hasScatterData"
             class="text-sm text-gray-500"
           >
-            Need at least two numeric columns to render a scatter chart.
+            {{
+              scatterMode === 'category_compare'
+                ? 'Need one category field and at least one numeric series for scatter comparison.'
+                : 'Need at least two numeric columns to render a scatter chart.'
+            }}
           </p>
           <p
             v-else-if="visualization === 'waterfall' && !hasWaterfallData"
