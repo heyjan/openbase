@@ -5,6 +5,7 @@ import { runSavedQueryById } from '~~/server/utils/query-runner'
 import {
   extractVariables,
   parseVariableDefinitions,
+  type VariableDefinition,
   type VariableOption
 } from '~~/shared/utils/query-variables'
 import { requireSharedDashboardAccess } from '~~/server/utils/share-access'
@@ -76,6 +77,14 @@ const parseSourceQueryParameters = (query: Record<string, unknown>) => {
   return parameters
 }
 
+const getPinnedVariableNames = (config: Record<string, unknown> | null | undefined) => {
+  const rawPinned = config?.pinnedVariables
+  if (!rawPinned || typeof rawPinned !== 'object' || Array.isArray(rawPinned)) {
+    return new Set<string>()
+  }
+  return new Set(Object.keys(rawPinned as Record<string, unknown>))
+}
+
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   const moduleId = getRouterParam(event, 'moduleId')
@@ -87,8 +96,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const query = getQuery(event)
-  const token = query.token
-  if (!token || Array.isArray(token)) {
+  const token = typeof query.token === 'string' ? query.token : ''
+  if (!token) {
     throw createError({ statusCode: 401, statusMessage: 'Missing share token' })
   }
 
@@ -107,10 +116,13 @@ export default defineEventHandler(async (event) => {
 
   const savedQuery = await getSavedQueryById(savedQueryId)
   const configuredDefinitions = parseVariableDefinitions(savedQuery.parameters ?? {})
-  const fallbackDefinitions = extractVariables(savedQuery.queryText).map((name) => ({
-    name,
-    type: 'text' as const
-  }))
+  const fallbackDefinitions: VariableDefinition[] = extractVariables(savedQuery.queryText).map(
+    (name): VariableDefinition => ({
+      name,
+      type: 'text',
+      required: false
+    })
+  )
   const definitions = configuredDefinitions.length ? configuredDefinitions : fallbackDefinitions
   const sourceQueryParameters = parseSourceQueryParameters(query as Record<string, unknown>)
   const variables: PublicVariableControl[] = []
@@ -203,5 +215,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return { variables }
+  const pinnedVariableNames = getPinnedVariableNames(module.config)
+  const visibleVariables = variables.filter((variable) => !pinnedVariableNames.has(variable.name))
+  return { variables: visibleVariables }
 })

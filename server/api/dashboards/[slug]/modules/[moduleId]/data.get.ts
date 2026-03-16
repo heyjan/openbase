@@ -48,6 +48,25 @@ const parseLimit = (moduleConfig: Record<string, unknown>) => {
   return Math.min(rounded, 1000)
 }
 
+const mergePinnedVariables = (
+  filters: Record<string, unknown>,
+  moduleConfig: Record<string, unknown>
+) => {
+  const rawPinned = moduleConfig.pinnedVariables
+  if (!rawPinned || typeof rawPinned !== 'object' || Array.isArray(rawPinned)) {
+    return filters
+  }
+
+  for (const [key, value] of Object.entries(rawPinned as Record<string, unknown>)) {
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      continue
+    }
+    filters[key] = String(value)
+  }
+
+  return filters
+}
+
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   const moduleId = getRouterParam(event, 'moduleId')
@@ -59,8 +78,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const query = getQuery(event)
-  const token = query.token
-  if (!token || Array.isArray(token)) {
+  const token = typeof query.token === 'string' ? query.token : ''
+  if (!token) {
     throw createError({ statusCode: 401, statusMessage: 'Missing share token' })
   }
 
@@ -82,7 +101,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const filters = parseFilters(query as Record<string, unknown>)
+  const filters = mergePinnedVariables(
+    parseFilters(query as Record<string, unknown>),
+    moduleConfig
+  )
   const data = await runSavedQueryById({
     savedQueryId,
     parameters: filters,

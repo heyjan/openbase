@@ -16,6 +16,10 @@ export type ModuleType =
   | 'subheader'
 
 export type TextModuleType = 'header' | 'subheader'
+export type PinnedVariables = Record<string, string | number>
+export type ModuleConfigWithPinned = Record<string, unknown> & {
+  pinnedVariables?: PinnedVariables
+}
 
 const textModuleTypeSet = new Set<ModuleType>(['header', 'subheader'])
 

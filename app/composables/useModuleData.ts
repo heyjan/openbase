@@ -1,5 +1,9 @@
 import type { Ref } from 'vue'
-import { isTextModuleType, type ModuleConfig } from '~/types/module'
+import {
+  isTextModuleType,
+  type ModuleConfig,
+  type PinnedVariables
+} from '~/types/module'
 
 export type ModuleDataResult = {
   rows: Record<string, unknown>[]
@@ -15,6 +19,31 @@ const emptyModuleData = (): ModuleDataResult => ({
 
 const getSavedQueryId = (module: ModuleConfig) => {
   return module.queryVisualizationQueryId?.trim() ?? ''
+}
+
+const getPinnedVariables = (module: ModuleConfig): PinnedVariables => {
+  const rawPinned = module.config?.pinnedVariables
+  if (!rawPinned || typeof rawPinned !== 'object' || Array.isArray(rawPinned)) {
+    return {}
+  }
+
+  const pinned: PinnedVariables = {}
+  for (const [key, value] of Object.entries(rawPinned as Record<string, unknown>)) {
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      continue
+    }
+    pinned[key] = value
+  }
+
+  return pinned
+}
+
+const getConfigSignature = (module: ModuleConfig) => {
+  try {
+    return JSON.stringify(module.config ?? {})
+  } catch {
+    return ''
+  }
 }
 
 export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
@@ -52,6 +81,14 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
       .join('|')
   )
   const savedQueryId = computed(() => getSavedQueryId(moduleRef.value))
+  const pinnedVariables = computed(() => getPinnedVariables(moduleRef.value))
+  const pinnedVariablesKey = computed(() =>
+    Object.entries(pinnedVariables.value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => `${key}:${value}`)
+      .join('|')
+  )
+  const configSignature = computed(() => getConfigSignature(moduleRef.value))
   const isPublicDashboardRoute = computed(() =>
     route.path.startsWith('/d/') && !!publicSlug.value
   )
@@ -98,10 +135,14 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
 
   const queryParams = computed<Record<string, unknown>>(() => {
     const params: Record<string, unknown> = {}
+    const pinnedVariableNames = new Set(Object.keys(pinnedVariables.value))
 
     if (isPublicDashboardRoute.value) {
       for (const [key, value] of Object.entries(route.query)) {
         if (value === undefined || value === null) {
+          continue
+        }
+        if (pinnedVariableNames.has(key)) {
           continue
         }
         params[key] = value
@@ -115,6 +156,9 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
         if (value === undefined || value === null) {
           continue
         }
+        if (pinnedVariableNames.has(key)) {
+          continue
+        }
         params[key] = value
       }
       return params
@@ -123,6 +167,9 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
     if (isAdminDashboardEditRoute.value) {
       for (const [key, value] of Object.entries(adminDashboardVariableValues.value)) {
         if (!value) {
+          continue
+        }
+        if (pinnedVariableNames.has(key)) {
           continue
         }
         params[key] = value
@@ -180,6 +227,8 @@ export const useModuleData = (moduleRef: Ref<ModuleConfig>) => {
       () => moduleRef.value.id,
       () => moduleRef.value.type,
       () => savedQueryId.value,
+      () => configSignature.value,
+      () => pinnedVariablesKey.value,
       () => publicSlug.value,
       () => dashboardId.value,
       () => token.value,

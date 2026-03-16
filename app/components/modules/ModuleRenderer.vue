@@ -132,6 +132,13 @@ const adminDashboardVariableValuesKey = computed(() =>
     .map(([name, value]) => `${name}:${value}`)
     .join('|')
 )
+const moduleConfigSignature = computed(() => {
+  try {
+    return JSON.stringify(props.module.config ?? {})
+  } catch {
+    return ''
+  }
+})
 
 const canLoadModuleVariables = computed(() => {
   if (isTextModule.value || !props.module.id) {
@@ -247,6 +254,7 @@ watch(
     () => props.module.id,
     () => props.module.type,
     () => props.module.queryVisualizationQueryId,
+    () => moduleConfigSignature.value,
     () => route.path,
     () => route.fullPath,
     () => adminDashboardVariableValuesKey.value

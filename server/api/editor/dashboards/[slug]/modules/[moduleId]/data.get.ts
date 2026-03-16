@@ -48,6 +48,25 @@ const parseLimit = (moduleConfig: Record<string, unknown>) => {
   return Math.min(rounded, 1000)
 }
 
+const mergePinnedVariables = (
+  filters: Record<string, unknown>,
+  moduleConfig: Record<string, unknown>
+) => {
+  const rawPinned = moduleConfig.pinnedVariables
+  if (!rawPinned || typeof rawPinned !== 'object' || Array.isArray(rawPinned)) {
+    return filters
+  }
+
+  for (const [key, value] of Object.entries(rawPinned as Record<string, unknown>)) {
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      continue
+    }
+    filters[key] = String(value)
+  }
+
+  return filters
+}
+
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   const moduleId = getRouterParam(event, 'moduleId')
@@ -85,7 +104,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const filters = parseFilters(getQuery(event) as Record<string, unknown>)
+  const filters = mergePinnedVariables(
+    parseFilters(getQuery(event) as Record<string, unknown>),
+    moduleConfig
+  )
   return runSavedQueryById({
     savedQueryId,
     parameters: filters,

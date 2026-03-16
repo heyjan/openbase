@@ -2,9 +2,11 @@
 import {
   isTextModuleType,
   type ModuleConfig,
+  type PinnedVariables,
   type TextModuleType
 } from '~/types/module'
 import type { ModuleTemplate } from '~/types/template'
+import ModuleInlineDateRange from '~/components/modules/ModuleInlineDateRange.vue'
 
 type FontSizePreset = 'M' | 'L' | 'XL'
 type BarLabelRotation = 0 | 45 | 90
@@ -22,10 +24,12 @@ const emit = defineEmits<{
 
 const { list: listTemplates, create: createTemplate } = useTemplates()
 const { list: listWritableTables } = useWritableTables()
+const { getById: getQueryVisualizationById } = useQueryVisualizations()
 const toast = useAppToast()
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/
 const fontSizePresets: FontSizePreset[] = ['M', 'L', 'XL']
 const BAR_LABEL_ROTATION_OPTIONS: BarLabelRotation[] = [0, 45, 90]
+const AUTO_TITLE_SEPARATOR = ' - '
 
 const textModuleDefaults: Record<
   TextModuleType,
@@ -84,6 +88,13 @@ const templateError = ref('')
 const selectedTemplateId = ref('')
 const templateName = ref('')
 const savingTemplate = ref(false)
+const titleSuggestion = ref('')
+const baseVisualizationTitle = ref('')
+
+const adminDashboardVariableValues = useState<Record<string, string>>(
+  'admin-dashboard-variable-values',
+  () => ({})
+)
 
 const isTextModule = computed(
   () => !!props.module && isTextModuleType(props.module.type)
@@ -92,6 +103,26 @@ const isDataTableModule = computed(() => props.module?.type === 'data_table')
 const isBarChartModule = computed(
   () => props.module?.type === 'bar_chart' || props.module?.type === 'stacked_horizontal_bar_chart'
 )
+const savedQueryId = computed(() =>
+  props.module?.queryVisualizationQueryId?.trim() || ''
+)
+
+const sanitizedRuntimeParameters = computed<Record<string, unknown>>(() => {
+  const next: Record<string, unknown> = {}
+  for (const [name, value] of Object.entries(adminDashboardVariableValues.value)) {
+    if (!value || !value.trim()) {
+      continue
+    }
+    next[name] = value
+  }
+  return next
+})
+
+const {
+  variables: queryVariableDefinitions,
+  loading: queryVariableDefinitionsLoading,
+  error: queryVariableDefinitionsError
+} = useQueryVariableDefinitions(savedQueryId, sanitizedRuntimeParameters)
 
 const colorHexWithoutHash = computed({
   get: () =>
@@ -126,6 +157,28 @@ const parseConfigTextSafe = () => {
     return null
   }
 }
+
+const normalizePinnedVariables = (
+  value: unknown
+): PinnedVariables => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+
+  const pinned: PinnedVariables = {}
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry !== 'string' && typeof entry !== 'number') {
+      continue
+    }
+    pinned[key] = entry
+  }
+
+  return pinned
+}
+
+const readPinnedVariables = (
+  config: Record<string, unknown> | null | undefined
+): PinnedVariables => normalizePinnedVariables(config?.pinnedVariables)
 
 const readWritableTableId = (config: Record<string, unknown> | null | undefined) => {
   if (!config) {
@@ -278,11 +331,85 @@ const tabSharedColumnOptions = computed(() => {
   )
 })
 
-const applyDataTableConfigPatch = (
-  patcher: (config: Record<string, unknown>) => void
-) => {
-  if (!isDataTableModule.value) {
+const parsedConfigForUi = computed(() => parseConfigTextSafe())
+const pinnedVariables = computed(() => {
+  if (parsedConfigForUi.value) {
+    return readPinnedVariables(parsedConfigForUi.value)
+  }
+  return readPinnedVariables(props.module?.config)
+})
+const variableNames = computed(() =>
+  new Set(queryVariableDefinitions.value.map((variable) => variable.name))
+)
+const stalePinnedVariableNames = computed(() => {
+  if (queryVariableDefinitionsLoading.value || queryVariableDefinitionsError.value) {
+    return [] as string[]
+  }
+
+  return Object.keys(pinnedVariables.value).filter((name) => !variableNames.value.has(name))
+})
+const pinnedVariablesSectionVisible = computed(
+  () =>
+    !isTextModule.value &&
+    (queryVariableDefinitionsLoading.value ||
+      !!queryVariableDefinitionsError.value ||
+      queryVariableDefinitions.value.length > 0 ||
+      stalePinnedVariableNames.value.length > 0)
+)
+
+const resolvePinnedTitleSuffix = () => {
+  for (const variable of queryVariableDefinitions.value) {
+    const pinnedValue = pinnedVariables.value[variable.name]
+    if (pinnedValue === undefined) {
+      continue
+    }
+
+    const normalized = String(pinnedValue).trim()
+    if (!normalized) {
+      continue
+    }
+    return normalized
+  }
+
+  return ''
+}
+
+const isAutoTitleCandidate = (title: string, baseTitle: string) => {
+  if (!title) {
+    return true
+  }
+  if (!baseTitle) {
+    return false
+  }
+  return title === baseTitle || title.startsWith(`${baseTitle}${AUTO_TITLE_SEPARATOR}`)
+}
+
+const updateTitleSuggestion = () => {
+  if (isTextModule.value) {
+    titleSuggestion.value = ''
     return
+  }
+
+  const baseTitle = baseVisualizationTitle.value.trim()
+  const currentTitle = draft.title?.trim() ?? ''
+  if (!isAutoTitleCandidate(currentTitle, baseTitle)) {
+    titleSuggestion.value = ''
+    return
+  }
+
+  const suffix = resolvePinnedTitleSuffix()
+  if (!baseTitle || !suffix) {
+    titleSuggestion.value = ''
+    return
+  }
+
+  const suggestion = `${baseTitle}${AUTO_TITLE_SEPARATOR}${suffix}`
+  titleSuggestion.value = suggestion === currentTitle ? '' : suggestion
+}
+
+const applyConfigPatch = (patcher: (config: Record<string, unknown>) => void) => {
+  if (isTextModule.value) {
+    return false
   }
 
   let parsedConfig: Record<string, unknown>
@@ -290,12 +417,156 @@ const applyDataTableConfigPatch = (
     parsedConfig = parseConfigText()
   } catch (error) {
     parseError.value = error instanceof Error ? error.message : 'Invalid module config.'
-    return
+    return false
   }
 
   patcher(parsedConfig)
   configText.value = JSON.stringify(parsedConfig, null, 2)
   parseError.value = ''
+  return true
+}
+
+const isVariablePinned = (name: string) =>
+  Object.prototype.hasOwnProperty.call(pinnedVariables.value, name)
+
+const getPinnedValue = (name: string) => {
+  const value = pinnedVariables.value[name]
+  return value === undefined || value === null ? '' : String(value)
+}
+
+const resolvePinnedDefaultValue = (
+  variable: {
+    inputType: 'text' | 'number' | 'select' | 'date_range'
+    defaultValue?: string
+    options: Array<{ value: string }>
+  }
+): string | number => {
+  if (variable.inputType === 'select') {
+    if (
+      variable.defaultValue &&
+      variable.options.some((option) => option.value === variable.defaultValue)
+    ) {
+      return variable.defaultValue
+    }
+    return variable.options[0]?.value ?? variable.defaultValue ?? ''
+  }
+
+  if (variable.inputType === 'number') {
+    if (variable.defaultValue && variable.defaultValue.trim()) {
+      const parsed = Number(variable.defaultValue)
+      if (Number.isFinite(parsed)) {
+        return parsed
+      }
+    }
+    return ''
+  }
+
+  if (variable.inputType === 'date_range') {
+    if (variable.defaultValue && variable.defaultValue.trim()) {
+      return variable.defaultValue
+    }
+    const now = new Date()
+    const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    return `${yearMonth}|${yearMonth}`
+  }
+
+  return variable.defaultValue ?? ''
+}
+
+const setPinnedMode = (
+  variable: {
+    name: string
+    inputType: 'text' | 'number' | 'select' | 'date_range'
+    defaultValue?: string
+    options: Array<{ value: string }>
+  },
+  pin: boolean
+) => {
+  const applied = applyConfigPatch((config) => {
+    const nextPinned = readPinnedVariables(config)
+    if (pin) {
+      nextPinned[variable.name] = resolvePinnedDefaultValue(variable)
+    } else {
+      delete nextPinned[variable.name]
+    }
+
+    if (Object.keys(nextPinned).length) {
+      config.pinnedVariables = nextPinned
+    } else {
+      delete config.pinnedVariables
+    }
+  })
+  if (applied) {
+    updateTitleSuggestion()
+  }
+}
+
+const setPinnedValue = (name: string, value: string | number) => {
+  const applied = applyConfigPatch((config) => {
+    const nextPinned = readPinnedVariables(config)
+    nextPinned[name] = value
+    config.pinnedVariables = nextPinned
+  })
+  if (applied) {
+    updateTitleSuggestion()
+  }
+}
+
+const onPinnedTextInput = (event: Event, name: string) => {
+  const target = event.target as HTMLInputElement | null
+  setPinnedValue(name, target?.value ?? '')
+}
+
+const onPinnedNumberInput = (event: Event, name: string) => {
+  const target = event.target as HTMLInputElement | null
+  const rawValue = target?.value ?? ''
+  if (!rawValue.trim()) {
+    setPinnedValue(name, '')
+    return
+  }
+
+  const parsedValue = Number(rawValue)
+  setPinnedValue(name, Number.isFinite(parsedValue) ? parsedValue : rawValue)
+}
+
+const onPinnedSelectChange = (event: Event, name: string) => {
+  const target = event.target as HTMLSelectElement | null
+  setPinnedValue(name, target?.value ?? '')
+}
+
+const onPinnedDateRangeChange = (name: string, value: string) => {
+  setPinnedValue(name, value)
+}
+
+const isPinnedQueryListValueMissing = (name: string) => {
+  const variable = queryVariableDefinitions.value.find((entry) => entry.name === name)
+  if (!variable || variable.sourceType !== 'query_list' || !isVariablePinned(name)) {
+    return false
+  }
+
+  const currentValue = getPinnedValue(name)
+  if (!currentValue || !variable.options.length) {
+    return false
+  }
+
+  return !variable.options.some((option) => option.value === currentValue)
+}
+
+const applyTitleSuggestion = () => {
+  if (!titleSuggestion.value.trim()) {
+    return
+  }
+  draft.title = titleSuggestion.value.trim()
+  titleSuggestion.value = ''
+}
+
+const applyDataTableConfigPatch = (
+  patcher: (config: Record<string, unknown>) => void
+) => {
+  if (!isDataTableModule.value) {
+    return
+  }
+  applyConfigPatch(patcher)
 }
 
 const normalizeTextConfig = (
@@ -382,6 +653,35 @@ const loadWritableTables = async () => {
       error instanceof Error ? error.message : 'Failed to load writable tables'
   } finally {
     writableTablesLoading.value = false
+  }
+}
+
+let visualizationRequestSeq = 0
+const loadBaseVisualizationTitle = async () => {
+  const requestId = ++visualizationRequestSeq
+  const module = props.module
+  if (!module || isTextModuleType(module.type)) {
+    baseVisualizationTitle.value = ''
+    return
+  }
+
+  const visualizationId = module.queryVisualizationId?.trim() ?? ''
+  if (!visualizationId) {
+    baseVisualizationTitle.value = module.title?.trim() ?? ''
+    return
+  }
+
+  try {
+    const visualization = await getQueryVisualizationById(visualizationId)
+    if (requestId !== visualizationRequestSeq) {
+      return
+    }
+    baseVisualizationTitle.value = visualization.name?.trim() || module.title?.trim() || ''
+  } catch {
+    if (requestId !== visualizationRequestSeq) {
+      return
+    }
+    baseVisualizationTitle.value = module.title?.trim() || ''
   }
 }
 
@@ -557,6 +857,7 @@ watch(
     syncDataTableTabControls(module.config)
     parseError.value = ''
     templateError.value = ''
+    titleSuggestion.value = ''
     selectedTemplateId.value = ''
     templateName.value =
       module.title?.trim() ||
@@ -631,6 +932,14 @@ watch(
 
     syncDataTableTabControls(parsedConfig)
   }
+)
+
+watch(
+  () => [props.module?.id, props.module?.queryVisualizationId] as const,
+  () => {
+    void loadBaseVisualizationTitle()
+  },
+  { immediate: true }
 )
 
 const save = () => {
@@ -748,6 +1057,25 @@ onMounted(() => {
           v-model="draft.title"
           class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
         />
+        <div
+          v-if="titleSuggestion"
+          class="mt-1 flex flex-wrap items-center gap-2 normal-case"
+        >
+          <button
+            type="button"
+            class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:border-gray-300"
+            @click="applyTitleSuggestion"
+          >
+            Use "{{ titleSuggestion }}"
+          </button>
+          <button
+            type="button"
+            class="text-xs text-gray-500 hover:text-gray-700"
+            @click="titleSuggestion = ''"
+          >
+            Dismiss
+          </button>
+        </div>
       </label>
 
       <label
@@ -916,6 +1244,102 @@ onMounted(() => {
               </label>
             </div>
           </div>
+        </div>
+
+        <div
+          v-if="pinnedVariablesSectionVisible"
+          class="mt-2 space-y-2 rounded border border-gray-200 bg-gray-50 p-3 normal-case"
+        >
+          <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-700">
+            Pinned Variables
+          </h4>
+
+          <p v-if="queryVariableDefinitionsLoading" class="text-xs text-gray-500">
+            Loading variables...
+          </p>
+          <p v-else-if="queryVariableDefinitionsError" class="text-xs text-red-600">
+            {{ queryVariableDefinitionsError }}
+          </p>
+
+          <template v-if="!queryVariableDefinitionsLoading && !queryVariableDefinitionsError">
+            <div
+              v-for="variable in queryVariableDefinitions"
+              :key="`pinned-variable-${variable.name}`"
+              class="rounded border border-gray-200 bg-white p-2"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-medium text-gray-700">{{ variable.label }}</span>
+                <span class="text-[10px] uppercase tracking-wide text-gray-400">{{ variable.name }}</span>
+              </div>
+
+              <div class="mt-1 space-y-1">
+                <label class="inline-flex items-center gap-2 text-xs text-gray-600">
+                  <input
+                    type="radio"
+                    :name="`pinned-mode-${module?.id}-${variable.name}`"
+                    :checked="!isVariablePinned(variable.name)"
+                    @change="setPinnedMode(variable, false)"
+                  >
+                  Use dashboard filter
+                </label>
+                <label class="inline-flex items-center gap-2 text-xs text-gray-600">
+                  <input
+                    type="radio"
+                    :name="`pinned-mode-${module?.id}-${variable.name}`"
+                    :checked="isVariablePinned(variable.name)"
+                    @change="setPinnedMode(variable, true)"
+                  >
+                  Pin to fixed value
+                </label>
+              </div>
+
+              <div v-if="isVariablePinned(variable.name)" class="mt-2">
+                <ModuleInlineDateRange
+                  v-if="variable.inputType === 'date_range'"
+                  label="Value"
+                  :value="getPinnedValue(variable.name)"
+                  :config="variable.dateRangeConfig"
+                  @change="(value) => onPinnedDateRangeChange(variable.name, value)"
+                />
+                <select
+                  v-else-if="variable.inputType === 'select'"
+                  :value="getPinnedValue(variable.name)"
+                  class="h-8 w-full rounded border border-gray-300 bg-white px-2 text-xs"
+                  @change="onPinnedSelectChange($event, variable.name)"
+                >
+                  <option
+                    v-for="option in variable.options"
+                    :key="`${variable.name}:${option.value}`"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+                <input
+                  v-else-if="variable.inputType === 'number'"
+                  :value="getPinnedValue(variable.name)"
+                  type="number"
+                  class="h-8 w-full rounded border border-gray-300 bg-white px-2 text-xs"
+                  @input="onPinnedNumberInput($event, variable.name)"
+                />
+                <input
+                  v-else
+                  :value="getPinnedValue(variable.name)"
+                  type="text"
+                  class="h-8 w-full rounded border border-gray-300 bg-white px-2 text-xs"
+                  @input="onPinnedTextInput($event, variable.name)"
+                />
+              </div>
+
+              <p v-if="isPinnedQueryListValueMissing(variable.name)" class="mt-1 text-xs text-amber-700">
+                Pinned value is not in current options.
+              </p>
+            </div>
+          </template>
+
+          <p v-if="stalePinnedVariableNames.length" class="text-xs text-amber-700">
+            Missing variables: {{ stalePinnedVariableNames.join(', ') }}
+          </p>
         </div>
 
         Config (JSON)
