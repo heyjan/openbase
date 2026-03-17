@@ -4,10 +4,19 @@ export type SavedQuery = {
   id: string
   dataSourceId: string
   dataSourceName?: string
+  folderId: string | null
   name: string
   description?: string
   queryText: string
   parameters: QueryParameterConfig
+  createdAt: string
+  updatedAt: string
+}
+
+export type QueryFolder = {
+  id: string
+  name: string
+  sortOrder: number
   createdAt: string
   updatedAt: string
 }

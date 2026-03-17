@@ -164,9 +164,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS query_folders (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       VARCHAR(255) NOT NULL,
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS saved_queries (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   data_source_id UUID REFERENCES data_sources(id),
+  folder_id      UUID REFERENCES query_folders(id) ON DELETE SET NULL,
   name           VARCHAR(255) NOT NULL,
   description    TEXT,
   query_text     TEXT NOT NULL,
@@ -349,3 +358,17 @@ CREATE TABLE IF NOT EXISTS products (
   notes               TEXT,
   updated_at          TIMESTAMPTZ DEFAULT now()
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'saved_queries'
+      AND column_name = 'folder_id'
+  ) THEN
+    ALTER TABLE saved_queries
+    ADD COLUMN folder_id UUID REFERENCES query_folders(id) ON DELETE SET NULL;
+  END IF;
+END $$;

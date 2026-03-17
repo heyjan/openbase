@@ -4,6 +4,7 @@ import { query } from './db'
 type SavedQueryRow = {
   id: string
   data_source_id: string
+  folder_id: string | null
   name: string
   description: string | null
   query_text: string
@@ -17,6 +18,7 @@ export type SavedQueryRecord = {
   id: string
   dataSourceId: string
   dataSourceName?: string
+  folderId: string | null
   name: string
   description?: string
   queryText: string
@@ -29,6 +31,7 @@ const mapSavedQuery = (row: SavedQueryRow): SavedQueryRecord => ({
   id: row.id,
   dataSourceId: row.data_source_id,
   dataSourceName: row.data_source_name,
+  folderId: row.folder_id,
   name: row.name,
   description: row.description ?? undefined,
   queryText: row.query_text,
@@ -55,6 +58,7 @@ export const listSavedQueries = async (): Promise<SavedQueryRecord[]> => {
     `SELECT
        sq.id,
        sq.data_source_id,
+       sq.folder_id,
        sq.name,
        sq.description,
        sq.query_text,
@@ -74,6 +78,7 @@ export const getSavedQueryById = async (id: string): Promise<SavedQueryRecord> =
     `SELECT
        sq.id,
        sq.data_source_id,
+       sq.folder_id,
        sq.name,
        sq.description,
        sq.query_text,
@@ -189,6 +194,21 @@ export const updateSavedQuery = async (
 
 export const deleteSavedQuery = async (id: string) => {
   const result = await query('DELETE FROM saved_queries WHERE id = $1', [id])
+  if (result.rowCount === 0) {
+    throw createError({ statusCode: 404, statusMessage: 'Saved query not found' })
+  }
+}
+
+export const assignQueryToFolder = async (
+  queryId: string,
+  folderId: string | null
+) => {
+  const result = await query(
+    `UPDATE saved_queries
+     SET folder_id = $1, updated_at = now()
+     WHERE id = $2`,
+    [folderId, queryId]
+  )
   if (result.rowCount === 0) {
     throw createError({ statusCode: 404, statusMessage: 'Saved query not found' })
   }
