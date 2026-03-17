@@ -375,6 +375,14 @@ const parseSeries = (
 const parseScatterMode = (value: unknown): ScatterVizMode =>
   value === 'category_compare' ? 'category_compare' : 'numeric'
 
+const parseAxisLabelRotation = (value: unknown): 0 | 45 | 90 => {
+  const parsed = typeof value === 'string' && value.trim() ? Number(value) : value
+  if (parsed === 45 || parsed === 90) {
+    return parsed
+  }
+  return 0
+}
+
 const parseScatterCompareSeries = (
   value: unknown,
   fallbackFields: string[],
@@ -611,6 +619,7 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
     minSymbolSize: 10,
     maxSymbolSize: 42,
     showLabels: false,
+    categoryLabelRotation: 0,
     yAxisInverse: false
   } as VizOptionsByType[T]
 }
@@ -865,6 +874,16 @@ const sanitizeVizConfigForType = (
     42
   )
   normalized.showLabels = readConfiguredBoolean(normalized, ['showLabels', 'show_labels'], false)
+  normalized.categoryLabelRotation = parseAxisLabelRotation(
+    readConfiguredValue(normalized, [
+      'categoryLabelRotation',
+      'category_label_rotation',
+      'xAxisLabelRotation',
+      'x_axis_label_rotation',
+      'axisLabelRotate',
+      'axis_label_rotate'
+    ])
+  )
   normalized.yAxisMin = readConfiguredOptionalNumber(normalized, ['yAxisMin', 'y_axis_min'])
   normalized.yAxisMax = readConfiguredOptionalNumber(normalized, ['yAxisMax', 'y_axis_max'])
   normalized.yAxisInverse = readConfiguredBoolean(

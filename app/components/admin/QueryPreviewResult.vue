@@ -540,7 +540,9 @@ const scatterCompareSeriesData = computed(() =>
             value: [category, y, size] as [string, number, number],
             rawValue: [row[scatterCategoryColumn.value], row[series.field], row[series.sizeField ?? series.field]],
             name: category,
-            sizeField: series.sizeField ?? series.field
+            sizeField: series.sizeField ?? series.field,
+            seriesField: series.field,
+            seriesLabel: series.label ?? series.field
           }
         })
         .filter(
@@ -549,6 +551,8 @@ const scatterCompareSeriesData = computed(() =>
             rawValue: [unknown, unknown, unknown]
             name: string
             sizeField: string
+            seriesField: string
+            seriesLabel: string
           } => point !== null
         )
     }))
@@ -572,10 +576,30 @@ const scatterSizeExtent = computed(() => {
 const scatterMinSymbolSize = computed(() => readNumber(['minSymbolSize', 'min_symbol_size'], 10))
 const scatterMaxSymbolSize = computed(() => readNumber(['maxSymbolSize', 'max_symbol_size'], 42))
 const scatterShowLabels = computed(() => readBoolean(['showLabels', 'show_labels'], false))
+const scatterCategoryLabelRotation = computed(() => {
+  const rawValue = readNumber(
+    [
+      'categoryLabelRotation',
+      'category_label_rotation',
+      'xAxisLabelRotation',
+      'x_axis_label_rotation',
+      'axisLabelRotate',
+      'axis_label_rotate'
+    ],
+    0
+  )
+  return rawValue === 45 || rawValue === 90 ? rawValue : 0
+})
 const scatterYAxisInverse = computed(() => readBoolean(['yAxisInverse', 'y_axis_inverse'], false))
 const scatterLegendVisible = computed(
   () => scatterMode.value === 'category_compare' && scatterCompareSeriesData.value.length > 1
 )
+const scatterCategoryAxisLabel = computed(() => ({
+  color: '#6b7280',
+  rotate: scatterCategoryLabelRotation.value,
+  interval: scatterCategoryLabelRotation.value > 0 ? 0 : undefined,
+  hideOverlap: scatterCategoryLabelRotation.value > 0 ? false : undefined
+}))
 
 const scaleScatterSymbolSize = (value: unknown) => {
   if (!Array.isArray(value)) {
@@ -982,6 +1006,79 @@ watch(tableShowSearch, (enabled) => {
   }
 })
 
+const formatScatterTooltipValue = (value: unknown) => {
+  const numeric = toNumber(value)
+  if (numeric !== null) {
+    return KPI_VALUE_FORMATTER.format(numeric)
+  }
+  return String(value ?? '')
+}
+
+const formatScatterCategoryCompareTooltip = (params: unknown) => {
+  const entries = Array.isArray(params) ? params : [params]
+  const points = entries
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return null
+      }
+
+      const record = entry as Record<string, unknown>
+      const dataRecord =
+        record.data && typeof record.data === 'object'
+          ? (record.data as Record<string, unknown>)
+          : null
+      const values = Array.isArray(dataRecord?.value) ? dataRecord.value : []
+      const rawValues = Array.isArray(dataRecord?.rawValue) ? dataRecord.rawValue : []
+      const label =
+        String(
+          record.seriesName ??
+            (typeof dataRecord?.seriesLabel === 'string' ? dataRecord.seriesLabel : '') ??
+            (typeof dataRecord?.seriesField === 'string' ? dataRecord.seriesField : '')
+        ) || 'Series'
+
+      return {
+        category: String(record.axisValueLabel ?? record.axisValue ?? dataRecord?.name ?? values[0] ?? ''),
+        label,
+        value: rawValues[1] ?? values[1],
+        numericValue: toNumber(rawValues[1] ?? values[1])
+      }
+    })
+    .filter(
+      (
+        point
+      ): point is {
+        category: string
+        label: string
+        value: unknown
+        numericValue: number | null
+      } => point !== null
+    )
+
+  if (!points.length) {
+    return ''
+  }
+
+  const rank1 = points.find((point) => /rang?\s*1/i.test(point.label))
+  const rank2 = points.find((point) => /rang?\s*2/i.test(point.label))
+  const fallbackFirst = points[0]
+  const fallbackSecond = points[1]
+  const diffBaseLeft = rank1 ?? fallbackFirst
+  const diffBaseRight = rank2 ?? fallbackSecond
+  const diff =
+    diffBaseLeft?.numericValue !== null &&
+    diffBaseLeft?.numericValue !== undefined &&
+    diffBaseRight?.numericValue !== null &&
+    diffBaseRight?.numericValue !== undefined
+      ? diffBaseRight.numericValue - diffBaseLeft.numericValue
+      : null
+
+  return [
+    points[0].category,
+    ...points.map((point) => `${point.label}: ${formatScatterTooltipValue(point.value)}`),
+    ...(diff !== null ? [`Differenz €: ${formatScatterTooltipValue(diff)}`] : [])
+  ].join('<br/>')
+}
+
 const chartOption = computed<EChartsOption>(() => {
   if (props.visualization === 'pie') {
     return {
@@ -1043,34 +1140,11 @@ const chartOption = computed<EChartsOption>(() => {
           : undefined,
         color: scatterCompareSeriesData.value.map((series) => series.color ?? '#2563eb'),
         tooltip: {
-          trigger: 'item',
-          formatter: (params: unknown) => {
-            if (!params || typeof params !== 'object') {
-              return ''
-            }
-
-            const record = params as Record<string, unknown>
-            const dataRecord =
-              record.data && typeof record.data === 'object'
-                ? (record.data as Record<string, unknown>)
-                : null
-            const values = Array.isArray(dataRecord?.value) ? dataRecord.value : []
-            const rawValues = Array.isArray(dataRecord?.rawValue) ? dataRecord.rawValue : []
-            const category = String(values[0] ?? '')
-            const seriesName = String(record.seriesName ?? '')
-            const value = rawValues[1] ?? values[1]
-            const size = rawValues[2] ?? values[2]
-            const sizeField =
-              typeof dataRecord?.sizeField === 'string' && dataRecord.sizeField.trim()
-                ? dataRecord.sizeField.trim()
-                : 'Size'
-
-            return [
-              category,
-              `${seriesName}: ${String(value ?? '')}`,
-              `${sizeField}: ${String(size ?? '')}`
-            ].join('<br/>')
-          }
+          trigger: 'axis',
+          axisPointer: {
+            type: 'line'
+          },
+          formatter: formatScatterCategoryCompareTooltip
         },
         legend: {
           show: scatterLegendVisible.value,
@@ -1089,7 +1163,7 @@ const chartOption = computed<EChartsOption>(() => {
           data: scatterCategories.value,
           name: scatterCategoryColumn.value || 'Category',
           nameGap: 20,
-          axisLabel: { color: '#6b7280' },
+          axisLabel: scatterCategoryAxisLabel.value,
           axisLine: { lineStyle: { color: '#d1d5db' } }
         },
         yAxis: {

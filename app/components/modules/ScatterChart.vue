@@ -16,6 +16,8 @@ type ScatterCategoryPoint = {
   value: [string, number, number]
   rawValue: [unknown, unknown, unknown]
   sizeField: string
+  seriesField: string
+  seriesLabel: string
   name?: string
 }
 
@@ -154,6 +156,21 @@ const yAxisInverse = computed(() => {
   const value = props.module.config.y_axis_inverse ?? props.module.config.yAxisInverse
   return typeof value === 'boolean' ? value : false
 })
+const categoryLabelRotation = computed(() => {
+  const rawValue =
+    props.module.config.category_label_rotation ??
+    props.module.config.categoryLabelRotation ??
+    props.module.config.x_axis_label_rotation ??
+    props.module.config.xAxisLabelRotation ??
+    props.module.config.axis_label_rotate ??
+    props.module.config.axisLabelRotate
+
+  const parsed = typeof rawValue === 'string' && rawValue.trim() ? Number(rawValue) : rawValue
+  if (parsed === 45 || parsed === 90) {
+    return parsed
+  }
+  return 0
+})
 
 const symbolRange = computed(() => ({
   min: Math.min(minSymbolSize.value, maxSymbolSize.value),
@@ -284,6 +301,8 @@ const categoryCompareSeriesData = computed(() =>
             value: [category, y, size] as [string, number, number],
             rawValue: [row[categoryField.value], row[series.field], row[series.sizeField ?? series.field]],
             sizeField: series.sizeField ?? series.field,
+            seriesField: series.field,
+            seriesLabel: series.label ?? series.field,
             name: category
           } satisfies ScatterCategoryPoint
         })
@@ -334,8 +353,103 @@ const hasData = computed(() =>
 const scatterLegendVisible = computed(
   () => scatterMode.value === 'category_compare' && categoryCompareSeriesData.value.length > 1
 )
+const categoryAxisLabel = computed(() => ({
+  color: '#6b7280',
+  rotate: categoryLabelRotation.value,
+  interval: categoryLabelRotation.value > 0 ? 0 : undefined,
+  hideOverlap: categoryLabelRotation.value > 0 ? false : undefined
+}))
 
 const formatScatterTooltip = (params: unknown) => {
+  if (scatterMode.value === 'category_compare') {
+    const entries = Array.isArray(params) ? params : [params]
+    const points = entries
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') {
+          return null
+        }
+
+        const record = entry as Record<string, unknown>
+        const dataRecord =
+          record.data && typeof record.data === 'object'
+            ? (record.data as Record<string, unknown>)
+            : null
+        const values = Array.isArray(dataRecord?.value) ? dataRecord.value : []
+        const rawValues = Array.isArray(dataRecord?.rawValue) ? dataRecord.rawValue : []
+        const label =
+          String(
+            record.seriesName ??
+              (typeof dataRecord?.seriesLabel === 'string' ? dataRecord.seriesLabel : '') ??
+              (typeof dataRecord?.seriesField === 'string' ? dataRecord.seriesField : '')
+          ) || 'Series'
+
+        return {
+          category: String(
+            record.axisValueLabel ??
+              record.axisValue ??
+              dataRecord?.name ??
+              values[0] ??
+              ''
+          ),
+          label,
+          value: values[1],
+          rawValue: rawValues[1],
+          numericValue: toNumber(rawValues[1] ?? values[1]),
+          color: typeof record.color === 'string' ? record.color : undefined
+        }
+      })
+      .filter(
+        (
+          point
+        ): point is {
+          category: string
+          label: string
+          value: unknown
+          rawValue: unknown
+          numericValue: number | null
+          color?: string
+        } => point !== null
+      )
+
+    if (!points.length) {
+      return ''
+    }
+
+    const rank1 = points.find((point) => /rang?\s*1/i.test(point.label))
+    const rank2 = points.find((point) => /rang?\s*2/i.test(point.label))
+    const fallbackFirst = points[0]
+    const fallbackSecond = points[1]
+    const diffBaseLeft = rank1 ?? fallbackFirst
+    const diffBaseRight = rank2 ?? fallbackSecond
+    const diff =
+      diffBaseLeft?.numericValue !== null &&
+      diffBaseLeft?.numericValue !== undefined &&
+      diffBaseRight?.numericValue !== null &&
+      diffBaseRight?.numericValue !== undefined
+        ? diffBaseRight.numericValue - diffBaseLeft.numericValue
+        : null
+
+    return renderLabelValueRows({
+      header: points[0]?.category || undefined,
+      rows: [
+        ...points.map((point) => ({
+          label: point.label,
+          value: point.value,
+          rawValue: point.rawValue,
+          color: point.color
+        })),
+        ...(diff !== null
+          ? [
+              {
+                label: 'Differenz €',
+                value: diff
+              }
+            ]
+          : [])
+      ]
+    })
+  }
+
   if (!params || typeof params !== 'object') {
     return ''
   }
@@ -346,30 +460,6 @@ const formatScatterTooltip = (params: unknown) => {
   const values = Array.isArray(dataRecord?.value) ? dataRecord.value : []
   const rawValues = Array.isArray(dataRecord?.rawValue) ? dataRecord.rawValue : []
   const name = String(dataRecord?.name ?? values[0] ?? '')
-
-  if (scatterMode.value === 'category_compare') {
-    const seriesName = String(record.seriesName ?? '')
-    const sizeField =
-      typeof dataRecord?.sizeField === 'string' && dataRecord.sizeField.trim()
-        ? dataRecord.sizeField.trim()
-        : 'Size'
-    return renderLabelValueRows({
-      header: name || undefined,
-      rows: [
-        {
-          label: seriesName || 'Series',
-          value: values[1],
-          rawValue: rawValues[1],
-          color: String(record.color ?? '#2563eb')
-        },
-        {
-          label: sizeField,
-          value: values[2],
-          rawValue: rawValues[2]
-        }
-      ]
-    })
-  }
 
   return renderLabelValueRows({
     header: name || undefined,
@@ -398,7 +488,10 @@ const chartOption = computed<EChartsOption>(() => {
     return {
       color: categoryCompareSeriesData.value.map((series) => series.color ?? '#2563eb'),
       tooltip: {
-        trigger: 'item',
+        trigger: 'axis',
+        axisPointer: {
+          type: 'line'
+        },
         formatter: formatScatterTooltip
       },
       legend: {
@@ -418,7 +511,7 @@ const chartOption = computed<EChartsOption>(() => {
         data: scatterCategories.value,
         name: categoryField.value || 'Category',
         nameGap: 20,
-        axisLabel: { color: '#6b7280' },
+        axisLabel: categoryAxisLabel.value,
         axisLine: { lineStyle: { color: '#d1d5db' } }
       },
       yAxis: {

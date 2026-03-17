@@ -151,6 +151,7 @@ export type ScatterVizOptions = SharedVizOptions & {
   minSymbolSize?: number
   maxSymbolSize?: number
   showLabels?: boolean
+  categoryLabelRotation?: 0 | 45 | 90
   yAxisMin?: number
   yAxisMax?: number
   yAxisInverse?: boolean

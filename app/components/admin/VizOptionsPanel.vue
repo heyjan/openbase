@@ -494,6 +494,30 @@ const updateSeries = (index: number, patch: Partial<VizSeriesOption>) => {
 const scatterMode = computed<ScatterVizMode>(() =>
   readString('mode') === 'category_compare' ? 'category_compare' : 'numeric'
 )
+const SCATTER_LABEL_ROTATION_OPTIONS: Array<{ label: string; value: 0 | 45 | 90 }> = [
+  { label: '0°', value: 0 },
+  { label: '45°', value: 45 },
+  { label: '90°', value: 90 }
+]
+
+const parseScatterLabelRotation = (value: unknown): 0 | 45 | 90 => {
+  const parsed = typeof value === 'string' && value.trim() ? Number(value) : value
+  if (parsed === 45 || parsed === 90) {
+    return parsed
+  }
+  return 0
+}
+
+const scatterCategoryLabelRotation = computed(() =>
+  parseScatterLabelRotation(
+    props.modelValue.categoryLabelRotation ??
+      props.modelValue.category_label_rotation ??
+      props.modelValue.xAxisLabelRotation ??
+      props.modelValue.x_axis_label_rotation ??
+      props.modelValue.axisLabelRotate ??
+      props.modelValue.axis_label_rotate
+  )
+)
 
 const scatterSeriesCandidateFields = computed(() => numericColumns.value)
 
@@ -541,6 +565,12 @@ const scatterCompareSeries = computed<ScatterCompareSeriesOption[]>(() => {
 const setScatterMode = (value: unknown) => {
   updateConfig({
     mode: value === 'category_compare' ? 'category_compare' : 'numeric'
+  })
+}
+
+const setScatterCategoryLabelRotation = (value: unknown) => {
+  updateConfig({
+    categoryLabelRotation: parseScatterLabelRotation(value)
   })
 }
 
@@ -1483,7 +1513,7 @@ watch(
       </template>
 
       <template v-else-if="vizType === 'scatter'">
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="space-y-3">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Scatter mode
             <USelect
@@ -1498,13 +1528,13 @@ watch(
             />
           </label>
 
-          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs font-medium uppercase tracking-wide text-gray-600">
             Show labels
             <USwitch :model-value="readBoolean('showLabels', false)" @update:model-value="updateBoolean('showLabels', $event)" />
           </label>
         </div>
 
-        <div v-if="scatterMode === 'numeric'" class="grid gap-3 md:grid-cols-2">
+        <div v-if="scatterMode === 'numeric'" class="mt-3 space-y-3">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             X field
             <USelect
@@ -1556,7 +1586,7 @@ watch(
           </label>
         </div>
 
-        <div v-else class="grid gap-3 md:grid-cols-2">
+        <div v-else class="mt-3 space-y-3">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Category field
             <USelect
@@ -1567,15 +1597,26 @@ watch(
               @update:model-value="updateConfig({ categoryField: String($event || '') })"
             />
           </label>
+
+          <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+            Category label rotation
+            <USelect
+              v-bind="sharedSelectProps"
+              class="mt-1"
+              :items="SCATTER_LABEL_ROTATION_OPTIONS"
+              :model-value="scatterCategoryLabelRotation"
+              @update:model-value="setScatterCategoryLabelRotation($event)"
+            />
+          </label>
         </div>
 
-        <div v-if="scatterMode === 'category_compare'">
+        <div v-if="scatterMode === 'category_compare'" class="mt-3">
           <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Series fields</p>
-          <div class="mt-2 grid gap-1 md:grid-cols-3">
+          <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
             <label
               v-for="field in scatterSeriesCandidateFields"
               :key="`scatter-series-${field}`"
-              class="inline-flex items-center gap-2 text-sm text-gray-700"
+              class="inline-flex items-center gap-2 text-xs text-gray-700"
             >
               <input
                 :checked="scatterCompareSeries.some((entry) => entry.field === field)"
@@ -1583,58 +1624,67 @@ watch(
                 class="h-4 w-4 rounded border border-gray-300"
                 @change="toggleScatterSeriesField(field, ($event.target as HTMLInputElement).checked)"
               >
-              <span>{{ field }}</span>
+              <span class="truncate">{{ field }}</span>
             </label>
           </div>
         </div>
 
-        <div v-if="scatterMode === 'category_compare' && scatterCompareSeries.length" class="space-y-2">
+        <div v-if="scatterMode === 'category_compare' && scatterCompareSeries.length" class="mt-3 space-y-2">
           <div
             v-for="(series, index) in scatterCompareSeries"
             :key="`scatter-series-options-${series.field}`"
-            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[1fr_120px_1fr]"
+            class="space-y-2 rounded border border-gray-200 bg-gray-50 p-2"
           >
-            <UInput
-              :model-value="series.label ?? series.field"
-              @update:model-value="updateScatterSeries(index, { label: String($event || '') })"
-            />
-            <input
-              :value="series.color ?? '#2563eb'"
-              type="color"
-              class="h-9 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
-              @input="updateScatterSeries(index, { color: ($event.target as HTMLInputElement).value })"
-            >
-            <USelect
-              v-bind="sharedSelectProps"
-              :items="numericColumns.map((column) => ({ label: column, value: column }))"
-              :model-value="series.sizeField ?? series.field"
-              @update:model-value="updateScatterSeries(index, { sizeField: String($event || series.field) })"
-            />
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+              Label
+              <UInput
+                class="mt-1"
+                :model-value="series.label ?? series.field"
+                @update:model-value="updateScatterSeries(index, { label: String($event || '') })"
+              />
+            </label>
+
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+              Color
+              <input
+                :value="series.color ?? '#2563eb'"
+                type="color"
+                class="mt-1 h-8 w-full cursor-pointer rounded border border-gray-300 bg-white px-1"
+                @input="updateScatterSeries(index, { color: ($event.target as HTMLInputElement).value })"
+              >
+            </label>
+
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+              Bubble size field
+              <USelect
+                v-bind="sharedSelectProps"
+                class="mt-1"
+                :items="numericColumns.map((column) => ({ label: column, value: column }))"
+                :model-value="series.sizeField ?? series.field"
+                @update:model-value="updateScatterSeries(index, { sizeField: String($event || series.field) })"
+              />
+            </label>
           </div>
         </div>
 
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="mt-3 space-y-3">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Min bubble size
-            <USlider
-              class="mt-2"
-              :min="4"
-              :max="30"
-              :step="1"
-              :model-value="readNumber('minSymbolSize', 10)"
-              @update:model-value="updateConfig({ minSymbolSize: sliderToNumber($event, 10) })"
+            <UInput
+              class="mt-1"
+              type="number"
+              :model-value="String(readNumber('minSymbolSize', 10))"
+              @update:model-value="updateInteger('minSymbolSize', $event, 10)"
             />
           </label>
 
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Max bubble size
-            <USlider
-              class="mt-2"
-              :min="20"
-              :max="80"
-              :step="1"
-              :model-value="readNumber('maxSymbolSize', 42)"
-              @update:model-value="updateConfig({ maxSymbolSize: sliderToNumber($event, 42) })"
+            <UInput
+              class="mt-1"
+              type="number"
+              :model-value="String(readNumber('maxSymbolSize', 42))"
+              @update:model-value="updateInteger('maxSymbolSize', $event, 42)"
             />
           </label>
 
@@ -1658,7 +1708,7 @@ watch(
             />
           </label>
 
-          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+          <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs font-medium uppercase tracking-wide text-gray-600">
             Invert Y-axis
             <USwitch :model-value="readBoolean('yAxisInverse', false)" @update:model-value="updateBoolean('yAxisInverse', $event)" />
           </label>
