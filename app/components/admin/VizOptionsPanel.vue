@@ -758,7 +758,7 @@ watch(
       </label>
 
       <template v-if="vizType === 'table'">
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2">
             <p class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
               <Search class="h-3.5 w-3.5" />
@@ -871,7 +871,7 @@ watch(
 
             <div>
               <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Shared columns</p>
-              <div class="mt-2 grid gap-2 sm:grid-cols-2">
+              <div class="mt-2 grid gap-2 grid-cols-1">
                 <label
                   v-for="column in orderedColumns"
                   :key="`tab-shared-${column}`"
@@ -1008,7 +1008,7 @@ watch(
             <div
               v-for="(rule, index) in conditionalRules"
               :key="`rule-${index}`"
-              class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-7"
+              class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 grid-cols-1"
             >
               <USelect
                 v-bind="sharedSelectProps"
@@ -1034,7 +1034,7 @@ watch(
                 :model-value="String(rule.valueTo ?? '')"
                 @update:model-value="updateRule(index, { valueTo: toNumber($event) ?? undefined })"
               />
-              <div v-else class="hidden md:block" />
+              <div v-else class="hidden" />
 
               <USelect
                 v-bind="sharedSelectProps"
@@ -1068,7 +1068,7 @@ watch(
       </template>
 
       <template v-else-if="vizType === 'kpi'">
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Label
             <UInput
@@ -1090,7 +1090,7 @@ watch(
           </label>
         </div>
 
-        <div class="grid gap-3 md:grid-cols-3">
+        <div class="grid gap-3 grid-cols-1">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Prefix
             <UInput
@@ -1122,7 +1122,7 @@ watch(
       </template>
 
       <template v-else-if="vizType === 'line' || vizType === 'area'">
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             X-axis field
             <USelect
@@ -1142,7 +1142,7 @@ watch(
 
         <div>
           <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Series fields</p>
-          <div class="mt-2 grid gap-1 md:grid-cols-3">
+          <div class="mt-2 grid gap-1 grid-cols-1">
             <label
               v-for="field in seriesCandidateFields"
               :key="`line-series-${field}`"
@@ -1163,7 +1163,7 @@ watch(
           <div
             v-for="(series, index) in currentSeries"
             :key="`line-series-options-${series.field}`"
-            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[1fr_120px]"
+            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 grid-cols-1"
           >
             <UInput
               :model-value="series.label ?? series.field"
@@ -1178,7 +1178,7 @@ watch(
           </div>
         </div>
 
-        <div class="grid gap-3 md:grid-cols-4">
+        <div class="grid gap-3 grid-cols-1">
           <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
             Smooth
             <USwitch :model-value="readBoolean('smooth', true)" @update:model-value="updateBoolean('smooth', $event)" />
@@ -1203,7 +1203,7 @@ watch(
           </label>
         </div>
 
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Y-axis min
             <UInput
@@ -1227,7 +1227,7 @@ watch(
       </template>
 
       <template v-else-if="vizType === 'bar' || vizType === 'stacked_horizontal_bar'">
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             X-axis field
             <USelect
@@ -1247,7 +1247,7 @@ watch(
 
         <div>
           <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Series fields</p>
-          <div class="mt-2 grid gap-1 md:grid-cols-3">
+          <div class="mt-2 grid gap-1 grid-cols-1">
             <label
               v-for="field in seriesCandidateFields"
               :key="`bar-series-${field}`"
@@ -1268,7 +1268,7 @@ watch(
           <div
             v-for="(series, index) in currentSeries"
             :key="`bar-series-options-${series.field}`"
-            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[1fr_120px]"
+            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 grid-cols-1"
           >
             <UInput
               :model-value="series.label ?? series.field"
@@ -1283,7 +1283,7 @@ watch(
           </div>
         </div>
 
-        <div class="grid gap-3 md:grid-cols-4">
+        <div class="grid gap-3 grid-cols-1">
           <label
             v-if="vizType === 'bar'"
             class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
@@ -1320,7 +1320,7 @@ watch(
       </template>
 
       <template v-else-if="vizType === 'waterfall'">
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Category field
             <USelect
@@ -1344,7 +1344,7 @@ watch(
           </label>
         </div>
 
-        <div class="grid gap-3 md:grid-cols-4">
+        <div class="grid gap-3 grid-cols-1">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Increase color
             <input
@@ -1388,7 +1388,7 @@ watch(
           </label>
         </div>
 
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
             Show legend
             <USwitch :model-value="readBoolean('showLegend', false)" @update:model-value="updateBoolean('showLegend', $event)" />
@@ -1397,7 +1397,7 @@ watch(
       </template>
 
       <template v-else-if="vizType === 'radar'">
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Axis field
             <USelect
@@ -1417,7 +1417,7 @@ watch(
 
         <div>
           <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Series fields</p>
-          <div class="mt-2 grid gap-1 md:grid-cols-3">
+          <div class="mt-2 grid gap-1 grid-cols-1">
             <label
               v-for="field in seriesCandidateFields"
               :key="`radar-series-${field}`"
@@ -1438,7 +1438,7 @@ watch(
           <div
             v-for="(series, index) in currentSeries"
             :key="`radar-series-options-${series.field}`"
-            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 md:grid-cols-[1fr_120px]"
+            class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-2 grid-cols-1"
           >
             <UInput
               :model-value="series.label ?? series.field"
@@ -1453,7 +1453,7 @@ watch(
           </div>
         </div>
 
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <label class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
             Show legend
             <USwitch :model-value="readBoolean('showLegend', true)" @update:model-value="updateBoolean('showLegend', $event)" />
@@ -1462,7 +1462,7 @@ watch(
       </template>
 
       <template v-else-if="vizType === 'pie'">
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="grid gap-3 grid-cols-1">
           <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
             Category field
             <USelect
