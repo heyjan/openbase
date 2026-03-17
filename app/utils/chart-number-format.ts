@@ -84,7 +84,13 @@ export const formatNumberWithFractionDigits = (
 ) => {
   const numeric = toNumericValue(value)
   if (numeric === null) {
-    return '0'
+    if (value === null || value === undefined) {
+      return ''
+    }
+    if (typeof value === 'string') {
+      return value
+    }
+    return String(value)
   }
 
   if (typeof fractionDigits !== 'number' || !Number.isFinite(fractionDigits)) {
