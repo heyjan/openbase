@@ -8,6 +8,14 @@ type DataBrowserRowsOptions = {
   sortDir?: 'asc' | 'desc'
 }
 
+type DataSourceImportMode = 'append' | 'replace'
+
+export type MySqlTableColumn = {
+  name: string
+  type: string
+  nullable: boolean
+}
+
 type NamedQueryCompilation = {
   sql: string
   values: unknown[]
@@ -261,4 +269,112 @@ export const getMySqlRows = async (
 export const testMySqlConnection = async (connectionConfig: Record<string, unknown>) => {
   const tables = await listMySqlTables(connectionConfig)
   return { ok: true, tables }
+}
+
+export const getMySqlTableColumns = async (
+  connectionConfig: Record<string, unknown>,
+  table: string
+): Promise<MySqlTableColumn[]> => {
+  const mysql = await import('mysql2/promise')
+  const connection = await mysql.createConnection(toMySqlConnectionOptions(connectionConfig))
+
+  try {
+    await connection.query('SET SESSION TRANSACTION READ ONLY')
+
+    const parsed = parseTableReference(table)
+    const database = await assertDatabaseForTable(connection, parsed.schema)
+
+    const [rows] = await connection.execute<
+      Array<{ column_name: string; data_type: string; is_nullable: 'YES' | 'NO' }>
+    >(
+      `SELECT column_name, data_type, is_nullable
+       FROM information_schema.columns
+       WHERE table_schema = ?
+         AND table_name = ?
+       ORDER BY ordinal_position`,
+      [database, parsed.table]
+    )
+
+    if (!rows.length) {
+      throw createError({ statusCode: 404, statusMessage: 'Table not found' })
+    }
+
+    return rows.map((row) => ({
+      name: row.column_name,
+      type: row.data_type,
+      nullable: row.is_nullable === 'YES'
+    }))
+  } finally {
+    await connection.end()
+  }
+}
+
+const buildMySqlInsertStatement = (
+  database: string,
+  tableName: string,
+  columns: string[],
+  rowCount: number
+) => {
+  const tupleSql = `(${columns.map(() => '?').join(', ')})`
+  const valuesSql = Array.from({ length: rowCount }, () => tupleSql).join(', ')
+
+  return `INSERT INTO ${quoteIdentifier(database)}.${quoteIdentifier(tableName)} (${columns.map(quoteIdentifier).join(', ')}) VALUES ${valuesSql}`
+}
+
+export const importMySqlRows = async (
+  connectionConfig: Record<string, unknown>,
+  table: string,
+  columns: string[],
+  rows: string[][],
+  mode: DataSourceImportMode
+) => {
+  if (!columns.length) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'At least one matching CSV column is required for import'
+    })
+  }
+
+  const mysql = await import('mysql2/promise')
+  const connection = await mysql.createConnection(toMySqlConnectionOptions(connectionConfig))
+
+  try {
+    const parsed = parseTableReference(table)
+    const database = await assertDatabaseForTable(connection, parsed.schema)
+    const batchSize = 500
+
+    await connection.beginTransaction()
+
+    if (mode === 'replace') {
+      await connection.query(
+        `DELETE FROM ${quoteIdentifier(database)}.${quoteIdentifier(parsed.table)}`
+      )
+    }
+
+    let inserted = 0
+
+    for (let start = 0; start < rows.length; start += batchSize) {
+      const batchRows = rows.slice(start, start + batchSize)
+      if (!batchRows.length) {
+        continue
+      }
+
+      const sql = buildMySqlInsertStatement(
+        database,
+        parsed.table,
+        columns,
+        batchRows.length
+      )
+      await connection.execute(sql, batchRows.flat())
+      inserted += batchRows.length
+    }
+
+    await connection.commit()
+    return inserted
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    await connection.end()
+  }
 }

@@ -9,6 +9,14 @@ type DataBrowserRowsOptions = {
   sortDir?: 'asc' | 'desc'
 }
 
+type DataSourceImportMode = 'append' | 'replace'
+
+export type PostgresTableColumn = {
+  name: string
+  type: string
+  nullable: boolean
+}
+
 const parseTableReference = (value: string) => {
   const trimmed = value.trim()
   if (!trimmed) {
@@ -209,4 +217,139 @@ export const getPostgresRows = async (
 export const testPostgresConnection = async (connection: Record<string, unknown>) => {
   const tables = await listPostgresTables(connection)
   return { ok: true, tables }
+}
+
+export const getPostgresTableColumns = async (
+  connection: Record<string, unknown>,
+  table: string
+): Promise<PostgresTableColumn[]> => {
+  const connectionString = toPostgresConnectionString(connection)
+  if (!connectionString) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'PostgreSQL connection string is required'
+    })
+  }
+
+  const { schema, table: tableName } = parseTableReference(table)
+  const pool = new Pool({ connectionString })
+
+  try {
+    const result = await pool.query<{
+      column_name: string
+      data_type: string
+      is_nullable: 'YES' | 'NO'
+    }>(
+      `SELECT column_name, data_type, is_nullable
+       FROM information_schema.columns
+       WHERE table_schema = $1
+         AND table_name = $2
+       ORDER BY ordinal_position`,
+      [schema, tableName]
+    )
+
+    if (!result.rows.length) {
+      throw createError({ statusCode: 404, statusMessage: 'Table not found' })
+    }
+
+    return result.rows.map((row) => ({
+      name: row.column_name,
+      type: row.data_type,
+      nullable: row.is_nullable === 'YES'
+    }))
+  } finally {
+    await pool.end()
+  }
+}
+
+const buildPostgresInsertStatement = (
+  schema: string,
+  tableName: string,
+  columns: string[],
+  startParamIndex: number,
+  rowCount: number
+) => {
+  const tupleSize = columns.length
+  const valuesSql: string[] = []
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const placeholders: string[] = []
+    for (let colIndex = 0; colIndex < tupleSize; colIndex += 1) {
+      const paramIndex = startParamIndex + (rowIndex * tupleSize) + colIndex
+      placeholders.push(`$${paramIndex}`)
+    }
+    valuesSql.push(`(${placeholders.join(', ')})`)
+  }
+
+  return `INSERT INTO ${quoteIdentifier(schema)}.${quoteIdentifier(tableName)} (${columns.map(quoteIdentifier).join(', ')}) VALUES ${valuesSql.join(', ')}`
+}
+
+export const importPostgresRows = async (
+  connection: Record<string, unknown>,
+  table: string,
+  columns: string[],
+  rows: string[][],
+  mode: DataSourceImportMode
+) => {
+  const connectionString = toPostgresConnectionString(connection)
+  if (!connectionString) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'PostgreSQL connection string is required'
+    })
+  }
+
+  if (!columns.length) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'At least one matching CSV column is required for import'
+    })
+  }
+
+  const { schema, table: tableName } = parseTableReference(table)
+  const maxRowsByParameterLimit = Math.floor(65535 / Math.max(columns.length, 1))
+  const batchSize = Math.max(1, Math.min(500, maxRowsByParameterLimit || 1))
+
+  const pool = new Pool({ connectionString })
+  const client = await pool.connect()
+
+  try {
+    await client.query('BEGIN')
+
+    if (mode === 'replace') {
+      await client.query(
+        `DELETE FROM ${quoteIdentifier(schema)}.${quoteIdentifier(tableName)}`
+      )
+    }
+
+    let inserted = 0
+
+    for (let start = 0; start < rows.length; start += batchSize) {
+      const batchRows = rows.slice(start, start + batchSize)
+      if (!batchRows.length) {
+        continue
+      }
+
+      const values = batchRows.flat()
+      const sql = buildPostgresInsertStatement(
+        schema,
+        tableName,
+        columns,
+        1,
+        batchRows.length
+      )
+
+      await client.query(sql, values)
+      inserted += batchRows.length
+    }
+
+    await client.query('COMMIT')
+    return inserted
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+    await pool.end()
+  }
 }

@@ -3,6 +3,10 @@ import type {
   DataSourceInput,
   DataSourceUpdate
 } from '~/types/data-source'
+import type {
+  CsvImportPreviewResponse,
+  CsvImportResponse
+} from '~/types/csv-import'
 
 type DataSourceRowsQuery = {
   limit?: number
@@ -61,6 +65,18 @@ export const useDataSources = () => {
       { query: { table, ...query } }
     )
 
+  const previewCsvImport = (payload: FormData) =>
+    $fetch<CsvImportPreviewResponse>('/api/admin/import/csv/preview', {
+      method: 'POST',
+      body: payload
+    })
+
+  const importCsv = (payload: FormData) =>
+    $fetch<CsvImportResponse>('/api/admin/import/csv', {
+      method: 'POST',
+      body: payload
+    })
+
   return {
     list,
     getById,
@@ -69,6 +85,8 @@ export const useDataSources = () => {
     remove,
     test,
     listTables,
-    getRows
+    getRows,
+    previewCsvImport,
+    importCsv
   }
 }
