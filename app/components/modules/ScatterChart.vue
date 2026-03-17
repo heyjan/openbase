@@ -16,6 +16,8 @@ type ScatterCategoryPoint = {
   value: [string, number, number]
   rawValue: [unknown, unknown, unknown]
   sizeField: string
+  sellerField?: string
+  sellerValue?: unknown
   seriesField: string
   seriesLabel: string
   name?: string
@@ -115,6 +117,71 @@ const categoryField = computed(
     columns.value[0] ||
     ''
 )
+const sellerColumns = computed(() =>
+  columns.value.filter((column) => /(händler|haendler|seller)/i.test(column))
+)
+
+const normalizeFieldForSellerMatch = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/(händler|haendler|seller|preis|price)/g, '')
+    .replace(/[^a-z0-9]/g, '')
+
+const resolveSellerFieldForSeries = (series: ScatterCompareSeriesOption) => {
+  if (!sellerColumns.value.length) {
+    return ''
+  }
+
+  const label = (series.label ?? series.field).trim()
+  const directCandidates = [
+    series.field.replace(/preis/gi, 'Händler'),
+    series.field.replace(/price/gi, 'Seller'),
+    label.replace(/preis/gi, 'Händler'),
+    label.replace(/price/gi, 'Seller')
+  ]
+
+  for (const candidate of directCandidates) {
+    const match = sellerColumns.value.find(
+      (column) => column.toLowerCase() === candidate.toLowerCase()
+    )
+    if (match) {
+      return match
+    }
+  }
+
+  const rankMatch = `${series.field} ${label}`.match(/(?:rang|rank)\s*(\d+)/i)
+  if (rankMatch) {
+    const rank = rankMatch[1]
+    const match = sellerColumns.value.find((column) =>
+      new RegExp(`(?:rang|rank)\\s*${rank}\\b`, 'i').test(column)
+    )
+    if (match) {
+      return match
+    }
+  }
+
+  const base = normalizeFieldForSellerMatch(label || series.field)
+  if (base) {
+    const match = sellerColumns.value.find(
+      (column) => normalizeFieldForSellerMatch(column) === base
+    )
+    if (match) {
+      return match
+    }
+  }
+
+  return ''
+}
+
+const getSellerLabelForSeries = (seriesLabel: string) => {
+  if (/price/i.test(seriesLabel)) {
+    return seriesLabel.replace(/price/gi, 'Seller')
+  }
+  if (/preis/i.test(seriesLabel)) {
+    return seriesLabel.replace(/preis/gi, 'Händler')
+  }
+  return `${seriesLabel} Händler`
+}
 
 const readSizeBound = (value: unknown, fallback: number) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -284,9 +351,12 @@ const scatterCategories = computed(() => {
 
 const categoryCompareSeriesData = computed(() =>
   configuredCompareSeries.value
-    .map((series) => ({
-      ...series,
-      points: rows.value
+    .map((series) => {
+      const sellerField = resolveSellerFieldForSeries(series)
+      return {
+        ...series,
+        sellerField,
+        points: rows.value
         .map((row, rowIndex) => {
           const category =
             String(row[categoryField.value] ?? `Item ${rowIndex + 1}`).trim() || `Item ${rowIndex + 1}`
@@ -301,13 +371,16 @@ const categoryCompareSeriesData = computed(() =>
             value: [category, y, size] as [string, number, number],
             rawValue: [row[categoryField.value], row[series.field], row[series.sizeField ?? series.field]],
             sizeField: series.sizeField ?? series.field,
+            sellerField: sellerField || undefined,
+            sellerValue: sellerField ? row[sellerField] : undefined,
             seriesField: series.field,
             seriesLabel: series.label ?? series.field,
             name: category
           } satisfies ScatterCategoryPoint
         })
         .filter((point): point is ScatterCategoryPoint => point !== null)
-    }))
+      }
+    })
     .filter((series) => series.points.length > 0)
 )
 
@@ -394,6 +467,9 @@ const formatScatterTooltip = (params: unknown) => {
           label,
           value: values[1],
           rawValue: rawValues[1],
+          sellerField:
+            typeof dataRecord?.sellerField === 'string' ? dataRecord.sellerField : undefined,
+          sellerValue: dataRecord?.sellerValue,
           numericValue: toNumber(rawValues[1] ?? values[1]),
           color: typeof record.color === 'string' ? record.color : undefined
         }
@@ -406,6 +482,8 @@ const formatScatterTooltip = (params: unknown) => {
           label: string
           value: unknown
           rawValue: unknown
+          sellerField?: string
+          sellerValue?: unknown
           numericValue: number | null
           color?: string
         } => point !== null
@@ -432,12 +510,29 @@ const formatScatterTooltip = (params: unknown) => {
     return renderLabelValueRows({
       header: points[0]?.category || undefined,
       rows: [
-        ...points.map((point) => ({
-          label: point.label,
-          value: point.value,
-          rawValue: point.rawValue,
-          color: point.color
-        })),
+        ...points.flatMap((point) => {
+          const rows = [
+            {
+              label: point.label,
+              value: point.value,
+              rawValue: point.rawValue,
+              color: point.color
+            }
+          ]
+
+          const sellerText =
+            point.sellerValue === null || point.sellerValue === undefined
+              ? ''
+              : String(point.sellerValue).trim()
+          if (sellerText) {
+            rows.push({
+              label: getSellerLabelForSeries(point.label),
+              value: sellerText
+            })
+          }
+
+          return rows
+        }),
         ...(diff !== null
           ? [
               {

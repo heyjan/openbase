@@ -445,6 +445,71 @@ const scatterCategoryColumn = computed(() => {
   }
   return categoryColumns.value[0] ?? columns.value[0] ?? ''
 })
+const scatterSellerColumns = computed(() =>
+  columns.value.filter((column) => /(händler|haendler|seller)/i.test(column))
+)
+
+const normalizeScatterFieldForSeller = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/(händler|haendler|seller|preis|price)/g, '')
+    .replace(/[^a-z0-9]/g, '')
+
+const resolveScatterSellerFieldForSeries = (series: ScatterCompareSeriesOption) => {
+  if (!scatterSellerColumns.value.length) {
+    return ''
+  }
+
+  const label = (series.label ?? series.field).trim()
+  const directCandidates = [
+    series.field.replace(/preis/gi, 'Händler'),
+    series.field.replace(/price/gi, 'Seller'),
+    label.replace(/preis/gi, 'Händler'),
+    label.replace(/price/gi, 'Seller')
+  ]
+
+  for (const candidate of directCandidates) {
+    const match = scatterSellerColumns.value.find(
+      (column) => column.toLowerCase() === candidate.toLowerCase()
+    )
+    if (match) {
+      return match
+    }
+  }
+
+  const rankMatch = `${series.field} ${label}`.match(/(?:rang|rank)\s*(\d+)/i)
+  if (rankMatch) {
+    const rank = rankMatch[1]
+    const match = scatterSellerColumns.value.find((column) =>
+      new RegExp(`(?:rang|rank)\\s*${rank}\\b`, 'i').test(column)
+    )
+    if (match) {
+      return match
+    }
+  }
+
+  const base = normalizeScatterFieldForSeller(label || series.field)
+  if (base) {
+    const match = scatterSellerColumns.value.find(
+      (column) => normalizeScatterFieldForSeller(column) === base
+    )
+    if (match) {
+      return match
+    }
+  }
+
+  return ''
+}
+
+const getScatterSellerLabelForSeries = (seriesLabel: string) => {
+  if (/price/i.test(seriesLabel)) {
+    return seriesLabel.replace(/price/gi, 'Seller')
+  }
+  if (/preis/i.test(seriesLabel)) {
+    return seriesLabel.replace(/preis/gi, 'Händler')
+  }
+  return `${seriesLabel} Händler`
+}
 
 const scatterCompareSeries = computed<ScatterCompareSeriesOption[]>(() => {
   const raw = config.value.series
@@ -524,9 +589,12 @@ const scatterCategories = computed(() => {
 
 const scatterCompareSeriesData = computed(() =>
   scatterCompareSeries.value
-    .map((series) => ({
-      ...series,
-      points: rows.value
+    .map((series) => {
+      const sellerField = resolveScatterSellerFieldForSeries(series)
+      return {
+        ...series,
+        sellerField,
+        points: rows.value
         .map((row, rowIndex) => {
           const category = String(row[scatterCategoryColumn.value] ?? `Item ${rowIndex + 1}`).trim() || `Item ${rowIndex + 1}`
           const y = toNumber(row[series.field])
@@ -541,6 +609,8 @@ const scatterCompareSeriesData = computed(() =>
             rawValue: [row[scatterCategoryColumn.value], row[series.field], row[series.sizeField ?? series.field]],
             name: category,
             sizeField: series.sizeField ?? series.field,
+            sellerField: sellerField || undefined,
+            sellerValue: sellerField ? row[sellerField] : undefined,
             seriesField: series.field,
             seriesLabel: series.label ?? series.field
           }
@@ -551,11 +621,14 @@ const scatterCompareSeriesData = computed(() =>
             rawValue: [unknown, unknown, unknown]
             name: string
             sizeField: string
+            sellerField?: string
+            sellerValue?: unknown
             seriesField: string
             seriesLabel: string
           } => point !== null
         )
-    }))
+      }
+    })
     .filter((series) => series.points.length > 0)
 )
 
@@ -1040,6 +1113,8 @@ const formatScatterCategoryCompareTooltip = (params: unknown) => {
         category: String(record.axisValueLabel ?? record.axisValue ?? dataRecord?.name ?? values[0] ?? ''),
         label,
         value: rawValues[1] ?? values[1],
+        sellerField: typeof dataRecord?.sellerField === 'string' ? dataRecord.sellerField : undefined,
+        sellerValue: dataRecord?.sellerValue,
         numericValue: toNumber(rawValues[1] ?? values[1])
       }
     })
@@ -1050,6 +1125,8 @@ const formatScatterCategoryCompareTooltip = (params: unknown) => {
         category: string
         label: string
         value: unknown
+        sellerField?: string
+        sellerValue?: unknown
         numericValue: number | null
       } => point !== null
     )
@@ -1074,7 +1151,17 @@ const formatScatterCategoryCompareTooltip = (params: unknown) => {
 
   return [
     points[0].category,
-    ...points.map((point) => `${point.label}: ${formatScatterTooltipValue(point.value)}`),
+    ...points.flatMap((point) => {
+      const rows = [`${point.label}: ${formatScatterTooltipValue(point.value)}`]
+      const sellerText =
+        point.sellerValue === null || point.sellerValue === undefined
+          ? ''
+          : String(point.sellerValue).trim()
+      if (sellerText) {
+        rows.push(`${getScatterSellerLabelForSeries(point.label)}: ${sellerText}`)
+      }
+      return rows
+    }),
     ...(diff !== null ? [`Differenz €: ${formatScatterTooltipValue(diff)}`] : [])
   ].join('<br/>')
 }
