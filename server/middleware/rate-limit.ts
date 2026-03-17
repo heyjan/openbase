@@ -53,7 +53,7 @@ const resolveRule = (event: H3Event) => {
   if (path.startsWith('/api/dashboards/') || path.startsWith('/d/')) {
     return {
       key: `public-dashboard:${buildIpKey(event)}`,
-      maxRequests: 120,
+      maxRequests: 180,
       windowMs: ONE_MINUTE_MS
     }
   }
