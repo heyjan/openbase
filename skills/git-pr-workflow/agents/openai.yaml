@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git PR Workflow"
+  short_description: "Feature branches and high-quality pull requests."
+  default_prompt: "Use $git-pr-workflow to create a focused feature branch, prepare conventional commits, and open a clean PR against main."
