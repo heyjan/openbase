@@ -104,12 +104,12 @@ watch(editorId, () => {
     <PageHeader
       title="Editor Permissions"
       :breadcrumbs="[
-        { label: 'Dashboards', to: '/admin' },
+        { label: 'Home', to: '/admin' },
         { label: 'Editors', to: '/admin/editors' },
         { label: editorName || 'Permissions' }
       ]"
       back-to="/admin/editors"
-      back-label="Back"
+      back-label="Back to editors"
     >
       <template #actions>
         <button

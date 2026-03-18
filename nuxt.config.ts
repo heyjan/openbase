@@ -2,7 +2,7 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
-  modules: ['@nuxt/ui', '@nuxtjs/google-fonts'],
+  modules: ['@nuxt/ui', '@nuxtjs/mdc', '@nuxtjs/google-fonts'],
   ui: {
     fonts: false
   },

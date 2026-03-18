@@ -33,15 +33,17 @@ const loadData = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [q, f] = await Promise.all([list(), listFolders()])
-    queries.value = q
-    folders.value = f
+    queries.value = await list()
   } catch (error) {
     errorMessage.value =
-      error instanceof Error ? error.message : 'Failed to load data'
-  } finally {
-    loading.value = false
+      error instanceof Error ? error.message : 'Failed to load queries'
   }
+  try {
+    folders.value = await listFolders()
+  } catch {
+    // Folders are optional — don't block the page if they fail
+  }
+  loading.value = false
 }
 
 const deleteQuery = async (queryId: string) => {
@@ -138,11 +140,11 @@ onMounted(loadData)
         :title="selectedFolderName"
         description="Reusable queries that power dashboard modules."
         :breadcrumbs="[
-          { label: 'Dashboards', to: '/admin' },
+          { label: 'Home', to: '/admin' },
           { label: 'Queries' }
         ]"
         back-to="/admin"
-        back-label="Back to dashboards"
+        back-label="Back to home"
       >
         <template #actions>
           <NuxtLink

@@ -465,7 +465,7 @@ onMounted(async () => {
       :title="isNew ? 'New Query' : 'Edit Query'"
       description="Configure reusable queries and preview results."
       :breadcrumbs="[
-        { label: 'Dashboards', to: '/admin' },
+        { label: 'Home', to: '/admin' },
         { label: 'Queries', to: '/admin/queries' },
         { label: isNew ? 'New' : 'Edit' }
       ]"

@@ -26,7 +26,8 @@ const route = useRoute()
 const dashboardId = computed(() => String(route.params.id || ''))
 const dashboardAsyncKey = computed(() => `admin-dashboard-edit-${dashboardId.value}`)
 const breadcrumbs = [
-  { label: 'Dashboards', to: '/admin' },
+  { label: 'Home', to: '/admin' },
+  { label: 'Dashboards', to: '/admin/dashboards' },
   { label: 'Edit' }
 ]
 

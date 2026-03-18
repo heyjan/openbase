@@ -11,6 +11,11 @@ const logoSrc = '/brain-icon-7087186-512.png'
 
 const hiddenTopBarPaths = new Set(['/login', '/admin/login'])
 const hiddenTopBarPrefixes = ['/setup', '/d', '/editor']
+const logoTarget = computed(() =>
+  route.path === '/admin' || route.path.startsWith('/admin/')
+    ? '/admin'
+    : '/'
+)
 
 const shouldShowTopBar = computed(() => {
   const path = route.path
@@ -103,7 +108,7 @@ onBeforeUnmount(() => {
   <div v-if="shouldShowTopBar" class="h-12 border-b border-gray-200 bg-white">
     <div class="flex h-full items-center justify-between gap-4 px-6">
       <div class="flex min-w-0 items-center gap-10">
-        <NuxtLink to="/" class="flex shrink-0 items-center">
+        <NuxtLink :to="logoTarget" class="flex shrink-0 items-center">
           <img :src="logoSrc" alt="Openbase" class="h-12 w-12" />
         </NuxtLink>
       </div>

@@ -231,7 +231,7 @@ onMounted(loadTables)
       title="Data Browser"
       description="Inspect data from this source."
       :breadcrumbs="[
-        { label: 'Dashboards', to: '/admin' },
+        { label: 'Home', to: '/admin' },
         { label: 'Settings', to: '/admin/settings' },
         { label: 'Data Sources', to: '/admin/settings/data-sources' },
         { label: 'Browse' }

@@ -157,11 +157,11 @@ onMounted(loadTemplates)
       title="Module Templates"
       description="Save reusable module configurations and apply them when creating new modules."
       :breadcrumbs="[
-        { label: 'Dashboards', to: '/admin' },
+        { label: 'Home', to: '/admin' },
         { label: 'Templates' }
       ]"
       back-to="/admin"
-      back-label="Back to dashboards"
+      back-label="Back to home"
     />
 
     <form class="mt-6 grid gap-4 md:grid-cols-2" @submit.prevent="createTemplate">
