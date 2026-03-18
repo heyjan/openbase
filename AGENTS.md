@@ -52,9 +52,12 @@ The Playwright config (`playwright.config.ts`) auto-starts the Nuxt dev server w
 - For unit tests (future), prefer `*.test.ts` naming and colocate by feature (for example, `server/**/__tests__`).
 
 ## Commit & Pull Request Guidelines
-Current history is minimal (`Initial commit`), so use clear imperative commits going forward.
-- Preferred format: `type(scope): summary` (example: `fix(auth): reject inactive admins`).
+- When done, create a branch named feat/<short-description>, commit all changes.
+- Push the branch, and open a PR against main with a description of what was changed and why.
+- Do NOT push directly to main.
 - Keep commits focused and logically grouped.
+- Preferred format: `type(scope): summary` (example: `fix(auth): reject inactive admins`).
+
 
 PRs should include:
 - What changed and why.
