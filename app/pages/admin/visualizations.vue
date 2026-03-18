@@ -50,11 +50,11 @@ onMounted(loadVisualizations)
       title="Query Visualizations"
       description="Saved visualization presets linked to queries."
       :breadcrumbs="[
-        { label: 'Dashboards', to: '/admin' },
+        { label: 'Home', to: '/admin' },
         { label: 'Visualizations' }
       ]"
       back-to="/admin"
-      back-label="Back to dashboards"
+      back-label="Back to home"
     />
 
     <div class="mt-6 space-y-3">

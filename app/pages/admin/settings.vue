@@ -46,11 +46,11 @@ const isActive = (to: string) => route.path === to
     <PageHeader
       title="Settings"
       :breadcrumbs="[
-        { label: 'Dashboards', to: '/admin' },
+        { label: 'Home', to: '/admin' },
         { label: 'Settings' }
       ]"
       back-to="/admin"
-      back-label="Back to dashboards"
+      back-label="Back to home"
     />
 
     <div class="mt-6 flex flex-col gap-6 lg:flex-row">

@@ -108,11 +108,11 @@ watch(isPermissionsRoute, (value) => {
     <PageHeader
       title="Editors"
       :breadcrumbs="[
-        { label: 'Dashboards', to: '/admin' },
+        { label: 'Home', to: '/admin' },
         { label: 'Editors' }
       ]"
       back-to="/admin"
-      back-label="Back"
+      back-label="Back to home"
     />
 
     <section class="rounded border border-gray-200 bg-white p-6 shadow-sm">

@@ -38,10 +38,11 @@ const submit = async () => {
       title="New Dashboard"
       description="Create a dashboard for sharing."
       :breadcrumbs="[
-        { label: 'Dashboards', to: '/admin' },
+        { label: 'Home', to: '/admin' },
+        { label: 'Dashboards', to: '/admin/dashboards' },
         { label: 'New' }
       ]"
-      back-to="/admin"
+      back-to="/admin/dashboards"
       back-label="Back to dashboards"
     />
 
