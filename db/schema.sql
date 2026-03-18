@@ -372,3 +372,12 @@ BEGIN
     ADD COLUMN folder_id UUID REFERENCES query_folders(id) ON DELETE SET NULL;
   END IF;
 END $$;
+
+-- Grant app user access to all tables (safe to re-run, no-ops if user doesn't exist)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openbase_app') THEN
+    GRANT ALL ON ALL TABLES IN SCHEMA public TO openbase_app;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO openbase_app;
+  END IF;
+END $$;
