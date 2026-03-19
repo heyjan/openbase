@@ -40,7 +40,7 @@ const quickActions = [
   <section class="rounded border border-gray-200 bg-white p-6 shadow-sm">
     <h2 class="text-lg font-semibold text-gray-900">Quick Actions</h2>
 
-    <nav class="mt-4 flex flex-nowrap items-start gap-2 overflow-x-auto pb-1">
+    <nav class="mt-4 flex p-2 flex-nowrap items-start gap-4 overflow-x-auto pb-1">
       <SettingsNavCard
         v-for="item in quickActions"
         :key="item.to"
