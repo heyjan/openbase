@@ -5,6 +5,7 @@ import { query } from './db'
 type QueryVisualizationRow = {
   id: string
   saved_query_id: string
+  folder_id: string | null
   saved_query_name: string
   name: string
   module_type: ModuleType
@@ -16,6 +17,7 @@ type QueryVisualizationRow = {
 export type QueryVisualizationRecord = {
   id: string
   savedQueryId: string
+  folderId: string | null
   savedQueryName: string
   name: string
   moduleType: ModuleType
@@ -29,6 +31,7 @@ const mapQueryVisualization = (
 ): QueryVisualizationRecord => ({
   id: row.id,
   savedQueryId: row.saved_query_id,
+  folderId: row.folder_id,
   savedQueryName: row.saved_query_name,
   name: row.name,
   moduleType: row.module_type,
@@ -45,7 +48,7 @@ const isForeignKeyViolation = (error: unknown) =>
 
 const toSavedQueryError = (error: unknown) => {
   if (isForeignKeyViolation(error)) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid saved query id' })
+    throw createError({ statusCode: 400, statusMessage: 'Invalid saved query id or folder id' })
   }
   throw error
 }
@@ -53,6 +56,7 @@ const toSavedQueryError = (error: unknown) => {
 const selectBase = `SELECT
   qv.id,
   qv.saved_query_id,
+  qv.folder_id,
   sq.name AS saved_query_name,
   qv.name,
   qv.module_type,
@@ -66,6 +70,7 @@ const selectLatestBase = `WITH ranked AS (
   SELECT
     qv.id,
     qv.saved_query_id,
+    qv.folder_id,
     sq.name AS saved_query_name,
     qv.name,
     qv.module_type,
@@ -82,6 +87,7 @@ const selectLatestBase = `WITH ranked AS (
 const selectLatestProjection = `SELECT
   id,
   saved_query_id,
+  folder_id,
   saved_query_name,
   name,
   module_type,
@@ -132,6 +138,7 @@ export const getQueryVisualizationById = async (
 
 export const createQueryVisualization = async (input: {
   savedQueryId: string
+  folderId?: string | null
   name: string
   moduleType: ModuleType
   config?: Record<string, unknown>
@@ -149,28 +156,40 @@ export const createQueryVisualization = async (input: {
 
     const existingId = existing.rows[0]?.id
     if (existingId) {
-      const result = await query<{ id: string }>(
-        `UPDATE query_visualizations
-         SET name = $1,
-             config = $2,
-             updated_at = now()
-         WHERE id = $3
-         RETURNING id`,
-        [input.name, input.config ?? {}, existingId]
-      )
+      const result = input.folderId === undefined
+        ? await query<{ id: string }>(
+            `UPDATE query_visualizations
+             SET name = $1,
+                 config = $2,
+                 updated_at = now()
+             WHERE id = $3
+             RETURNING id`,
+            [input.name, input.config ?? {}, existingId]
+          )
+        : await query<{ id: string }>(
+            `UPDATE query_visualizations
+             SET name = $1,
+                 config = $2,
+                 folder_id = $3,
+                 updated_at = now()
+             WHERE id = $4
+             RETURNING id`,
+            [input.name, input.config ?? {}, input.folderId, existingId]
+          )
       return await getQueryVisualizationById(result.rows[0].id)
     }
 
     const result = await query<{ id: string }>(
       `INSERT INTO query_visualizations (
          saved_query_id,
+         folder_id,
          name,
          module_type,
          config
-       )
-       VALUES ($1, $2, $3, $4)
-       RETURNING id`,
-      [input.savedQueryId, input.name, input.moduleType, input.config ?? {}]
+        )
+       VALUES ($1, $2, $3, $4, $5)
+        RETURNING id`,
+      [input.savedQueryId, input.folderId ?? null, input.name, input.moduleType, input.config ?? {}]
     )
     return await getQueryVisualizationById(result.rows[0].id)
   } catch (error) {
@@ -187,6 +206,7 @@ export const updateQueryVisualization = async (
   id: string,
   updates: Partial<{
     savedQueryId: string
+    folderId: string | null
     name: string
     moduleType: ModuleType
     config: Record<string, unknown>
@@ -199,6 +219,10 @@ export const updateQueryVisualization = async (
   if (updates.savedQueryId !== undefined) {
     fields.push(`saved_query_id = $${index++}`)
     values.push(updates.savedQueryId)
+  }
+  if (updates.folderId !== undefined) {
+    fields.push(`folder_id = $${index++}`)
+    values.push(updates.folderId)
   }
   if (updates.name !== undefined) {
     fields.push(`name = $${index++}`)
@@ -246,6 +270,21 @@ export const updateQueryVisualization = async (
 
 export const deleteQueryVisualization = async (id: string) => {
   const result = await query('DELETE FROM query_visualizations WHERE id = $1', [id])
+  if (result.rowCount === 0) {
+    throw createError({ statusCode: 404, statusMessage: 'Query visualization not found' })
+  }
+}
+
+export const assignVisualizationToFolder = async (
+  visualizationId: string,
+  folderId: string | null
+) => {
+  const result = await query(
+    `UPDATE query_visualizations
+     SET folder_id = $1, updated_at = now()
+     WHERE id = $2`,
+    [folderId, visualizationId]
+  )
   if (result.rowCount === 0) {
     throw createError({ statusCode: 404, statusMessage: 'Query visualization not found' })
   }

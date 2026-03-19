@@ -172,6 +172,13 @@ CREATE TABLE IF NOT EXISTS query_folders (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS visualization_folders (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS saved_queries (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   data_source_id UUID REFERENCES data_sources(id),
@@ -195,6 +202,7 @@ CREATE TABLE IF NOT EXISTS module_templates (
 CREATE TABLE IF NOT EXISTS query_visualizations (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   saved_query_id UUID NOT NULL REFERENCES saved_queries(id) ON DELETE CASCADE,
+  folder_id      UUID REFERENCES visualization_folders(id) ON DELETE SET NULL,
   name           VARCHAR(255) NOT NULL,
   module_type    VARCHAR(50) NOT NULL,
   config         JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -370,6 +378,20 @@ BEGIN
   ) THEN
     ALTER TABLE saved_queries
     ADD COLUMN folder_id UUID REFERENCES query_folders(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'query_visualizations'
+      AND column_name = 'folder_id'
+  ) THEN
+    ALTER TABLE query_visualizations
+    ADD COLUMN folder_id UUID REFERENCES visualization_folders(id) ON DELETE SET NULL;
   END IF;
 END $$;
 
