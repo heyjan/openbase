@@ -34,12 +34,14 @@ const adminName = computed(() => {
 
   return email.split('@')[0] || 'Admin'
 })
+
+const headerTitle = computed(() => `${greeting.value},\n${adminName.value}`)
 </script>
 
 <template>
   <section class="space-y-6 px-6 py-5">
     <PageHeader
-      :title="`${greeting}, ${adminName}`"
+      :title="headerTitle"
       :breadcrumbs="[{ label: 'Home' }]"
     />
 

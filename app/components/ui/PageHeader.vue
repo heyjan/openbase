@@ -15,7 +15,7 @@ const props = defineProps<{
   <header class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="space-y-1">
-        <div class="flex flex-wrap items-center gap-3">
+        <div v-if="props.breadcrumbs?.length || backTo" class="flex flex-wrap items-center gap-3">
           <Breadcrumbs
             v-if="props.breadcrumbs?.length"
             :items="props.breadcrumbs"
@@ -28,8 +28,8 @@ const props = defineProps<{
             <ArrowLeft class="h-3.5 w-3.5" />
             {{ backLabel || 'Back' }}
           </NuxtLink>
-          <h1 class="text-2xl font-semibold">{{ title }}</h1>
         </div>
+        <h1 class="text-2xl font-semibold whitespace-pre-line">{{ title }}</h1>
         <p v-if="description" class="text-sm text-gray-500">{{ description }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">

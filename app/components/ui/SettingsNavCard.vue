@@ -18,7 +18,7 @@ const emit = defineEmits<{
   <NuxtLink
     v-if="props.to"
     :to="props.to"
-    class="settings-nav-card group flex flex-col items-center text-center"
+    class="settings-nav-card group flex shrink-0 flex-col items-center text-center"
     :class="{ 'settings-nav-card--active': props.active }"
   >
     <span
@@ -36,7 +36,7 @@ const emit = defineEmits<{
   <button
     v-else
     type="button"
-    class="settings-nav-card group flex flex-col items-center text-center"
+    class="settings-nav-card group flex shrink-0 flex-col items-center text-center"
     :class="{
       'settings-nav-card--active': props.active,
       'settings-nav-card--disabled': props.disabled
