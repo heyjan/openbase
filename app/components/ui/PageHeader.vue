@@ -29,7 +29,7 @@ const props = defineProps<{
             {{ backLabel || 'Back' }}
           </NuxtLink>
         </div>
-        <h1 class="text-2xl font-semibold whitespace-pre-line">{{ title }}</h1>
+        <h1 class="text-2xl font-semibold">{{ title }}</h1>
         <p v-if="description" class="text-sm text-gray-500">{{ description }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">

@@ -22,7 +22,7 @@ const emit = defineEmits<{
     :class="{ 'settings-nav-card--active': props.active }"
   >
     <span
-      class="settings-nav-card__box flex h-[84px] w-[70.5px] flex-col items-center rounded-[8px] border border-[#f2f2f2] bg-white py-2 text-black shadow-none outline outline-1 outline-black"
+      class="settings-nav-card__box flex h-[84px] w-[76.5px] flex-col items-center rounded-[8px] border border-[#f2f2f2] bg-white py-2 text-black shadow-none outline outline-1 outline-black"
     >
       <span class="flex min-h-0 flex-1 items-center justify-center">
         <component :is="props.icon" class="h-[32px] w-[30px]" />
@@ -45,12 +45,12 @@ const emit = defineEmits<{
     @click="emit('click')"
   >
     <span
-      class="settings-nav-card__box flex h-[84px] w-[75.5px] flex-col items-center rounded-[8px] border border-[#f2f2f2] bg-white py-2 text-black shadow-none outline outline-1 outline-black"
+      class="settings-nav-card__box flex h-[84px] w-[76.5px] flex-col items-center rounded-[8px] border border-[#f2f2f2] bg-white py-2 text-black shadow-none outline outline-1 outline-black"
     >
       <span class="flex min-h-0 flex-1 items-center justify-center">
         <component :is="props.icon" class="h-[32px] w-[30px]" />
       </span>
-      <span class="settings-nav-card__label w-full px-1 py-1 text-center text-[11px] font-medium leading-tight text-gray-700">
+      <span class="settings-nav-card__label w-full px-1 py-1 text-center text-[10px] font-medium leading-tight text-gray-700">
         {{ props.label }}
       </span>
     </span>

@@ -21,8 +21,8 @@ const submitPrompt = () => {
 </script>
 
 <template>
-  <section class="flex h-[85vh] flex-col rounded border border-gray-200 bg-white p-6 shadow-sm">
-    <h2 class="text-lg font-semibold text-gray-900">AI Chatbot</h2>
+  <section class="flex h-[80vh] flex-col rounded border border-gray-200 bg-white p-6 shadow-sm">
+    <h2 class="text-xl font-semibold tracking-tight text-gray-900">AI Chatbot</h2>
 
     <div class="mt-6 flex min-h-0 flex-1 flex-col gap-4 rounded border border-gray-200 bg-gray-50 p-4">
       <div class="flex-1 space-y-3 overflow-y-auto">

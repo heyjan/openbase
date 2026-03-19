@@ -35,7 +35,7 @@ const adminName = computed(() => {
   return email.split('@')[0] || 'Admin'
 })
 
-const headerTitle = computed(() => `${greeting.value},\n${adminName.value}`)
+const headerTitle = computed(() => `${greeting.value}, ${adminName.value}`)
 </script>
 
 <template>
