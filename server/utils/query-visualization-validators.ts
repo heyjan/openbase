@@ -56,6 +56,13 @@ export const parseQueryVisualizationInput = (value: unknown) => {
 
   return {
     savedQueryId: parseString(rawSavedQueryId, 'saved query id'),
+    folderId: record.folderId === undefined && record.folder_id === undefined
+      ? undefined
+      : (
+          record.folderId === null || record.folder_id === null
+            ? null
+            : parseString(record.folderId ?? record.folder_id, 'folder id')
+        ),
     name: parseString(record.name, 'name'),
     moduleType: parseModuleType(rawModuleType),
     config: parseConfig(record.config)
@@ -66,6 +73,7 @@ export const parseQueryVisualizationUpdate = (value: unknown) => {
   const record = asRecord(value, 'payload')
   const updates: Partial<{
     savedQueryId: string
+    folderId: string | null
     name: string
     moduleType: ModuleType
     config: Record<string, unknown>
@@ -76,6 +84,11 @@ export const parseQueryVisualizationUpdate = (value: unknown) => {
       record.savedQueryId ?? record.saved_query_id,
       'saved query id'
     )
+  }
+
+  if (record.folderId !== undefined || record.folder_id !== undefined) {
+    const rawFolderId = record.folderId ?? record.folder_id
+    updates.folderId = rawFolderId === null ? null : parseString(rawFolderId, 'folder id')
   }
 
   if (record.name !== undefined) {
