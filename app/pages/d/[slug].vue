@@ -28,16 +28,93 @@ const { data: response, pending, error, refresh } = useAsyncData(
   }
 )
 
-const requiresPassword = computed(() => {
-  const currentError = error.value as
-    | (Error & { statusCode?: number; data?: Record<string, unknown> })
-    | null
+const getErrorStatus = (value: unknown) => {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
 
-  if (!currentError || currentError.statusCode !== 401) {
+  const errorRecord = value as Record<string, unknown>
+  const directStatus =
+    typeof errorRecord.statusCode === 'number'
+      ? errorRecord.statusCode
+      : typeof errorRecord.status === 'number'
+        ? errorRecord.status
+        : null
+
+  if (directStatus !== null) {
+    return directStatus
+  }
+
+  const response = errorRecord.response
+  if (response && typeof response === 'object') {
+    const responseStatus = (response as Record<string, unknown>).status
+    if (typeof responseStatus === 'number') {
+      return responseStatus
+    }
+  }
+
+  const cause = errorRecord.cause
+  if (cause && typeof cause === 'object') {
+    const causeRecord = cause as Record<string, unknown>
+    if (typeof causeRecord.statusCode === 'number') {
+      return causeRecord.statusCode
+    }
+    if (typeof causeRecord.status === 'number') {
+      return causeRecord.status
+    }
+  }
+
+  return null
+}
+
+const getErrorData = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const errorRecord = value as Record<string, unknown>
+  const directData = errorRecord.data
+  if (directData && typeof directData === 'object') {
+    return directData as Record<string, unknown>
+  }
+
+  const response = errorRecord.response
+  if (response && typeof response === 'object') {
+    const payload = (response as Record<string, unknown>)._data
+    if (payload && typeof payload === 'object') {
+      return payload as Record<string, unknown>
+    }
+  }
+
+  const cause = errorRecord.cause
+  if (cause && typeof cause === 'object') {
+    const causeData = (cause as Record<string, unknown>).data
+    if (causeData && typeof causeData === 'object') {
+      return causeData as Record<string, unknown>
+    }
+  }
+
+  return null
+}
+
+const requiresPassword = computed(() => {
+  const currentError = error.value
+  if (!currentError) {
     return false
   }
 
-  return Boolean(currentError.data?.requiresPassword)
+  if (getErrorStatus(currentError) !== 401) {
+    return false
+  }
+
+  const payload = getErrorData(currentError)
+  if (payload?.requiresPassword === true) {
+    return true
+  }
+
+  const message =
+    currentError instanceof Error ? currentError.message : String(currentError ?? '')
+  return /password required/i.test(message)
 })
 
 const submitPassword = async () => {
