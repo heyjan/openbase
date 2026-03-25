@@ -932,6 +932,19 @@ export const resolveTableVisibleColumns = (orderedColumns: string[], config: Rec
     return orderedColumns
   }
 
+  // Columns present in the query result but absent from the saved config
+  // were never explicitly hidden — include them so new columns aren't silently dropped.
+  const configuredOrder = readConfiguredStringArray(
+    config,
+    ['columnOrder', 'column_order']
+  )
+  const knownColumns = new Set([...configuredVisible, ...configuredOrder])
+  const newColumns = orderedColumns.filter((column) => !knownColumns.has(column))
+
+  if (newColumns.length) {
+    return orderedColumns
+  }
+
   return orderedColumns.filter((column) => configuredVisible.includes(column))
 }
 

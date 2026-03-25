@@ -465,6 +465,12 @@ const addFromVisualization = async (visualization: QueryVisualization) => {
       preferredY: maxGridY
     })
     const config = JSON.parse(JSON.stringify(visualization.config ?? {})) as Record<string, unknown>
+    // Remove stale column visibility/order so the dashboard module
+    // derives them from the live query result instead of the saved snapshot.
+    delete config.visibleColumns
+    delete config.visible_columns
+    delete config.columnOrder
+    delete config.column_order
 
     const createdModule = await create(dashboardId.value, {
       type: visualization.moduleType,
