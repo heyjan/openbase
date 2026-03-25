@@ -7,10 +7,22 @@ export const useShareLinks = () => {
       cache: 'no-store'
     })
 
-  const create = (dashboardId: string, label?: string) =>
+  const create = (dashboardId: string, label?: string, password?: string) =>
     $fetch<ShareLink>('/api/admin/share-links', {
       method: 'POST',
-      body: { dashboardId, label }
+      body: { dashboardId, label, password }
+    })
+
+  const update = (
+    id: string,
+    payload: {
+      label?: string | null
+      password?: string | null
+    }
+  ) =>
+    $fetch<ShareLink>(`/api/admin/share-links/${id}`, {
+      method: 'PUT',
+      body: payload
     })
 
   const remove = (id: string) =>
@@ -21,6 +33,7 @@ export const useShareLinks = () => {
   return {
     list,
     create,
+    update,
     remove
   }
 }

@@ -7,7 +7,7 @@ definePageMeta({
 })
 
 const route = useRoute()
-const { getPublic } = useDashboard()
+const { getPublic, verifySharedPassword } = useDashboard()
 
 const slug = computed(() => String(route.params.slug || ''))
 const token = computed(() => {
@@ -16,14 +16,68 @@ const token = computed(() => {
 })
 const asyncKey = computed(() => `public-dashboard-${slug.value}-${token.value || 'missing-token'}`)
 const tokenMissing = computed(() => !token.value)
+const password = ref('')
+const passwordError = ref('')
+const verifyingPassword = ref(false)
 
-const { data: response, pending, error } = useAsyncData(
+const { data: response, pending, error, refresh } = useAsyncData(
   asyncKey,
   () => (token.value ? getPublic(slug.value, token.value) : null),
   {
     watch: [slug, token]
   }
 )
+
+const requiresPassword = computed(() => {
+  const currentError = error.value as
+    | (Error & { statusCode?: number; data?: Record<string, unknown> })
+    | null
+
+  if (!currentError || currentError.statusCode !== 401) {
+    return false
+  }
+
+  return Boolean(currentError.data?.requiresPassword)
+})
+
+const submitPassword = async () => {
+  if (!token.value || verifyingPassword.value) {
+    return
+  }
+
+  const passwordValue = password.value.trim()
+  if (!passwordValue) {
+    passwordError.value = 'Password is required'
+    return
+  }
+
+  verifyingPassword.value = true
+  passwordError.value = ''
+
+  try {
+    await verifySharedPassword(token.value, passwordValue)
+    password.value = ''
+    await refresh()
+  } catch (requestError) {
+    const typedError = requestError as
+      | (Error & { statusCode?: number })
+      | null
+    const message =
+      typedError?.statusCode === 401
+        ? 'Invalid token or password'
+        : typedError instanceof Error
+          ? typedError.message
+          : 'Invalid token or password'
+    passwordError.value = message
+  } finally {
+    verifyingPassword.value = false
+  }
+}
+
+watch([slug, token], () => {
+  password.value = ''
+  passwordError.value = ''
+})
 
 const canvasWidthMode = computed(() =>
   response.value?.dashboard?.gridConfig?.canvasWidthMode === 'full' ? 'full' : 'fixed'
@@ -38,6 +92,28 @@ const canvasWidthMode = computed(() =>
   >
     <div v-if="tokenMissing" class="text-sm text-red-600">Missing share token.</div>
     <div v-else-if="pending" class="text-sm text-gray-500">Loading dashboard...</div>
+    <div v-else-if="requiresPassword" class="mx-auto mt-8 max-w-md rounded border border-gray-200 p-5 shadow-sm">
+      <form class="space-y-3" @submit.prevent="submitPassword">
+        <h1 class="text-base font-semibold text-gray-900">Password Required</h1>
+        <input
+          v-model="password"
+          type="password"
+          class="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          placeholder="Password"
+          autocomplete="current-password"
+        />
+        <button
+          type="submit"
+          class="w-full rounded bg-brand-primary px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          :disabled="verifyingPassword"
+        >
+          {{ verifyingPassword ? 'Verifying...' : 'Continue' }}
+        </button>
+      </form>
+      <p v-if="passwordError" class="mt-3 text-sm text-red-600">
+        {{ passwordError }}
+      </p>
+    </div>
     <div v-else-if="error" class="text-sm text-red-600">
       {{ error?.message || 'Unable to load dashboard.' }}
     </div>

@@ -35,12 +35,19 @@ export const useDashboard = () => {
       }
     )
 
+  const verifySharedPassword = (token: string, password: string) =>
+    apiFetch<{ ok: true }>('/api/shared/verify-password', {
+      method: 'POST',
+      body: { token, password }
+    })
+
   return {
     list,
     getById,
     create,
     update,
     remove,
-    getPublic
+    getPublic,
+    verifySharedPassword
   }
 }

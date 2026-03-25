@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Missing share token' })
   }
 
-  const { dashboard, shareLink } = await requireSharedDashboardAccess(slug, token)
+  const { dashboard, shareLink } = await requireSharedDashboardAccess(event, slug, token)
 
   const ipAddress = getRequestIP(event, { xForwardedFor: true }) ?? null
   const userAgent = getHeader(event, 'user-agent') ?? null

@@ -1,10 +1,14 @@
 import { createError, defineEventHandler, readBody } from 'h3'
+import bcrypt from 'bcryptjs'
 import { createShareLink } from '~~/server/utils/share-link-store'
 
 type Payload = {
   dashboardId?: string
   label?: string
+  password?: string | null
 }
+
+const SHARE_LINK_PASSWORD_ROUNDS = 12
 
 export default defineEventHandler(async (event) => {
   const body = (await readBody(event)) as Payload
@@ -20,5 +24,11 @@ export default defineEventHandler(async (event) => {
       ? body.label.trim()
       : undefined
 
-  return await createShareLink(dashboardId, label)
+  const rawPassword =
+    typeof body?.password === 'string' ? body.password.trim() : ''
+  const passwordHash = rawPassword
+    ? await bcrypt.hash(rawPassword, SHARE_LINK_PASSWORD_ROUNDS)
+    : null
+
+  return await createShareLink(dashboardId, label, passwordHash)
 })

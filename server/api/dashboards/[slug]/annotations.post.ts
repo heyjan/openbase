@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Missing share token' })
   }
 
-  const { dashboard } = await requireSharedDashboardAccess(slug, token)
+  const { dashboard } = await requireSharedDashboardAccess(event, slug, token)
 
   const body = (await readBody(event)) as Body
   const note = typeof body.note === 'string' ? body.note.trim() : ''

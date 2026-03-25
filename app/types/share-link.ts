@@ -3,6 +3,7 @@ export interface ShareLink {
   dashboardId: string
   token: string
   label: string | null
+  isPasswordProtected: boolean
   isActive: boolean
   viewCount: number
   lastViewedAt: string | null
