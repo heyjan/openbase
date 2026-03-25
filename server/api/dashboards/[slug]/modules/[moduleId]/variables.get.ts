@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Missing share token' })
   }
 
-  const { dashboard } = await requireSharedDashboardAccess(slug, token)
+  const { dashboard } = await requireSharedDashboardAccess(event, slug, token)
 
   const modules = await listModules(dashboard.id)
   const module = modules.find((item) => item.id === moduleId)

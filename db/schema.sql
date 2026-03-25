@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS share_links (
   dashboard_id   UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
   token          VARCHAR(64) UNIQUE NOT NULL,
   label          VARCHAR(255),
+  password_hash  VARCHAR(255),
   is_active      BOOLEAN NOT NULL DEFAULT true,
   view_count     INTEGER NOT NULL DEFAULT 0,
   last_viewed_at TIMESTAMPTZ,

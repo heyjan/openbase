@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Copy, Link2Off, Plus, RefreshCw } from 'lucide-vue-next'
+import { Copy, Link2Off, Lock, LockOpen, Plus, RefreshCw } from 'lucide-vue-next'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import type { ShareLinkWithStats } from '~/types/share-link'
 
@@ -21,18 +21,22 @@ const emit = defineEmits<{
   (event: 'changed'): void
 }>()
 
-const { list, create, remove } = useShareLinks()
+const { list, create, update, remove } = useShareLinks()
 const toast = useAppToast()
+const MIN_SHARE_LINK_PASSWORD_LENGTH = 6
 
 const links = ref<ShareLinkWithStats[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 const search = ref('')
 const createLabel = ref('')
+const createRequiresPassword = ref(false)
+const createPassword = ref('')
 const creating = ref(false)
 const deletingId = ref<string | null>(null)
 const deletingSelected = ref(false)
 const copyingId = ref<string | null>(null)
+const updatingPasswordId = ref<string | null>(null)
 const selectedIds = ref<string[]>([])
 const confirmSingleDeleteOpen = ref(false)
 const confirmBulkDeleteOpen = ref(false)
@@ -160,12 +164,26 @@ const createLink = async () => {
     return
   }
 
+  const password = createRequiresPassword.value ? createPassword.value.trim() : ''
+  if (createRequiresPassword.value && !password) {
+    errorMessage.value = 'Password is required when protection is enabled'
+    toast.error('Failed to create share link', errorMessage.value)
+    return
+  }
+  if (password && password.length < MIN_SHARE_LINK_PASSWORD_LENGTH) {
+    errorMessage.value = `Password must be at least ${MIN_SHARE_LINK_PASSWORD_LENGTH} characters`
+    toast.error('Failed to create share link', errorMessage.value)
+    return
+  }
+
   creating.value = true
   errorMessage.value = ''
 
   try {
-    await create(props.dashboardId, createLabel.value || undefined)
+    await create(props.dashboardId, createLabel.value || undefined, password || undefined)
     createLabel.value = ''
+    createRequiresPassword.value = false
+    createPassword.value = ''
     await loadLinks()
     toast.success('Share link created')
     emit('changed')
@@ -174,6 +192,72 @@ const createLink = async () => {
     toast.error('Failed to create share link', errorMessage.value)
   } finally {
     creating.value = false
+  }
+}
+
+const setPassword = async (link: ShareLinkWithStats) => {
+  if (!process.client || updatingPasswordId.value) {
+    return
+  }
+
+  const input = window.prompt(
+    link.isPasswordProtected ? 'Update password' : 'Set password'
+  )
+  if (input === null) {
+    return
+  }
+
+  const password = input.trim()
+  if (!password) {
+    errorMessage.value = 'Password cannot be empty'
+    toast.error('Failed to update password', errorMessage.value)
+    return
+  }
+  if (password.length < MIN_SHARE_LINK_PASSWORD_LENGTH) {
+    errorMessage.value = `Password must be at least ${MIN_SHARE_LINK_PASSWORD_LENGTH} characters`
+    toast.error('Failed to update password', errorMessage.value)
+    return
+  }
+
+  updatingPasswordId.value = link.id
+  errorMessage.value = ''
+
+  try {
+    const updated = await update(link.id, { password })
+    links.value = links.value.map((item) => (item.id === link.id ? { ...item, ...updated } : item))
+    toast.success(link.isPasswordProtected ? 'Password updated' : 'Password set')
+    emit('changed')
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to update password'
+    toast.error('Failed to update password', errorMessage.value)
+  } finally {
+    updatingPasswordId.value = null
+  }
+}
+
+const removePassword = async (link: ShareLinkWithStats) => {
+  if (!process.client || updatingPasswordId.value || !link.isPasswordProtected) {
+    return
+  }
+
+  const confirmed = window.confirm('Remove password protection for this link?')
+  if (!confirmed) {
+    return
+  }
+
+  updatingPasswordId.value = link.id
+  errorMessage.value = ''
+
+  try {
+    const updated = await update(link.id, { password: null })
+    links.value = links.value.map((item) => (item.id === link.id ? { ...item, ...updated } : item))
+    toast.success('Password removed')
+    emit('changed')
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to remove password'
+    toast.error('Failed to remove password', errorMessage.value)
+  } finally {
+    updatingPasswordId.value = null
   }
 }
 
@@ -311,7 +395,10 @@ onMounted(loadLinks)
       </div>
     </div>
 
-    <div v-if="hasDashboardScope" class="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+    <div
+      v-if="hasDashboardScope"
+      class="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end"
+    >
       <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
         Optional label
         <input
@@ -320,6 +407,22 @@ onMounted(loadLinks)
           placeholder="Q1 leadership review"
         />
       </label>
+      <div class="space-y-2">
+        <label class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
+          <input
+            v-model="createRequiresPassword"
+            type="checkbox"
+          />
+          Password Protect
+        </label>
+        <input
+          v-model="createPassword"
+          type="password"
+          class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
+          :disabled="!createRequiresPassword"
+          placeholder="Password"
+        />
+      </div>
       <button
         class="inline-flex items-center justify-center gap-2 rounded bg-brand-primary px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         :disabled="creating"
@@ -361,6 +464,7 @@ onMounted(loadLinks)
             <th v-if="!hasDashboardScope" class="px-3 py-2">Dashboard</th>
             <th class="px-3 py-2">Share Link</th>
             <th class="px-3 py-2">Label</th>
+            <th class="px-3 py-2">Protection</th>
             <th class="px-3 py-2">Views</th>
             <th class="px-3 py-2">Last Viewed</th>
             <th class="px-3 py-2">Created</th>
@@ -394,11 +498,44 @@ onMounted(loadLinks)
               </NuxtLink>
             </td>
             <td class="px-3 py-2 text-gray-700">{{ link.label || '—' }}</td>
+            <td class="px-3 py-2 text-gray-700">
+              <span v-if="link.isPasswordProtected" class="inline-flex items-center gap-1">
+                <Lock class="h-3.5 w-3.5" />
+                Protected
+              </span>
+              <span v-else class="inline-flex items-center gap-1">
+                <LockOpen class="h-3.5 w-3.5" />
+                Open
+              </span>
+            </td>
             <td class="px-3 py-2 text-gray-700">{{ link.viewCount }}</td>
             <td class="px-3 py-2 text-gray-700">{{ formatDateTime(link.lastViewedAt) }}</td>
             <td class="px-3 py-2 text-gray-700">{{ formatDateTime(link.createdAt) }}</td>
             <td class="px-3 py-2">
               <div class="flex justify-end gap-2">
+                <button
+                  class="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:border-gray-300 disabled:opacity-50"
+                  :disabled="updatingPasswordId === link.id"
+                  @click="setPassword(link)"
+                >
+                  <Lock class="h-3.5 w-3.5" />
+                  {{
+                    updatingPasswordId === link.id
+                      ? 'Saving...'
+                      : link.isPasswordProtected
+                        ? 'Update Password'
+                        : 'Set Password'
+                  }}
+                </button>
+                <button
+                  v-if="link.isPasswordProtected"
+                  class="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:border-gray-300 disabled:opacity-50"
+                  :disabled="updatingPasswordId === link.id"
+                  @click="removePassword(link)"
+                >
+                  <LockOpen class="h-3.5 w-3.5" />
+                  Remove Password
+                </button>
                 <button
                   class="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:border-gray-300 disabled:opacity-50"
                   :disabled="copyingId === link.id"

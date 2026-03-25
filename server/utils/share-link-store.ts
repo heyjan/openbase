@@ -7,11 +7,16 @@ export type ShareLinkRecord = {
   dashboardId: string
   token: string
   label: string | null
+  isPasswordProtected: boolean
   isActive: boolean
   viewCount: number
   lastViewedAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type ShareLinkAccessRecord = ShareLinkRecord & {
+  passwordHash: string | null
 }
 
 export type ShareLinkRecordWithStats = ShareLinkRecord & {
@@ -24,6 +29,8 @@ type ShareLinkRow = {
   dashboard_id: string
   token: string
   label: string | null
+  password_hash: string | null
+  is_password_protected: boolean
   is_active: boolean
   view_count: number
   last_viewed_at: string | null
@@ -48,12 +55,29 @@ const ensureShareLinkSchema = async () => {
            dashboard_id   UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
            token          VARCHAR(64) UNIQUE NOT NULL,
            label          VARCHAR(255),
+           password_hash  VARCHAR(255),
            is_active      BOOLEAN NOT NULL DEFAULT true,
            view_count     INTEGER NOT NULL DEFAULT 0,
            last_viewed_at TIMESTAMPTZ,
            created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
            updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
          )`
+      )
+
+      await query(
+        `DO $$
+         BEGIN
+           IF NOT EXISTS (
+             SELECT 1
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = 'share_links'
+               AND column_name = 'password_hash'
+           ) THEN
+             ALTER TABLE share_links
+             ADD COLUMN password_hash VARCHAR(255);
+           END IF;
+         END $$`
       )
 
       await query(
@@ -135,16 +159,25 @@ const isUniqueViolation = (error: unknown) =>
   'code' in error &&
   (error as { code?: string }).code === '23505'
 
+const normalizeLabel = (value: string | null | undefined) =>
+  typeof value === 'string' && value.trim().length ? value.trim() : null
+
 const mapShareLink = (row: ShareLinkRow): ShareLinkRecord => ({
   id: row.id,
   dashboardId: row.dashboard_id,
   token: row.token,
   label: row.label,
+  isPasswordProtected: row.is_password_protected,
   isActive: row.is_active,
   viewCount: row.view_count,
   lastViewedAt: row.last_viewed_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at
+})
+
+const mapShareLinkAccess = (row: ShareLinkRow): ShareLinkAccessRecord => ({
+  ...mapShareLink(row),
+  passwordHash: row.password_hash
 })
 
 const mapShareLinkWithStats = (row: ShareLinkListRow): ShareLinkRecordWithStats => ({
@@ -171,21 +204,33 @@ const ensureDashboardExists = async (dashboardId: string) => {
 
 export const createShareLink = async (
   dashboardId: string,
-  label?: string
+  label?: string,
+  passwordHash?: string | null
 ): Promise<ShareLinkRecord> => {
   await ensureDashboardExists(dashboardId)
 
-  const normalizedLabel = label?.trim() ? label.trim() : null
+  const normalizedLabel = normalizeLabel(label)
+  const normalizedPasswordHash = passwordHash?.trim() ? passwordHash.trim() : null
   let attempts = 0
 
   while (attempts < 3) {
     attempts += 1
     try {
       const result = await query<ShareLinkRow>(
-        `INSERT INTO share_links (dashboard_id, token, label)
-         VALUES ($1, $2, $3)
-         RETURNING id, dashboard_id, token, label, is_active, view_count, last_viewed_at, created_at, updated_at`,
-        [dashboardId, generateToken(), normalizedLabel]
+        `INSERT INTO share_links (dashboard_id, token, label, password_hash)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id,
+                   dashboard_id,
+                   token,
+                   label,
+                   password_hash,
+                   (password_hash IS NOT NULL) AS is_password_protected,
+                   is_active,
+                   view_count,
+                   last_viewed_at,
+                   created_at,
+                   updated_at`,
+        [dashboardId, generateToken(), normalizedLabel, normalizedPasswordHash]
       )
 
       return mapShareLink(result.rows[0])
@@ -201,6 +246,62 @@ export const createShareLink = async (
     statusCode: 500,
     statusMessage: 'Unable to generate unique share token'
   })
+}
+
+export const updateShareLink = async (
+  id: string,
+  updates: {
+    label?: string | null
+    passwordHash?: string | null
+  }
+): Promise<ShareLinkRecord> => {
+  await ensureShareLinkSchema()
+
+  const values: Array<string | null> = []
+  const assignments: string[] = []
+
+  if (updates.label !== undefined) {
+    values.push(normalizeLabel(updates.label))
+    assignments.push(`label = $${values.length}`)
+  }
+
+  if (updates.passwordHash !== undefined) {
+    values.push(updates.passwordHash?.trim() ? updates.passwordHash.trim() : null)
+    assignments.push(`password_hash = $${values.length}`)
+  }
+
+  if (!assignments.length) {
+    throw createError({ statusCode: 400, statusMessage: 'No fields to update' })
+  }
+
+  values.push(id)
+  const idParam = `$${values.length}`
+
+  const result = await query<ShareLinkRow>(
+    `UPDATE share_links
+     SET ${assignments.join(', ')}, updated_at = now()
+     WHERE id = ${idParam}
+       AND is_active = true
+     RETURNING id,
+               dashboard_id,
+               token,
+               label,
+               password_hash,
+               (password_hash IS NOT NULL) AS is_password_protected,
+               is_active,
+               view_count,
+               last_viewed_at,
+               created_at,
+               updated_at`,
+    values
+  )
+
+  const row = result.rows[0]
+  if (!row) {
+    throw createError({ statusCode: 404, statusMessage: 'Share link not found' })
+  }
+
+  return mapShareLink(row)
 }
 
 export const listShareLinks = async (filters?: {
@@ -222,6 +323,8 @@ export const listShareLinks = async (filters?: {
        sl.dashboard_id,
        sl.token,
        sl.label,
+       sl.password_hash,
+       (sl.password_hash IS NOT NULL) AS is_password_protected,
        sl.is_active,
        sl.view_count,
        sl.last_viewed_at,
@@ -241,11 +344,21 @@ export const listShareLinks = async (filters?: {
 
 export const getShareLinkByToken = async (
   token: string
-): Promise<ShareLinkRecord | null> => {
+): Promise<ShareLinkAccessRecord | null> => {
   await ensureShareLinkSchema()
 
   const result = await query<ShareLinkRow>(
-    `SELECT id, dashboard_id, token, label, is_active, view_count, last_viewed_at, created_at, updated_at
+    `SELECT id,
+            dashboard_id,
+            token,
+            label,
+            password_hash,
+            (password_hash IS NOT NULL) AS is_password_protected,
+            is_active,
+            view_count,
+            last_viewed_at,
+            created_at,
+            updated_at
      FROM share_links
      WHERE token = $1
        AND is_active = true`,
@@ -253,7 +366,7 @@ export const getShareLinkByToken = async (
   )
 
   const row = result.rows[0]
-  return row ? mapShareLink(row) : null
+  return row ? mapShareLinkAccess(row) : null
 }
 
 export const deleteShareLink = async (id: string): Promise<void> => {
