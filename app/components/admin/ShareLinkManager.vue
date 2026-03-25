@@ -23,6 +23,7 @@ const emit = defineEmits<{
 
 const { list, create, update, remove } = useShareLinks()
 const toast = useAppToast()
+const MIN_SHARE_LINK_PASSWORD_LENGTH = 6
 
 const links = ref<ShareLinkWithStats[]>([])
 const loading = ref(false)
@@ -169,6 +170,11 @@ const createLink = async () => {
     toast.error('Failed to create share link', errorMessage.value)
     return
   }
+  if (password && password.length < MIN_SHARE_LINK_PASSWORD_LENGTH) {
+    errorMessage.value = `Password must be at least ${MIN_SHARE_LINK_PASSWORD_LENGTH} characters`
+    toast.error('Failed to create share link', errorMessage.value)
+    return
+  }
 
   creating.value = true
   errorMessage.value = ''
@@ -204,6 +210,11 @@ const setPassword = async (link: ShareLinkWithStats) => {
   const password = input.trim()
   if (!password) {
     errorMessage.value = 'Password cannot be empty'
+    toast.error('Failed to update password', errorMessage.value)
+    return
+  }
+  if (password.length < MIN_SHARE_LINK_PASSWORD_LENGTH) {
+    errorMessage.value = `Password must be at least ${MIN_SHARE_LINK_PASSWORD_LENGTH} characters`
     toast.error('Failed to update password', errorMessage.value)
     return
   }

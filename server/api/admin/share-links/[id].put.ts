@@ -8,6 +8,7 @@ type Payload = {
 }
 
 const SHARE_LINK_PASSWORD_ROUNDS = 12
+const MIN_SHARE_LINK_PASSWORD_LENGTH = 6
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -35,7 +36,14 @@ export default defineEventHandler(async (event) => {
     if (body.password === null) {
       passwordHash = null
     } else if (typeof body.password === 'string' && body.password.trim().length) {
-      passwordHash = await bcrypt.hash(body.password.trim(), SHARE_LINK_PASSWORD_ROUNDS)
+      const nextPassword = body.password.trim()
+      if (nextPassword.length < MIN_SHARE_LINK_PASSWORD_LENGTH) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: `password must be at least ${MIN_SHARE_LINK_PASSWORD_LENGTH} characters`
+        })
+      }
+      passwordHash = await bcrypt.hash(nextPassword, SHARE_LINK_PASSWORD_ROUNDS)
     } else {
       throw createError({
         statusCode: 400,
