@@ -169,7 +169,7 @@ const canvasWidthMode = computed(() =>
   >
     <div v-if="tokenMissing" class="text-sm text-red-600">Missing share token.</div>
     <div v-else-if="pending" class="text-sm text-gray-500">Loading dashboard...</div>
-    <div v-else-if="requiresPassword" class="mx-auto mt-8 max-w-md rounded border border-gray-200 p-5 shadow-sm">
+    <div v-else-if="requiresPassword" class="mx-auto mt-8 max-w-md bg-white rounded border border-gray-200 p-5 shadow-sm">
       <form class="space-y-3" @submit.prevent="submitPassword">
         <h1 class="text-base font-semibold text-gray-900">Password Required</h1>
         <input
@@ -190,6 +190,9 @@ const canvasWidthMode = computed(() =>
       <p v-if="passwordError" class="mt-3 text-sm text-red-600">
         {{ passwordError }}
       </p>
+      <div class="mt-6 flex justify-center">
+        <img src="/password-illustration.png" alt="" class="h-40 opacity-90" />
+      </div>
     </div>
     <div v-else-if="error" class="text-sm text-red-600">
       {{ error?.message || 'Unable to load dashboard.' }}
