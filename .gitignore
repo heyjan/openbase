@@ -36,6 +36,9 @@ db/*.sqlite
 db/*.sqlite-*
 db/*.sqlite3
 db/*.sqlite3-*
+# Deployment-only SQL kept local
+db/create_authorized*.sql
+openbase/db/*.sql
 
 # Project-specific
 .github/
