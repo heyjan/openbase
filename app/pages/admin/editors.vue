@@ -104,7 +104,7 @@ watch(isPermissionsRoute, (value) => {
 
 <template>
   <NuxtPage v-if="isPermissionsRoute" />
-  <section v-else class="space-y-6">
+  <section v-else class="space-y-6 px-6 py-5">
     <PageHeader
       title="Editors"
       :breadcrumbs="[
