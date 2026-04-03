@@ -100,7 +100,7 @@ watch(editorId, () => {
 </script>
 
 <template>
-  <section class="space-y-6">
+  <section class="space-y-6 px-6 py-5">
     <PageHeader
       title="Editor Permissions"
       :breadcrumbs="[
