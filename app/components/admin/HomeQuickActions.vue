@@ -5,7 +5,6 @@ import {
   Search,
   Users
 } from 'lucide-vue-next'
-import SettingsNavCard from '~/components/ui/SettingsNavCard.vue'
 
 const quickActions = [
   {
@@ -37,17 +36,21 @@ const quickActions = [
 </script>
 
 <template>
-  <section class="rounded border border-gray-200 bg-white p-6 shadow-sm">
-    <h2 class="text-xl font-semibold tracking-tight text-gray-900">Quick Actions</h2>
+  <section>
+    <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+      Quick Actions
+    </h3>
 
-    <nav class="mt-4 flex p-2 flex-nowrap items-start gap-4 overflow-x-auto pb-1">
-      <SettingsNavCard
+    <nav class="space-y-1">
+      <NuxtLink
         v-for="item in quickActions"
         :key="item.to"
         :to="item.to"
-        :label="item.label"
-        :icon="item.icon"
-      />
+        class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+      >
+        <component :is="item.icon" class="h-4 w-4 shrink-0 text-gray-400" />
+        <span>{{ item.label }}</span>
+      </NuxtLink>
     </nav>
   </section>
 </template>

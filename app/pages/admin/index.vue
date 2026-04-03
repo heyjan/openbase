@@ -39,15 +39,17 @@ const headerTitle = computed(() => `${greeting.value}, ${adminName.value}`)
 </script>
 
 <template>
-  <section class="space-y-6 px-6 py-5">
-    <PageHeader
-      :title="headerTitle"
-      :breadcrumbs="[{ label: 'Home' }]"
-    />
-
-    <div class="grid gap-6 xl:grid-cols-2">
-      <HomeChatbot />
+  <section class="flex h-full px-6 py-5">
+    <aside class="w-56 shrink-0 border-r border-gray-200 pr-4">
       <HomeQuickActions />
+    </aside>
+
+    <div class="min-w-0 flex-1 space-y-6 pl-6">
+      <PageHeader
+        :title="headerTitle"
+        :breadcrumbs="[{ label: 'Home' }]"
+      />
+      <HomeChatbot />
     </div>
   </section>
 </template>
