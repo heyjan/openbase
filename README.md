@@ -2,143 +2,99 @@
   <img src="public/brain-icon-7087186-512.png" alt="Openbase Logo" width="120" />
 </p>
 
-# Openbase
+<h1 align="center">Openbase</h1>
 
+<p align="center">
+  <a href="https://nuxt.com/"><img src="https://img.shields.io/badge/Nuxt-4-00DC82?logo=nuxt&logoColor=white" alt="Nuxt 4" /></a>
+  <a href="https://vuejs.org/"><img src="https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white" alt="Vue 3" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL" /></a>
+  <a href="https://playwright.dev/"><img src="https://img.shields.io/badge/Tested%20with-Playwright-2EAD33?logo=playwright&logoColor=white" alt="Playwright" /></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Containers-Docker%20%2F%20Podman-2496ED?logo=docker&logoColor=white" alt="Docker and Podman" /></a>
+</p>
 
-**Status:** Alpha — this project is under active development and may change without notice.
+Openbase is an open-source analytics and business intelligence platform built for teams that need secure, flexible dashboards across multiple data sources.
 
-Openbase is an open-source data analytics and business intelligence platform.
+It focuses on practical admin workflows: controlled editor permissions, governed write access, shareable dashboards, and production-oriented security defaults.
 
-It started from frustration with Metabase limitations, and evolved into a flexible alternative focused on modular dashboards, data source integrations, and practical admin workflows.
+## Product Preview
 
-## Release Plan
+![Openbase admin home](public/screenshots/admin-home-ai-chatbot.png)
 
-Current milestone: **v0.1 stabilization** (**March 2026**).
+## Core Features
 
-### Deployment progress
+- Guided first-run admin setup with magic link and password creation.
+- Role-based access control with separate admin and editor sessions.
+- Dashboard editor with drag/resize layout and configurable module types.
+- Controlled PostgreSQL write workflows via admin-managed writable tables.
+- Data-source integrations for PostgreSQL, MySQL, DuckDB, SQLite, and MongoDB.
+- Public dashboard sharing through tokenized links.
+- PDF export support for shared dashboards.
+- Audit logging and security hardening across auth and data-write flows.
 
-- Deployment spec moved to `documentation/DEPLOYMENT.md`.
-- Completed from deployment spec:
-  - Step 1: `.env`-driven configuration and `.env.example` template.
-  - Step 2: setup flow now confirms magic-link delivery and production SMTP is fail-fast validated.
-  - Step 3: production multi-stage `Dockerfile` added.
-  - Step 6 (Security): stronger security headers and production encryption-key requirement.
-- Pending by plan: reverse proxy/TLS and production compose rollout steps.
+Detailed capability breakdown: [Feature Guide](documentation/features.md)
 
-### Recently completed
+## Architecture
 
-- Editor RBAC with separate editor auth/session handling.
-- Controlled PostgreSQL write flows via admin-managed writable tables.
-- MySQL and DuckDB data source support (read-only adapters), alongside PostgreSQL/SQLite/MongoDB.
-- Security hardening (input sanitization, security headers, request rate limiting, audit logging).
-- Optional encryption at rest for data source connection settings.
+- Frontend: Nuxt 4 + Vue 3 (`app/`)
+- Backend APIs: Nuxt server routes (`server/api/**`)
+- Database schema: PostgreSQL SQL schema (`db/schema.sql`)
+- Static assets: `public/`
+- Technical documentation: `documentation/`
 
-### Next planned feature
-
-- **AI Chat-assisted dashboarding**:
-  - User provides a natural-language request.
-  - LLM selects the most suitable saved query/query input.
-  - LLM recommends and configures the best-fit visualization/module type.
-
-## What’s included
-
-- Guided admin setup (magic link + password) on first run.
-- Admin management with session-based authentication.
-- Editor RBAC with separate editor users/sessions and scoped dashboard access.
-- Controlled PostgreSQL data entry via admin-defined writable tables (INSERT/UPDATE).
-- Dashboard editor with drag/resize canvas and configurable modules.
-- Configurable text modules (`header`, `subheader`) for sectioning.
-- Data sources with a browser for tables/collections and rows.
-- PostgreSQL, MySQL, DuckDB, SQLite, and MongoDB connectors.
-- Public dashboard sharing with tokenized links.
-- PDF export for shared dashboards.
-- Audit logging for auth and editor write actions.
-
-## Quick start (Docker)
+## Quick Start (Podman)
 
 ```bash
 cp .env.example .env
-podman compose up --build
+podman compose down
+podman compose build
+podman compose up
 ```
 
-Then open `http://localhost:3000` and complete the setup flow on first run.
+Then open `http://localhost:3000` and complete setup.
 
-## Local development
+## Local Development
 
 1. Install dependencies:
 
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
-2. Set required environment variables (recommended via `.env`):
+2. Configure environment:
 
-   ```bash
-   cp .env.example .env
-   ```
-
-   If not using `.env`, export at least:
-
-   ```bash
-   export DATABASE_URL=postgres://openbase:password@localhost:5432/openbase
-
-   # Required in production
-   export SMTP_HOST=smtp.example.com
-   export SMTP_USER=noreply@example.com
-   export SMTP_PASS=your-smtp-password
-   export OPENBASE_ENCRYPTION_KEY=your-64-char-hex-key
-
-   # Optional
-   export OPENBASE_DATA_DIR=/workspace
-   ```
-
-   Generate `OPENBASE_ENCRYPTION_KEY` (64-char hex) with:
-
-   ```bash
-   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-   # or
-   openssl rand -hex 32
-   ```
-
-   Apply the schema in `db/schema.sql` if you are not using Docker.
+```bash
+cp .env.example .env
+```
 
 3. Start the dev server:
 
-   ```bash
-   npm run dev
-   ```
+```bash
+npm run dev
+```
 
-4. Before opening a PR, run:
+4. Build for verification:
 
-   ```bash
-   npm run build
-   ```
+```bash
+npm run build
+```
 
-5. Run end-to-end tests (Playwright):
+## Testing
 
-   ```bash
-   npm run test:e2e
-   ```
+End-to-end tests use Playwright:
 
-## Using data sources
+```bash
+npm run test:e2e
+```
 
-- **PostgreSQL:** URI or host/user/database credentials. Supports query execution, table browsing, and writable-table workflows.
-- **MySQL:** URI or host/user/database credentials. Read-only querying and table browsing.
-- **DuckDB:** File path (or `:memory:`). Read-only mode with path validation under `OPENBASE_DATA_DIR`.
-- **SQLite:** Local file path. Read-only mode with path validation under `OPENBASE_DATA_DIR`.
-- **MongoDB:** Connection URI and database name; collections are listed and browsable.
+## Security Notes
 
-## RBAC & Editor Writes
+- Connection strings and credentials must be provided through environment variables.
+- `OPENBASE_ENCRYPTION_KEY` is required in production for encrypted data-source settings.
+- Do not commit secrets or production credentials.
 
-- Admins manage editors at `/admin/editors`.
-- Admins define writable PostgreSQL tables at `/admin/writable-tables`.
-- Admins assign dashboard/table permissions per editor.
-- Editors sign in at `/editor/login`, access assigned dashboards at `/editor`, and edit permitted table cells directly inside `/editor/dashboards/{slug}`.
+## Documentation
 
-## Security hardening
-
-- Recursive API input sanitization for request payloads.
-- Security headers (CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Permissions-Policy`).
-- In-memory sliding-window rate limiting for login/admin/write/public routes.
-- AES-256-GCM encryption for data source connection settings (`OPENBASE_ENCRYPTION_KEY` required in production).
-- Audit log tracking for login/logout and editor write events.
+- Product specs: `documentation/spec.md`
+- Feature guide: `documentation/features.md`
+- Security and RBAC planning: `documentation/database-integration-rbac-spec.md`

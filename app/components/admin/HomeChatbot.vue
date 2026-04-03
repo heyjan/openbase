@@ -1,22 +1,38 @@
 <script setup lang="ts">
-const prompt = ref('')
-const toast = useAppToast()
+type ChatMessage = {
+  id: string
+  role: 'assistant' | 'user'
+  content: string
+}
 
-const messages = [
+const prompt = ref('')
+const messages = ref<ChatMessage[]>([
   {
-    id: 'assistant-placeholder',
-    role: 'assistant' as const,
-    content: 'Chatbot integration is coming soon.'
+    id: 'assistant-intro',
+    role: 'assistant',
+    content: 'Ask about dashboards, saved queries, or data sources.'
   }
-]
+])
 
 const submitPrompt = () => {
-  if (!prompt.value.trim()) {
+  const text = prompt.value.trim()
+  if (!text) {
     return
   }
 
+  messages.value.push({
+    id: `user-${Date.now()}`,
+    role: 'user',
+    content: text
+  })
+
   prompt.value = ''
-  toast.info('Coming soon', 'AI chat is not enabled yet.')
+
+  messages.value.push({
+    id: `assistant-${Date.now()}`,
+    role: 'assistant',
+    content: 'AI responses are currently disabled in this environment.'
+  })
 }
 </script>
 
