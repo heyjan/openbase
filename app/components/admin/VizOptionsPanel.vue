@@ -427,7 +427,6 @@ const updateColumnValueFormat = (
   key: keyof TableColumnValueFormat,
   rawValue: unknown
 ) => {
-  const text = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
   const next: Record<string, TableColumnValueFormat> = {
     ...exactColumnValueFormats.value
   }
@@ -435,13 +434,27 @@ const updateColumnValueFormat = (
     ...(next[column] ?? {})
   }
 
-  if (text.trim()) {
-    current[key] = text
+  if (key === 'fractionDigits') {
+    const text = typeof rawValue === 'string' ? rawValue.trim() : String(rawValue ?? '').trim()
+    if (text) {
+      const parsed = Number(text)
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return
+      }
+      current.fractionDigits = Math.min(20, Math.trunc(parsed))
+    } else {
+      delete current.fractionDigits
+    }
   } else {
-    delete current[key]
+    const text = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
+    if (text.trim()) {
+      current[key] = text
+    } else {
+      delete current[key]
+    }
   }
 
-  if (!current.prefix && !current.suffix) {
+  if (!current.prefix && !current.suffix && current.fractionDigits === undefined) {
     delete next[column]
   } else {
     next[column] = current
@@ -469,6 +482,24 @@ const addColumnFormatRule = () => {
 const removeColumnFormatRule = (index: number) => {
   updateConfig({
     columnFormatRules: columnFormatRules.value.filter((_, ruleIndex) => ruleIndex !== index)
+  })
+}
+
+const moveColumnFormatRule = (index: number, direction: -1 | 1) => {
+  const next = [...columnFormatRules.value]
+  const targetIndex = index + direction
+  if (targetIndex < 0 || targetIndex >= next.length) {
+    return
+  }
+
+  const [moved] = next.splice(index, 1)
+  if (!moved) {
+    return
+  }
+  next.splice(targetIndex, 0, moved)
+
+  updateConfig({
+    columnFormatRules: next
   })
 }
 
@@ -516,24 +547,44 @@ const updateColumnFormatRuleDigits = (index: number, rawValue: unknown) => {
   })
 }
 
+const hasColumnFormatRuleFormat = (rule: TableColumnFormatRule) =>
+  Boolean(rule.prefix || rule.suffix || rule.fractionDigits !== undefined)
+
 const columnMatchesFormatRule = (column: string, rule: TableColumnFormatRule) => {
-  if (!rule.pattern) {
+  const pattern = rule.pattern.trim()
+  if (!pattern) {
     return false
   }
   if (rule.matchMode === 'exact') {
-    return column === rule.pattern
+    return column === pattern
   }
   if (rule.matchMode === 'startsWith') {
-    return column.startsWith(rule.pattern)
+    return column.startsWith(pattern)
   }
   if (rule.matchMode === 'endsWith') {
-    return column.endsWith(rule.pattern)
+    return column.endsWith(pattern)
   }
-  return column.includes(rule.pattern)
+  return column.includes(pattern)
 }
 
 const countColumnFormatRuleMatches = (rule: TableColumnFormatRule) =>
   props.columns.filter((column) => columnMatchesFormatRule(column, rule)).length
+
+const winningColumnFormatRuleIndex = (column: string) => {
+  for (let index = columnFormatRules.value.length - 1; index >= 0; index -= 1) {
+    const rule = columnFormatRules.value[index]
+    if (!rule || !hasColumnFormatRuleFormat(rule)) {
+      continue
+    }
+    if (columnMatchesFormatRule(column, rule)) {
+      return index
+    }
+  }
+  return -1
+}
+
+const countColumnFormatRuleApplications = (index: number) =>
+  props.columns.filter((column) => winningColumnFormatRuleIndex(column) === index).length
 
 const currentSeries = computed<VizSeriesOption[]>(() => {
   const raw = props.modelValue.series
@@ -1068,12 +1119,28 @@ watch(
                   placeholder="Decimals"
                   @update:model-value="updateColumnFormatRuleDigits(index, $event)"
                 />
-                <UButton color="error" variant="ghost" size="xs" @click="removeColumnFormatRule(index)">
-                  <Trash2 class="h-3.5 w-3.5" />
-                </UButton>
+                <span class="inline-flex items-center gap-1">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Move up"
+                    @click="moveColumnFormatRule(index, -1)"
+                  >↑</UButton>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Move down"
+                    @click="moveColumnFormatRule(index, 1)"
+                  >↓</UButton>
+                  <UButton color="error" variant="ghost" size="xs" @click="removeColumnFormatRule(index)">
+                    <Trash2 class="h-3.5 w-3.5" />
+                  </UButton>
+                </span>
               </div>
               <p class="mt-1 text-xs text-gray-500">
-                Matches {{ countColumnFormatRuleMatches(rule) }} columns
+                Applies {{ countColumnFormatRuleApplications(index) }} of {{ countColumnFormatRuleMatches(rule) }} matches
               </p>
             </div>
           </div>
@@ -1168,7 +1235,7 @@ watch(
                 </span>
               </div>
 
-              <div class="mt-2 grid grid-cols-2 gap-2">
+              <div class="mt-2 grid grid-cols-3 gap-2">
                 <UInput
                   :model-value="exactColumnValueFormats[column]?.prefix ?? ''"
                   placeholder="Prefix"
@@ -1178,6 +1245,14 @@ watch(
                   :model-value="exactColumnValueFormats[column]?.suffix ?? ''"
                   placeholder="Suffix"
                   @update:model-value="updateColumnValueFormat(column, 'suffix', $event)"
+                />
+                <UInput
+                  :model-value="exactColumnValueFormats[column]?.fractionDigits === undefined ? '' : String(exactColumnValueFormats[column]?.fractionDigits)"
+                  type="number"
+                  min="0"
+                  max="20"
+                  placeholder="Decimals"
+                  @update:model-value="updateColumnValueFormat(column, 'fractionDigits', $event)"
                 />
               </div>
             </li>

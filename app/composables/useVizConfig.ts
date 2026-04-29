@@ -38,6 +38,15 @@ const THOUSANDS_SEPARATOR_FORMATTER = new Intl.NumberFormat('de-DE', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
 })
+const createFractionDigitsFormatter = (
+  fractionDigits: number,
+  useThousandsSeparator: boolean
+) =>
+  new Intl.NumberFormat('de-DE', {
+    useGrouping: useThousandsSeparator,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
+  })
 const TABLE_COLUMN_FORMAT_MATCH_MODES = new Set<TableColumnFormatMatchMode>([
   'exact',
   'startsWith',
@@ -1183,9 +1192,18 @@ export const resolveTableColumnValueFormats = (
       continue
     }
 
-    const matchingRule = rules.find((rule) =>
-      hasTableColumnValueFormat(rule) && matchesTableColumnFormatRule(column, rule)
-    )
+    let matchingRule: TableColumnFormatRule | null = null
+    for (let index = rules.length - 1; index >= 0; index -= 1) {
+      const rule = rules[index]
+      if (!rule || !hasTableColumnValueFormat(rule)) {
+        continue
+      }
+      if (matchesTableColumnFormatRule(column, rule)) {
+        matchingRule = rule
+        break
+      }
+    }
+
     if (!matchingRule) {
       continue
     }
@@ -1278,12 +1296,17 @@ export const formatTableCellDisplayValue = (
 ) => {
   const columnFormat = formats[columnKey]
   const numericValue = toNumber(value)
+
+  if (columnFormat?.fractionDigits !== undefined && numericValue === null) {
+    return defaultValue
+  }
+
   const formattedWithFractionDigits =
-    columnFormat?.fractionDigits !== undefined && numericValue !== null
-      ? new Intl.NumberFormat('de-DE', {
-          minimumFractionDigits: columnFormat.fractionDigits,
-          maximumFractionDigits: columnFormat.fractionDigits
-        }).format(numericValue)
+    columnFormat?.fractionDigits !== undefined
+      ? createFractionDigitsFormatter(
+          columnFormat.fractionDigits,
+          useThousandsSeparator
+        ).format(numericValue as number)
       : null
   const normalizedDisplay =
     formattedWithFractionDigits ??
