@@ -160,7 +160,7 @@ export const listEditorDashboards = async (editorId: string): Promise<Dashboard[
      JOIN dashboards d ON d.id = eda.dashboard_id
      WHERE eda.editor_user_id = $1
        AND d.is_active = true
-     ORDER BY d.name ASC`,
+     ORDER BY d.created_at DESC, d.name ASC`,
     [editorId]
   )
 
