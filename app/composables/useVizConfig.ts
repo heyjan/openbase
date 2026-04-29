@@ -648,13 +648,7 @@ const sanitizeVizConfigForType = (
       ...columns.filter((column) => !deduplicatedOrder.includes(column))
     ]
 
-    const configuredVisible = readConfiguredStringArray(
-      normalized,
-      ['visibleColumns', 'visible_columns']
-    )
-    const visibleColumns = configuredVisible.length
-      ? ordered.filter((column) => configuredVisible.includes(column))
-      : ordered
+    const visibleColumns = resolveTableVisibleColumns(ordered, normalized)
 
     normalized.columnOrder = ordered
     normalized.visibleColumns = visibleColumns
