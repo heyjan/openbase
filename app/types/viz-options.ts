@@ -47,6 +47,14 @@ type SharedVizOptions = {
 export type TableColumnValueFormat = {
   prefix?: string
   suffix?: string
+  fractionDigits?: number
+}
+
+export type TableColumnFormatMatchMode = 'exact' | 'startsWith' | 'endsWith' | 'contains'
+
+export type TableColumnFormatRule = TableColumnValueFormat & {
+  matchMode: TableColumnFormatMatchMode
+  pattern: string
 }
 
 export type TableVizOptions = SharedVizOptions & {
@@ -64,6 +72,7 @@ export type TableVizOptions = SharedVizOptions & {
   columnColors?: Record<string, string>
   columnGradients?: Record<string, boolean>
   columnValueFormats?: Record<string, TableColumnValueFormat>
+  columnFormatRules?: TableColumnFormatRule[]
   conditionalFormatting?: ConditionalFormatRule[]
 }
 

@@ -19,6 +19,8 @@ import type {
   QueryPreviewVisualization,
   ScatterCompareSeriesOption,
   ScatterVizMode,
+  TableColumnFormatMatchMode,
+  TableColumnFormatRule,
   TableColumnValueFormat,
   VizSeriesOption
 } from '~/types/viz-options'
@@ -27,10 +29,10 @@ import {
   getCategoryColumns,
   getNumericColumns,
   parseConditionalFormattingRules,
+  parseTableColumnValueFormats,
   resolveColumnColors,
   resolveColumnGradients,
   resolveTableColumnOrder,
-  resolveTableColumnValueFormats,
   resolveTableTabDefault,
   resolveTableTabGroupSeparator,
   resolveTableTabSharedColumns,
@@ -232,8 +234,56 @@ const tableTabGroups = computed(() =>
   ).groups.keys()]
 )
 
+const formatRuleMatchModes: Array<{ label: string; value: TableColumnFormatMatchMode }> = [
+  { label: 'Exact', value: 'exact' },
+  { label: 'Starts with', value: 'startsWith' },
+  { label: 'Ends with', value: 'endsWith' },
+  { label: 'Contains', value: 'contains' }
+]
+
 const columnValueFormats = computed(() =>
-  resolveTableColumnValueFormats(props.columns, props.modelValue)
+  parseTableColumnValueFormats(props.modelValue.columnValueFormats, props.columns)
+)
+
+const exactColumnValueFormats = computed(() =>
+  Object.keys(columnValueFormats.value).length
+    ? columnValueFormats.value
+    : parseTableColumnValueFormats(props.modelValue.column_value_formats, props.columns)
+)
+
+const readColumnFormatRulesForEditor = (value: unknown): TableColumnFormatRule[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return null
+      }
+
+      const record = entry as Record<string, unknown>
+      const matchMode = formatRuleMatchModes.some((option) => option.value === record.matchMode)
+        ? record.matchMode as TableColumnFormatMatchMode
+        : 'endsWith'
+      const fractionDigits =
+        typeof record.fractionDigits === 'number' && Number.isFinite(record.fractionDigits)
+          ? Math.max(0, Math.min(20, Math.trunc(record.fractionDigits)))
+          : undefined
+
+      return {
+        matchMode,
+        pattern: typeof record.pattern === 'string' ? record.pattern : '',
+        prefix: typeof record.prefix === 'string' ? record.prefix : '',
+        suffix: typeof record.suffix === 'string' ? record.suffix : '',
+        fractionDigits
+      } satisfies TableColumnFormatRule
+    })
+    .filter((entry): entry is TableColumnFormatRule => entry !== null)
+}
+
+const columnFormatRules = computed(() =>
+  readColumnFormatRulesForEditor(props.modelValue.columnFormatRules)
 )
 
 const columnColors = computed(() =>
@@ -377,21 +427,34 @@ const updateColumnValueFormat = (
   key: keyof TableColumnValueFormat,
   rawValue: unknown
 ) => {
-  const text = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
   const next: Record<string, TableColumnValueFormat> = {
-    ...columnValueFormats.value
+    ...exactColumnValueFormats.value
   }
   const current: TableColumnValueFormat = {
     ...(next[column] ?? {})
   }
 
-  if (text.trim()) {
-    current[key] = text
+  if (key === 'fractionDigits') {
+    const text = typeof rawValue === 'string' ? rawValue.trim() : String(rawValue ?? '').trim()
+    if (text) {
+      const parsed = Number(text)
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return
+      }
+      current.fractionDigits = Math.min(20, Math.trunc(parsed))
+    } else {
+      delete current.fractionDigits
+    }
   } else {
-    delete current[key]
+    const text = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
+    if (text.trim()) {
+      current[key] = text
+    } else {
+      delete current[key]
+    }
   }
 
-  if (!current.prefix && !current.suffix) {
+  if (!current.prefix && !current.suffix && current.fractionDigits === undefined) {
     delete next[column]
   } else {
     next[column] = current
@@ -401,6 +464,127 @@ const updateColumnValueFormat = (
     columnValueFormats: next
   })
 }
+
+const addColumnFormatRule = () => {
+  updateConfig({
+    columnFormatRules: [
+      ...columnFormatRules.value,
+      {
+        matchMode: 'endsWith',
+        pattern: '',
+        prefix: '',
+        suffix: ''
+      } satisfies TableColumnFormatRule
+    ]
+  })
+}
+
+const removeColumnFormatRule = (index: number) => {
+  updateConfig({
+    columnFormatRules: columnFormatRules.value.filter((_, ruleIndex) => ruleIndex !== index)
+  })
+}
+
+const moveColumnFormatRule = (index: number, direction: -1 | 1) => {
+  const next = [...columnFormatRules.value]
+  const targetIndex = index + direction
+  if (targetIndex < 0 || targetIndex >= next.length) {
+    return
+  }
+
+  const [moved] = next.splice(index, 1)
+  if (!moved) {
+    return
+  }
+  next.splice(targetIndex, 0, moved)
+
+  updateConfig({
+    columnFormatRules: next
+  })
+}
+
+const updateColumnFormatRule = (index: number, patch: Partial<TableColumnFormatRule>) => {
+  const next = [...columnFormatRules.value]
+  const current = next[index]
+  if (!current) {
+    return
+  }
+
+  const merged = {
+    ...current,
+    ...patch
+  }
+
+  if (merged.fractionDigits !== undefined) {
+    const digits = Number(merged.fractionDigits)
+    if (Number.isFinite(digits) && digits >= 0) {
+      merged.fractionDigits = Math.min(20, Math.trunc(digits))
+    } else {
+      delete merged.fractionDigits
+    }
+  }
+
+  next[index] = merged
+  updateConfig({
+    columnFormatRules: next
+  })
+}
+
+const updateColumnFormatRuleText = (
+  index: number,
+  key: 'pattern' | 'prefix' | 'suffix',
+  rawValue: unknown
+) => {
+  updateColumnFormatRule(index, {
+    [key]: typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
+  })
+}
+
+const updateColumnFormatRuleDigits = (index: number, rawValue: unknown) => {
+  const text = typeof rawValue === 'string' ? rawValue.trim() : String(rawValue ?? '').trim()
+  updateColumnFormatRule(index, {
+    fractionDigits: text ? Number(text) : undefined
+  })
+}
+
+const hasColumnFormatRuleFormat = (rule: TableColumnFormatRule) =>
+  Boolean(rule.prefix || rule.suffix || rule.fractionDigits !== undefined)
+
+const columnMatchesFormatRule = (column: string, rule: TableColumnFormatRule) => {
+  const pattern = rule.pattern.trim()
+  if (!pattern) {
+    return false
+  }
+  if (rule.matchMode === 'exact') {
+    return column === pattern
+  }
+  if (rule.matchMode === 'startsWith') {
+    return column.startsWith(pattern)
+  }
+  if (rule.matchMode === 'endsWith') {
+    return column.endsWith(pattern)
+  }
+  return column.includes(pattern)
+}
+
+const countColumnFormatRuleMatches = (rule: TableColumnFormatRule) =>
+  props.columns.filter((column) => columnMatchesFormatRule(column, rule)).length
+
+const winningColumnFormatRuleIndex = (column: string) => {
+  for (let index = columnFormatRules.value.length - 1; index >= 0; index -= 1) {
+    const rule = columnFormatRules.value[index]
+    if (!rule || !hasColumnFormatRuleFormat(rule)) {
+      continue
+    }
+    if (columnMatchesFormatRule(column, rule)) {
+      return index
+    }
+  }
+  return -1
+}
+
+const countColumnFormatRuleApplications = (index: number) =>
+  props.columns.filter((column) => winningColumnFormatRuleIndex(column) === index).length
 
 const currentSeries = computed<VizSeriesOption[]>(() => {
   const raw = props.modelValue.series
@@ -890,6 +1074,79 @@ watch(
         </div>
 
         <div>
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Format rules</p>
+            <UButton color="neutral" variant="outline" size="xs" @click="addColumnFormatRule">Add rule</UButton>
+          </div>
+
+          <div v-if="!columnFormatRules.length" class="rounded border border-gray-200 bg-gray-50 px-2 py-2 text-sm text-gray-500">
+            No rules
+          </div>
+
+          <div v-else class="space-y-2">
+            <div
+              v-for="(rule, index) in columnFormatRules"
+              :key="`format-rule-${index}`"
+              class="rounded border border-gray-200 bg-gray-50 p-2"
+            >
+              <div class="grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto]">
+                <USelect
+                  v-bind="sharedSelectProps"
+                  :items="formatRuleMatchModes"
+                  :model-value="rule.matchMode"
+                  @update:model-value="updateColumnFormatRule(index, { matchMode: ($event || 'endsWith') as TableColumnFormatMatchMode })"
+                />
+                <UInput
+                  :model-value="rule.pattern"
+                  placeholder="Pattern"
+                  @update:model-value="updateColumnFormatRuleText(index, 'pattern', $event)"
+                />
+                <UInput
+                  :model-value="rule.prefix ?? ''"
+                  placeholder="Prefix"
+                  @update:model-value="updateColumnFormatRuleText(index, 'prefix', $event)"
+                />
+                <UInput
+                  :model-value="rule.suffix ?? ''"
+                  placeholder="Suffix"
+                  @update:model-value="updateColumnFormatRuleText(index, 'suffix', $event)"
+                />
+                <UInput
+                  :model-value="rule.fractionDigits === undefined ? '' : String(rule.fractionDigits)"
+                  type="number"
+                  min="0"
+                  max="20"
+                  placeholder="Decimals"
+                  @update:model-value="updateColumnFormatRuleDigits(index, $event)"
+                />
+                <span class="inline-flex items-center gap-1">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Move up"
+                    @click="moveColumnFormatRule(index, -1)"
+                  >↑</UButton>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Move down"
+                    @click="moveColumnFormatRule(index, 1)"
+                  >↓</UButton>
+                  <UButton color="error" variant="ghost" size="xs" @click="removeColumnFormatRule(index)">
+                    <Trash2 class="h-3.5 w-3.5" />
+                  </UButton>
+                </span>
+              </div>
+              <p class="mt-1 text-xs text-gray-500">
+                Applies {{ countColumnFormatRuleApplications(index) }} of {{ countColumnFormatRuleMatches(rule) }} matches
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div>
           <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Columns</p>
           <ul class="mt-2 space-y-1.5">
             <li
@@ -978,16 +1235,24 @@ watch(
                 </span>
               </div>
 
-              <div class="mt-2 grid grid-cols-2 gap-2">
+              <div class="mt-2 grid grid-cols-3 gap-2">
                 <UInput
-                  :model-value="columnValueFormats[column]?.prefix ?? ''"
+                  :model-value="exactColumnValueFormats[column]?.prefix ?? ''"
                   placeholder="Prefix"
                   @update:model-value="updateColumnValueFormat(column, 'prefix', $event)"
                 />
                 <UInput
-                  :model-value="columnValueFormats[column]?.suffix ?? ''"
+                  :model-value="exactColumnValueFormats[column]?.suffix ?? ''"
                   placeholder="Suffix"
                   @update:model-value="updateColumnValueFormat(column, 'suffix', $event)"
+                />
+                <UInput
+                  :model-value="exactColumnValueFormats[column]?.fractionDigits === undefined ? '' : String(exactColumnValueFormats[column]?.fractionDigits)"
+                  type="number"
+                  min="0"
+                  max="20"
+                  placeholder="Decimals"
+                  @update:model-value="updateColumnValueFormat(column, 'fractionDigits', $event)"
                 />
               </div>
             </li>
