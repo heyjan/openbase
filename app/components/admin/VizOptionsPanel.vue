@@ -387,15 +387,15 @@ const toggleVisibleColumn = (column: string) => {
 
 const updateTabSharedColumns = (columns: string[]) => {
   const nextColumns = orderedColumns.value.filter((entry) => columns.includes(entry))
-  const nextConfig = { ...props.modelValue }
+  const nextConfig = Object.fromEntries(
+    Object.entries(props.modelValue).filter(
+      ([key]) => key !== 'tabSharedColumns' && key !== 'tab_shared_columns'
+    )
+  )
 
   if (nextColumns.length) {
     nextConfig.tabSharedColumns = nextColumns
-  } else {
-    delete nextConfig.tabSharedColumns
   }
-
-  delete nextConfig.tab_shared_columns
   emitNext(nextConfig)
 }
 
@@ -574,12 +574,13 @@ const updateColumnFormatRuleColor = (index: number, color: string) => {
     return
   }
 
-  next[index] = {
+  const updated = {
     ...current,
     color
   }
+  next[index] = updated
 
-  const prunedColumnColors = pruneColumnColorsForFormatRule(current)
+  const prunedColumnColors = pruneColumnColorsForFormatRules([current, updated])
   const nextConfig = {
     ...props.modelValue,
     columnFormatRules: next
@@ -603,7 +604,7 @@ const clearColumnFormatRuleColor = (index: number) => {
   delete updated.color
   next[index] = updated
 
-  const prunedColumnColors = pruneColumnColorsForFormatRule(current)
+  const prunedColumnColors = pruneColumnColorsForFormatRules([current])
   const nextConfig = {
     ...props.modelValue,
     columnFormatRules: next
@@ -636,21 +637,23 @@ const columnMatchesFormatRule = (column: string, rule: TableColumnFormatRule) =>
   return column.includes(pattern)
 }
 
-const pruneColumnColorsForFormatRule = (rule: TableColumnFormatRule) => {
-  if (!rule.color) {
-    return undefined
-  }
-
+const pruneColumnColorsForFormatRules = (rules: TableColumnFormatRule[]) => {
   const next = { ...columnColors.value }
   let changed = false
 
-  for (const column of orderedColumns.value) {
-    if (next[column] !== rule.color || !columnMatchesFormatRule(column, rule)) {
+  for (const rule of rules) {
+    if (!rule.color) {
       continue
     }
 
-    delete next[column]
-    changed = true
+    for (const column of orderedColumns.value) {
+      if (next[column] !== rule.color || !columnMatchesFormatRule(column, rule)) {
+        continue
+      }
+
+      delete next[column]
+      changed = true
+    }
   }
 
   return changed ? next : undefined
