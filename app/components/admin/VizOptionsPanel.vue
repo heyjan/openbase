@@ -276,7 +276,10 @@ const readColumnFormatRulesForEditor = (value: unknown): TableColumnFormatRule[]
         pattern: typeof record.pattern === 'string' ? record.pattern : '',
         prefix: typeof record.prefix === 'string' ? record.prefix : '',
         suffix: typeof record.suffix === 'string' ? record.suffix : '',
-        fractionDigits
+        fractionDigits,
+        color: typeof record.color === 'string' && record.color.trim()
+          ? record.color.trim()
+          : undefined
       } satisfies TableColumnFormatRule
     })
     .filter((entry): entry is TableColumnFormatRule => entry !== null)
@@ -547,8 +550,28 @@ const updateColumnFormatRuleDigits = (index: number, rawValue: unknown) => {
   })
 }
 
+const updateColumnFormatRuleColor = (index: number, color: string) => {
+  updateColumnFormatRule(index, { color })
+}
+
+const clearColumnFormatRuleColor = (index: number) => {
+  const next = [...columnFormatRules.value]
+  const current = next[index]
+  if (!current) {
+    return
+  }
+
+  const updated = { ...current }
+  delete updated.color
+  next[index] = updated
+
+  updateConfig({
+    columnFormatRules: next
+  })
+}
+
 const hasColumnFormatRuleFormat = (rule: TableColumnFormatRule) =>
-  Boolean(rule.prefix || rule.suffix || rule.fractionDigits !== undefined)
+  Boolean(rule.prefix || rule.suffix || rule.fractionDigits !== undefined || rule.color)
 
 const columnMatchesFormatRule = (column: string, rule: TableColumnFormatRule) => {
   const pattern = rule.pattern.trim()
@@ -1089,7 +1112,7 @@ watch(
               :key="`format-rule-${index}`"
               class="rounded border border-gray-200 bg-gray-50 p-2"
             >
-              <div class="grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto]">
+              <div class="grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto_auto]">
                 <USelect
                   v-bind="sharedSelectProps"
                   :items="formatRuleMatchModes"
@@ -1119,6 +1142,35 @@ watch(
                   placeholder="Decimals"
                   @update:model-value="updateColumnFormatRuleDigits(index, $event)"
                 />
+                <span class="inline-flex items-center gap-1">
+                  <label
+                    class="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded border border-gray-300 bg-white"
+                    title="Background color"
+                  >
+                    <input
+                      :value="rule.color ?? '#2563eb'"
+                      type="color"
+                      class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      @input="updateColumnFormatRuleColor(index, ($event.target as HTMLInputElement).value)"
+                    >
+                    <span
+                      v-if="rule.color"
+                      class="h-3.5 w-3.5 rounded border border-gray-300"
+                      :style="{ backgroundColor: rule.color }"
+                    />
+                    <Palette v-else class="h-3.5 w-3.5 text-gray-500" />
+                  </label>
+                  <UButton
+                    v-if="rule.color"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Clear color"
+                    @click="clearColumnFormatRuleColor(index)"
+                  >
+                    <Trash2 class="h-3.5 w-3.5" />
+                  </UButton>
+                </span>
                 <span class="inline-flex items-center gap-1">
                   <UButton
                     color="neutral"

@@ -55,6 +55,7 @@ export type TableColumnFormatMatchMode = 'exact' | 'startsWith' | 'endsWith' | '
 export type TableColumnFormatRule = TableColumnValueFormat & {
   matchMode: TableColumnFormatMatchMode
   pattern: string
+  color?: string
 }
 
 export type TableVizOptions = SharedVizOptions & {
