@@ -240,6 +240,7 @@ const parseTableColumnFormatRule = (value: unknown): TableColumnFormatRule | nul
       : typeof value.fraction_digits === 'number' && Number.isFinite(value.fraction_digits)
         ? Math.max(0, Math.min(20, Math.trunc(value.fraction_digits)))
         : undefined
+  const color = normalizeHexColor(value.color)
 
   if (!matchMode) {
     return null
@@ -250,7 +251,8 @@ const parseTableColumnFormatRule = (value: unknown): TableColumnFormatRule | nul
     pattern,
     prefix,
     suffix,
-    fractionDigits
+    fractionDigits,
+    color: color ?? undefined
   }
 }
 
@@ -1220,24 +1222,44 @@ export const resolveTableColumnValueFormats = (
 
 export const resolveColumnColors = (columns: string[], config: Record<string, unknown>) => {
   const raw = readConfiguredValue(config, ['columnColors', 'column_colors'])
-  if (!isRecord(raw)) {
-    return {} as Record<string, string>
-  }
 
   const allowed = new Set(columns)
   const next: Record<string, string> = {}
 
-  for (const [column, value] of Object.entries(raw)) {
-    if (!allowed.has(column)) {
+  if (isRecord(raw)) {
+    for (const [column, value] of Object.entries(raw)) {
+      if (!allowed.has(column)) {
+        continue
+      }
+
+      const color = normalizeHexColor(value)
+      if (!color) {
+        continue
+      }
+
+      next[column] = color
+    }
+  }
+
+  const rules = readConfiguredTableColumnFormatRules(config)
+  if (!rules.length) {
+    return next
+  }
+
+  for (const column of columns) {
+    if (next[column]) {
       continue
     }
 
-    const color = normalizeHexColor(value)
-    if (!color) {
-      continue
-    }
+    for (let index = rules.length - 1; index >= 0; index -= 1) {
+      const rule = rules[index]
+      if (!rule?.color || !matchesTableColumnFormatRule(column, rule)) {
+        continue
+      }
 
-    next[column] = color
+      next[column] = rule.color
+      break
+    }
   }
 
   return next
