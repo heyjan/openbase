@@ -30,8 +30,8 @@ import {
   getNumericColumns,
   parseConditionalFormattingRules,
   parseTableColumnValueFormats,
-  resolveColumnColors,
   resolveColumnGradients,
+  resolveExplicitColumnColors,
   resolveTableColumnOrder,
   resolveTableTabDefault,
   resolveTableTabGroupSeparator,
@@ -62,6 +62,7 @@ const emit = defineEmits<{
 
 const isOpen = ref(false)
 const draggingColumn = ref('')
+const sharedColumnSearch = ref('')
 const SELECT_NONE_VALUE = '__none__'
 const DEFAULT_SERIES_COLORS = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
 const sharedSelectProps = {
@@ -234,6 +235,16 @@ const tableTabGroups = computed(() =>
   ).groups.keys()]
 )
 
+const filteredTableTabSharedColumns = computed(() => {
+  const query = sharedColumnSearch.value.trim().toLowerCase()
+  const selected = new Set(tableTabSharedColumns.value)
+
+  return orderedColumns.value
+    .filter((column) => !selected.has(column))
+    .filter((column) => !query || column.toLowerCase().includes(query))
+    .slice(0, 12)
+})
+
 const formatRuleMatchModes: Array<{ label: string; value: TableColumnFormatMatchMode }> = [
   { label: 'Exact', value: 'exact' },
   { label: 'Starts with', value: 'startsWith' },
@@ -290,7 +301,7 @@ const columnFormatRules = computed(() =>
 )
 
 const columnColors = computed(() =>
-  resolveColumnColors(orderedColumns.value, props.modelValue)
+  resolveExplicitColumnColors(orderedColumns.value, props.modelValue)
 )
 
 const columnGradients = computed(() =>
@@ -374,15 +385,8 @@ const toggleVisibleColumn = (column: string) => {
   })
 }
 
-const toggleTabSharedColumn = (column: string) => {
-  const next = new Set(tableTabSharedColumns.value)
-  if (next.has(column)) {
-    next.delete(column)
-  } else {
-    next.add(column)
-  }
-
-  const nextColumns = orderedColumns.value.filter((entry) => next.has(entry))
+const updateTabSharedColumns = (columns: string[]) => {
+  const nextColumns = orderedColumns.value.filter((entry) => columns.includes(entry))
   const nextConfig = { ...props.modelValue }
 
   if (nextColumns.length) {
@@ -393,6 +397,19 @@ const toggleTabSharedColumn = (column: string) => {
 
   delete nextConfig.tab_shared_columns
   emitNext(nextConfig)
+}
+
+const addTabSharedColumn = (column: string) => {
+  if (!orderedColumns.value.includes(column)) {
+    return
+  }
+
+  updateTabSharedColumns([...tableTabSharedColumns.value, column])
+  sharedColumnSearch.value = ''
+}
+
+const removeTabSharedColumn = (column: string) => {
+  updateTabSharedColumns(tableTabSharedColumns.value.filter((entry) => entry !== column))
 }
 
 const updateColumnColor = (column: string, color: string) => {
@@ -551,7 +568,28 @@ const updateColumnFormatRuleDigits = (index: number, rawValue: unknown) => {
 }
 
 const updateColumnFormatRuleColor = (index: number, color: string) => {
-  updateColumnFormatRule(index, { color })
+  const next = [...columnFormatRules.value]
+  const current = next[index]
+  if (!current) {
+    return
+  }
+
+  next[index] = {
+    ...current,
+    color
+  }
+
+  const prunedColumnColors = pruneColumnColorsForFormatRule(current)
+  const nextConfig = {
+    ...props.modelValue,
+    columnFormatRules: next
+  }
+
+  if (prunedColumnColors) {
+    nextConfig.columnColors = Object.keys(prunedColumnColors).length ? prunedColumnColors : undefined
+  }
+
+  emitNext(nextConfig)
 }
 
 const clearColumnFormatRuleColor = (index: number) => {
@@ -565,9 +603,17 @@ const clearColumnFormatRuleColor = (index: number) => {
   delete updated.color
   next[index] = updated
 
-  updateConfig({
+  const prunedColumnColors = pruneColumnColorsForFormatRule(current)
+  const nextConfig = {
+    ...props.modelValue,
     columnFormatRules: next
-  })
+  }
+
+  if (prunedColumnColors) {
+    nextConfig.columnColors = Object.keys(prunedColumnColors).length ? prunedColumnColors : undefined
+  }
+
+  emitNext(nextConfig)
 }
 
 const hasColumnFormatRuleFormat = (rule: TableColumnFormatRule) =>
@@ -588,6 +634,26 @@ const columnMatchesFormatRule = (column: string, rule: TableColumnFormatRule) =>
     return column.endsWith(pattern)
   }
   return column.includes(pattern)
+}
+
+const pruneColumnColorsForFormatRule = (rule: TableColumnFormatRule) => {
+  if (!rule.color) {
+    return undefined
+  }
+
+  const next = { ...columnColors.value }
+  let changed = false
+
+  for (const column of orderedColumns.value) {
+    if (next[column] !== rule.color || !columnMatchesFormatRule(column, rule)) {
+      continue
+    }
+
+    delete next[column]
+    changed = true
+  }
+
+  return changed ? next : undefined
 }
 
 const countColumnFormatRuleMatches = (rule: TableColumnFormatRule) =>
@@ -1078,19 +1144,48 @@ watch(
 
             <div>
               <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Shared columns</p>
-              <div class="mt-2 grid gap-2 grid-cols-1">
-                <label
-                  v-for="column in orderedColumns"
-                  :key="`tab-shared-${column}`"
-                  class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+              <UInput
+                v-model="sharedColumnSearch"
+                class="mt-2"
+                placeholder="Search columns"
+                @keydown.enter.prevent="filteredTableTabSharedColumns[0] && addTabSharedColumn(filteredTableTabSharedColumns[0])"
+              />
+
+              <div v-if="tableTabSharedColumns.length" class="mt-2 flex flex-wrap gap-1.5">
+                <span
+                  v-for="column in tableTabSharedColumns"
+                  :key="`tab-shared-selected-${column}`"
+                  class="inline-flex max-w-full items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
                 >
-                  <input
-                    type="checkbox"
-                    :checked="tableTabSharedColumns.includes(column)"
-                    @change="toggleTabSharedColumn(column)"
-                  >
                   <span class="truncate">{{ column }}</span>
-                </label>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Remove"
+                    @click="removeTabSharedColumn(column)"
+                  >
+                    <Trash2 class="h-3 w-3" />
+                  </UButton>
+                </span>
+              </div>
+
+              <div
+                v-if="sharedColumnSearch.trim()"
+                class="mt-2 max-h-48 overflow-y-auto rounded border border-gray-200 bg-white p-1"
+              >
+                <button
+                  v-for="column in filteredTableTabSharedColumns"
+                  :key="`tab-shared-result-${column}`"
+                  type="button"
+                  class="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                  @click="addTabSharedColumn(column)"
+                >
+                  {{ column }}
+                </button>
+                <p v-if="!filteredTableTabSharedColumns.length" class="px-2 py-1.5 text-xs text-gray-500">
+                  No matches
+                </p>
               </div>
             </div>
           </div>

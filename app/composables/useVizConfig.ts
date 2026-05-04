@@ -773,7 +773,7 @@ const sanitizeVizConfigForType = (
       typeof tabSeparator === 'string' && tabSeparator.length ? tabSeparator : ' '
     normalized.tabSharedColumns = resolveTableTabSharedColumns(ordered, normalized)
     normalized.tabDefault = readConfiguredString(normalized, ['tabDefault', 'tab_default'])
-    normalized.columnColors = resolveColumnColors(columns, normalized)
+    normalized.columnColors = resolveExplicitColumnColors(columns, normalized)
     normalized.columnGradients = resolveColumnGradients(columns, normalized)
     normalized.columnValueFormats = readConfiguredTableColumnValueFormats(normalized, columns)
     normalized.columnFormatRules = readConfiguredTableColumnFormatRules(normalized)
@@ -1220,7 +1220,7 @@ export const resolveTableColumnValueFormats = (
   return resolved
 }
 
-export const resolveColumnColors = (columns: string[], config: Record<string, unknown>) => {
+export const resolveExplicitColumnColors = (columns: string[], config: Record<string, unknown>) => {
   const raw = readConfiguredValue(config, ['columnColors', 'column_colors'])
 
   const allowed = new Set(columns)
@@ -1241,6 +1241,11 @@ export const resolveColumnColors = (columns: string[], config: Record<string, un
     }
   }
 
+  return next
+}
+
+export const resolveColumnColors = (columns: string[], config: Record<string, unknown>) => {
+  const next = resolveExplicitColumnColors(columns, config)
   const rules = readConfiguredTableColumnFormatRules(config)
   if (!rules.length) {
     return next
