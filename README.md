@@ -98,3 +98,4 @@ npm run test:e2e
 - Product specs: `documentation/spec.md`
 - Feature guide: `documentation/features.md`
 - Security and RBAC planning: `documentation/database-integration-rbac-spec.md`
+
