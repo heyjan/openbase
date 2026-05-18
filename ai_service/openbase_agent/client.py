@@ -36,10 +36,30 @@ class OpenbaseClient:
             response.raise_for_status()
             return AgentContext.model_validate(response.json())
 
-    async def create_dashboard(self, message: str, public_origin: str | None) -> DashboardArtifact:
+    async def create_dashboard(
+        self,
+        message: str,
+        public_origin: str | None,
+        *,
+        data_source_id: str | None = None,
+        title: str | None = None,
+        sql: str | None = None,
+        module_type: str | None = None,
+        visualization_config: dict[str, Any] | None = None,
+    ) -> DashboardArtifact:
         payload: dict[str, Any] = {"message": message}
         if public_origin:
             payload["publicOrigin"] = public_origin
+        if data_source_id:
+            payload["dataSourceId"] = data_source_id
+        if title:
+            payload["title"] = title
+        if sql:
+            payload["sql"] = sql
+        if module_type:
+            payload["moduleType"] = module_type
+        if visualization_config is not None:
+            payload["visualizationConfig"] = visualization_config
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(

@@ -78,11 +78,18 @@ agent = Agent(
     deps_type=AgentDeps,
     output_type=AgentFinalResponse,
     instructions=(
-        "You are the Openbase dashboard agent. You can inspect connected databases, "
-        "inspect the supported ECharts catalog, and create dashboards through tools. "
-        "For requests that ask for revenue month over month for DE and UK on a line chart, "
-        "call create_revenue_month_over_month_dashboard. Return the created share URL, SQL, "
-        "and concise steps. Do not invent data or links."
+        "You are the Openbase dashboard agent. Your job is to answer analytics requests by "
+        "creating read-only SQL, choosing one supported ECharts visualization, creating a "
+        "dashboard, and returning the shared link. Always inspect list_connected_databases "
+        "before writing SQL so you know the available data sources, tables, columns, sample "
+        "values, and chart catalog. Use only SELECT or WITH queries. Never invent tables, "
+        "columns, data, IDs, or links. Choose the chart type from the provided catalog and "
+        "pass the required visualization config to create_dashboard_from_sql. If the request "
+        "is ambiguous, make the smallest reasonable assumption and mention it in the steps. "
+        "If the available schema cannot answer the request, return a helpful message explaining "
+        "what data or clarification is missing instead of creating a dashboard. PDF, Excel, "
+        "and email delivery tools are planned but not available yet, so do not promise those "
+        "actions."
     ),
 )
 
@@ -94,30 +101,25 @@ async def list_connected_databases(ctx: RunContext[AgentDeps]) -> AgentContext:
 
 
 @agent.tool
-async def create_revenue_month_over_month_dashboard(
+async def create_dashboard_from_sql(
     ctx: RunContext[AgentDeps],
+    title: str,
+    data_source_id: str,
+    sql: str,
+    module_type: str,
+    visualization_config: dict[str, Any],
     prompt: str,
 ) -> DashboardArtifact:
-    """Create a saved SQL query, line chart visualization, dashboard, and shared link for the prompt."""
-    return await ctx.deps.client.create_dashboard(prompt, ctx.deps.public_origin)
-
-
-@agent.tool
-async def create_pdf_export(ctx: RunContext[AgentDeps], dashboard_slug: str) -> str:
-    """Future tool placeholder for creating a PDF export from a dashboard slug."""
-    return f"PDF export is registered as a planned tool for dashboard {dashboard_slug}."
-
-
-@agent.tool
-async def create_excel_file(ctx: RunContext[AgentDeps], query_id: str) -> str:
-    """Future tool placeholder for exporting saved query data to Excel."""
-    return f"Excel export is registered as a planned tool for query {query_id}."
-
-
-@agent.tool
-async def email_file(ctx: RunContext[AgentDeps], file_id: str, email: str) -> str:
-    """Future tool placeholder for emailing a generated file to a recipient."""
-    return f"Email delivery is registered as a planned tool for {file_id} to {email}."
+    """Create a saved query, visualization, dashboard, and shared link from generated read-only SQL."""
+    return await ctx.deps.client.create_dashboard(
+        prompt,
+        ctx.deps.public_origin,
+        data_source_id=data_source_id,
+        title=title,
+        sql=sql,
+        module_type=module_type,
+        visualization_config=visualization_config,
+    )
 
 
 def _response_from_artifact(artifact: DashboardArtifact, runtime: str, tool_calls: list[str]) -> ChatResponse:
@@ -150,6 +152,14 @@ def _response_from_agent_output(output: AgentFinalResponse, runtime: str) -> Cha
     )
 
 
+def _can_use_revenue_fallback(message: str) -> bool:
+    normalized = message.lower()
+    return (
+        any(token in normalized for token in ("revenue", "sales", "turnover", "gmv"))
+        and any(token in normalized for token in ("month", "monthly", "mom", "month over month"))
+    )
+
+
 async def run_chat(
     message: str,
     public_origin: str | None,
@@ -162,12 +172,43 @@ async def run_chat(
         and not os.getenv("OPENAI_API_KEY")
         and _model_name().startswith("openai:")
     ):
-        artifact = await deps.client.create_dashboard(message, public_origin)
-        return _response_from_artifact(
-            artifact,
-            runtime="pydantic-ai-service:fallback-no-model-key",
-            tool_calls=["create_revenue_month_over_month_dashboard"],
+        if not _can_use_revenue_fallback(message):
+            return ChatResponse(
+                message=(
+                    "AI provider credentials are not configured. Configure an AI provider in "
+                    "Admin Settings to let the agent inspect schema, write SQL, choose a chart, "
+                    "and create dashboards for general analytics questions."
+                ),
+                steps=["Skipped dashboard creation because no AI model credentials are available."],
+                agentRuntime="pydantic-ai-service:no-model-key",
+            )
+        try:
+            artifact = await deps.client.create_dashboard(message, public_origin)
+            return _response_from_artifact(
+                artifact,
+                runtime="pydantic-ai-service:fallback-no-model-key",
+                tool_calls=["revenue_month_over_month_fallback"],
+            )
+        except Exception as exc:
+            return ChatResponse(
+                message=(
+                    "I could not create the fallback revenue dashboard. Configure an AI provider "
+                    "for general SQL/dashboard generation, or check the connected data source schema."
+                ),
+                steps=[f"Fallback dashboard creation failed: {type(exc).__name__}: {exc}"],
+                agentRuntime="pydantic-ai-service:fallback-error",
+            )
+
+    try:
+        result = await agent.run(message, deps=deps, model=_build_model(provider_settings))
+    except Exception as exc:
+        return ChatResponse(
+            message=(
+                "I could not complete the dashboard request. Check the AI provider credentials, "
+                "connected data sources, and whether the requested fields exist."
+            ),
+            steps=[f"Pydantic AI run failed: {type(exc).__name__}: {exc}"],
+            agentRuntime="pydantic-ai:error",
         )
 
-    result = await agent.run(message, deps=deps, model=_build_model(provider_settings))
     return _response_from_agent_output(result.output, runtime="pydantic-ai")

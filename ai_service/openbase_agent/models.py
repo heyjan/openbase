@@ -63,6 +63,13 @@ class DataSourceSummary(BaseModel):
     name: str
     type: str
     is_active: bool
+    tables: list["TableSummary"] = Field(default_factory=list)
+
+
+class TableSummary(BaseModel):
+    name: str
+    columns: list[str] = Field(default_factory=list)
+    sampleRows: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentContext(BaseModel):

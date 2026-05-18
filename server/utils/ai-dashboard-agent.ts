@@ -16,6 +16,11 @@ import type { ModuleType } from '~/types/module'
 type AgentChatInput = {
   message: string
   publicOrigin?: string
+  dataSourceId?: string
+  title?: string
+  sql?: string
+  moduleType?: string
+  visualizationConfig?: Record<string, unknown>
 }
 
 type SampledTable = {
@@ -32,6 +37,20 @@ type FieldPlan = {
   dateColumn: string
   countryColumn: string
   countries: Array<{ label: string; aliases: string[] }>
+}
+
+type AgentTableContext = {
+  name: string
+  columns: string[]
+  sampleRows: Record<string, unknown>[]
+}
+
+type AgentDataSourceContext = {
+  id: string
+  name: string
+  type: string
+  is_active: boolean
+  tables: AgentTableContext[]
 }
 
 export type AgentChatResult = {
@@ -55,7 +74,10 @@ export type AgentChatResult = {
 
 const MAX_TABLES_PER_SOURCE = 20
 const SAMPLE_ROWS = 25
+const CONTEXT_SAMPLE_ROWS = 5
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_$]*$/
+const CHART_COLORS = ['#175cd3', '#12b76a', '#f79009', '#7c3aed', '#e31b54', '#06aed4']
+const SUPPORTED_AGENT_MODULE_TYPES = new Set(AGENT_CHART_CATALOG.map((entry) => entry.moduleType))
 const COUNTRY_ALIASES: Record<string, string[]> = {
   DE: ['DE', 'Germany', 'Deutschland'],
   UK: ['UK', 'GB', 'Great Britain', 'United Kingdom']
@@ -99,6 +121,34 @@ const hasDateLikeValue = (value: unknown) => {
   }
   const parsed = new Date(value)
   return !Number.isNaN(parsed.getTime())
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const parseRequiredString = (value: unknown, fieldName: string) => {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw createError({ statusCode: 400, statusMessage: `${fieldName} is required` })
+  }
+  return value.trim()
+}
+
+const parseOptionalRecord = (value: unknown, fieldName: string) => {
+  if (value === undefined || value === null) {
+    return {}
+  }
+  if (!isRecord(value)) {
+    throw createError({ statusCode: 400, statusMessage: `${fieldName} must be an object` })
+  }
+  return value
+}
+
+const parseAgentModuleType = (value: unknown): ModuleType => {
+  const moduleType = parseRequiredString(value, 'moduleType')
+  if (!SUPPORTED_AGENT_MODULE_TYPES.has(moduleType)) {
+    throw createError({ statusCode: 400, statusMessage: `Unsupported chart type: ${moduleType}` })
+  }
+  return moduleType as ModuleType
 }
 
 const quoteIdentifier = (value: string, dataSourceType: string) => {
@@ -232,6 +282,46 @@ const loadSchemaSamples = async (message: string, steps: string[]) => {
 
   sampledTables.sort((left, right) => right.score - left.score)
   return sampledTables
+}
+
+export const getAgentSchemaContext = async () => {
+  const dataSources = (await listDataSources()).filter((source) => source.is_active)
+  const context: AgentDataSourceContext[] = []
+
+  for (const dataSource of dataSources) {
+    const tables: AgentTableContext[] = []
+    for (const tableName of (await readTables(dataSource)).slice(0, MAX_TABLES_PER_SOURCE)) {
+      try {
+        const sample = await readSampleRows(dataSource, tableName)
+        tables.push({
+          name: tableName,
+          columns: sample.columns.length
+            ? sample.columns
+            : Object.keys(sample.rows[0] ?? {}),
+          sampleRows: sample.rows.slice(0, CONTEXT_SAMPLE_ROWS)
+        })
+      } catch {
+        tables.push({
+          name: tableName,
+          columns: [],
+          sampleRows: []
+        })
+      }
+    }
+
+    context.push({
+      id: dataSource.id,
+      name: dataSource.name,
+      type: dataSource.type,
+      is_active: dataSource.is_active,
+      tables
+    })
+  }
+
+  return {
+    charts: AGENT_CHART_CATALOG,
+    dataSources: context
+  }
 }
 
 const selectColumn = (
@@ -403,17 +493,191 @@ const originFromEvent = (event: H3Event, publicOrigin?: string) => {
     return publicOrigin.replace(/\/$/, '')
   }
 
-  const protocol = event.node.req.headers['x-forwarded-proto'] || 'http'
-  const host = event.node.req.headers['x-forwarded-host'] || event.node.req.headers.host || 'localhost:3000'
+  const rawProtocol = event.node.req.headers['x-forwarded-proto']
+  const rawHost = event.node.req.headers['x-forwarded-host'] || event.node.req.headers.host
+  const protocol = Array.isArray(rawProtocol) ? rawProtocol[0] : rawProtocol || 'http'
+  const host = Array.isArray(rawHost) ? rawHost[0] : rawHost || 'localhost:3000'
   return `${protocol}://${host}`
 }
 
-export const runDashboardAgent = async (event: H3Event, input: AgentChatInput): Promise<AgentChatResult> => {
-  const message = typeof input.message === 'string' ? input.message.trim() : ''
-  if (!message) {
-    throw createError({ statusCode: 400, statusMessage: 'message is required' })
+const isNumericPreviewColumn = (rows: Record<string, unknown>[], column: string) =>
+  rows.some((row) => isNumericValue(row[column]))
+
+const isDatePreviewColumn = (rows: Record<string, unknown>[], column: string) =>
+  rows.some((row) => hasDateLikeValue(row[column]))
+
+const inferVisualizationConfig = (
+  moduleType: ModuleType,
+  preview: { columns: string[]; rows: Record<string, unknown>[] },
+  providedConfig: Record<string, unknown>
+) => {
+  const columns = preview.columns
+  const numericColumns = columns.filter((column) => isNumericPreviewColumn(preview.rows, column))
+  const dateColumns = columns.filter((column) => isDatePreviewColumn(preview.rows, column))
+  const categoryColumns = columns.filter((column) => !numericColumns.includes(column))
+  const xField = String(
+    providedConfig.xField ||
+    providedConfig.x_field ||
+    dateColumns[0] ||
+    categoryColumns[0] ||
+    columns[0] ||
+    ''
+  )
+  const seriesFields = numericColumns.filter((column) => column !== xField)
+  const series = Array.isArray(providedConfig.series) && providedConfig.series.length
+    ? providedConfig.series
+    : seriesFields.map((field, index) => ({
+        field,
+        label: titleCase(field),
+        color: CHART_COLORS[index % CHART_COLORS.length]
+      }))
+
+  if (moduleType === 'kpi_card') {
+    return {
+      valueField: providedConfig.valueField || numericColumns[0] || columns[0],
+      label: providedConfig.label,
+      prefix: providedConfig.prefix,
+      suffix: providedConfig.suffix,
+      ...providedConfig
+    }
   }
 
+  if (moduleType === 'pie_chart' || moduleType === 'waterfall_chart') {
+    return {
+      categoryField: providedConfig.categoryField || providedConfig.category_field || categoryColumns[0] || columns[0],
+      valueField: providedConfig.valueField || providedConfig.value_field || numericColumns[0] || columns[1] || columns[0],
+      showLegend: providedConfig.showLegend ?? true,
+      ...providedConfig
+    }
+  }
+
+  if (moduleType === 'scatter_chart') {
+    return {
+      xField: providedConfig.xField || numericColumns[0] || columns[0],
+      yField: providedConfig.yField || numericColumns.find((column) => column !== numericColumns[0]) || columns[1] || columns[0],
+      categoryField: providedConfig.categoryField || providedConfig.category_field,
+      sizeField: providedConfig.sizeField || providedConfig.size_field,
+      showLegend: providedConfig.showLegend ?? true,
+      ...providedConfig
+    }
+  }
+
+  if (moduleType === 'data_table') {
+    return {
+      visibleColumns: providedConfig.visibleColumns || columns,
+      showSearch: providedConfig.showSearch ?? true,
+      ...providedConfig
+    }
+  }
+
+  return {
+    xField,
+    series,
+    showLegend: providedConfig.showLegend ?? true,
+    ...providedConfig
+  }
+}
+
+const createDashboardFromSql = async (
+  event: H3Event,
+  input: AgentChatInput
+): Promise<AgentChatResult> => {
+  const message = parseRequiredString(input.message, 'message')
+  const title = parseRequiredString(input.title, 'title')
+  const dataSourceId = parseRequiredString(input.dataSourceId, 'dataSourceId')
+  const sql = parseRequiredString(input.sql, 'sql')
+  const moduleType = parseAgentModuleType(input.moduleType)
+  const providedConfig = parseOptionalRecord(input.visualizationConfig, 'visualizationConfig')
+  const dataSource = await getDataSourceById(dataSourceId)
+
+  if (!dataSource.is_active) {
+    throw createError({ statusCode: 400, statusMessage: 'Selected data source is inactive' })
+  }
+
+  const preview = await runQuery({
+    dataSourceType: dataSource.type,
+    connection: dataSource.connection,
+    queryText: sql,
+    limit: 100
+  })
+  if (!preview.rows.length) {
+    throw createError({ statusCode: 400, statusMessage: 'The generated query returned no rows' })
+  }
+
+  const visualizationConfig = inferVisualizationConfig(moduleType, preview, providedConfig)
+  const savedQuery = await createSavedQuery({
+    dataSourceId,
+    name: title,
+    description: `AI-generated query from prompt: ${message}`,
+    queryText: sql,
+    parameters: {}
+  })
+
+  const visualization = await createQueryVisualization({
+    savedQueryId: savedQuery.id,
+    name: title,
+    moduleType,
+    config: visualizationConfig
+  })
+
+  const dashboard = await createUniqueDashboard(title, `Generated from: ${message}`)
+  await createModule(dashboard.id, {
+    type: 'header',
+    config: {
+      text: title,
+      fontSize: 'L',
+      color: '#1a1a1a'
+    },
+    gridX: 0,
+    gridY: 0,
+    gridW: 12,
+    gridH: 1
+  })
+  await createModule(dashboard.id, {
+    type: moduleType,
+    title,
+    queryVisualizationId: visualization.id,
+    config: visualization.config,
+    gridX: 0,
+    gridY: 1,
+    gridW: 12,
+    gridH: moduleType === 'kpi_card' ? 3 : moduleType === 'data_table' ? 7 : 6
+  })
+
+  const shareLink = await createShareLink(dashboard.id, 'AI generated')
+  const shareUrl = `${originFromEvent(event, input.publicOrigin)}/d/${dashboard.slug}?token=${shareLink.token}`
+
+  return {
+    message: `Created ${title}.`,
+    shareUrl,
+    sql,
+    dataSourceId,
+    dataSourceName: dataSource.name,
+    queryId: savedQuery.id,
+    visualizationId: visualization.id,
+    dashboardId: dashboard.id,
+    dashboardSlug: dashboard.slug,
+    shareToken: shareLink.token,
+    preview: {
+      columns: preview.columns,
+      rows: preview.rows.slice(0, 10)
+    },
+    chartCatalog: AGENT_CHART_CATALOG,
+    steps: [
+      'Loaded database schema context and supported chart catalog.',
+      `Selected data source ${dataSource.name}.`,
+      'Executed the generated read-only SQL for validation.',
+      `Created saved query and ${moduleType} visualization.`,
+      'Created dashboard and shared link.'
+    ]
+  }
+}
+
+const runRevenueMonthFallback = async (
+  event: H3Event,
+  input: AgentChatInput,
+  message: string
+): Promise<AgentChatResult> => {
   const steps: string[] = []
   steps.push('Loaded supported ECharts module catalog.')
   const sampledTables = await loadSchemaSamples(message, steps)
@@ -509,4 +773,17 @@ export const runDashboardAgent = async (event: H3Event, input: AgentChatInput): 
     chartCatalog: AGENT_CHART_CATALOG,
     steps
   }
+}
+
+export const runDashboardAgent = async (event: H3Event, input: AgentChatInput): Promise<AgentChatResult> => {
+  const message = typeof input.message === 'string' ? input.message.trim() : ''
+  if (!message) {
+    throw createError({ statusCode: 400, statusMessage: 'message is required' })
+  }
+
+  if (input.sql) {
+    return await createDashboardFromSql(event, input)
+  }
+
+  return await runRevenueMonthFallback(event, input, message)
 }
