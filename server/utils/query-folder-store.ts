@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { query } from './db'
+import { ensureQueryOrganizationSchema } from './query-organization-schema'
 
 type QueryFolderRow = {
   id: string
@@ -26,6 +27,7 @@ const mapQueryFolder = (row: QueryFolderRow): QueryFolderRecord => ({
 })
 
 export const listQueryFolders = async (): Promise<QueryFolderRecord[]> => {
+  await ensureQueryOrganizationSchema()
   const result = await query<QueryFolderRow>(
     `SELECT id, name, sort_order, created_at, updated_at
      FROM query_folders
@@ -37,6 +39,8 @@ export const listQueryFolders = async (): Promise<QueryFolderRecord[]> => {
 export const createQueryFolder = async (input: {
   name: string
 }): Promise<QueryFolderRecord> => {
+  await ensureQueryOrganizationSchema()
+
   const result = await query<QueryFolderRow>(
     `INSERT INTO query_folders (name)
      VALUES ($1)
@@ -50,6 +54,7 @@ export const updateQueryFolder = async (
   id: string,
   updates: Partial<{ name: string; sortOrder: number }>
 ): Promise<QueryFolderRecord> => {
+  await ensureQueryOrganizationSchema()
   const fields: string[] = []
   const values: unknown[] = []
   let index = 1
@@ -83,6 +88,7 @@ export const updateQueryFolder = async (
 }
 
 const getQueryFolderById = async (id: string): Promise<QueryFolderRecord> => {
+  await ensureQueryOrganizationSchema()
   const result = await query<QueryFolderRow>(
     `SELECT id, name, sort_order, created_at, updated_at
      FROM query_folders
@@ -97,6 +103,7 @@ const getQueryFolderById = async (id: string): Promise<QueryFolderRecord> => {
 }
 
 export const deleteQueryFolder = async (id: string) => {
+  await ensureQueryOrganizationSchema()
   const result = await query('DELETE FROM query_folders WHERE id = $1', [id])
   if (result.rowCount === 0) {
     throw createError({ statusCode: 404, statusMessage: 'Query folder not found' })
