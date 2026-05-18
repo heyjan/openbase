@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { query } from './db'
+import { ensureQueryOrganizationSchema } from './query-organization-schema'
 
 type VisualizationFolderRow = {
   id: string
@@ -23,6 +24,7 @@ const mapVisualizationFolder = (row: VisualizationFolderRow): VisualizationFolde
 })
 
 export const listVisualizationFolders = async (): Promise<VisualizationFolderRecord[]> => {
+  await ensureQueryOrganizationSchema()
   const result = await query<VisualizationFolderRow>(
     `SELECT id, name, created_at, updated_at
      FROM visualization_folders
@@ -34,6 +36,8 @@ export const listVisualizationFolders = async (): Promise<VisualizationFolderRec
 export const createVisualizationFolder = async (input: {
   name: string
 }): Promise<VisualizationFolderRecord> => {
+  await ensureQueryOrganizationSchema()
+
   const result = await query<VisualizationFolderRow>(
     `INSERT INTO visualization_folders (name)
      VALUES ($1)
@@ -47,6 +51,7 @@ export const updateVisualizationFolder = async (
   id: string,
   updates: Partial<{ name: string }>
 ): Promise<VisualizationFolderRecord> => {
+  await ensureQueryOrganizationSchema()
   if (updates.name === undefined) {
     return getVisualizationFolderById(id)
   }
@@ -66,6 +71,7 @@ export const updateVisualizationFolder = async (
 }
 
 const getVisualizationFolderById = async (id: string): Promise<VisualizationFolderRecord> => {
+  await ensureQueryOrganizationSchema()
   const result = await query<VisualizationFolderRow>(
     `SELECT id, name, created_at, updated_at
      FROM visualization_folders
@@ -80,6 +86,7 @@ const getVisualizationFolderById = async (id: string): Promise<VisualizationFold
 }
 
 export const deleteVisualizationFolder = async (id: string) => {
+  await ensureQueryOrganizationSchema()
   const result = await query('DELETE FROM visualization_folders WHERE id = $1', [id])
   if (result.rowCount === 0) {
     throw createError({ statusCode: 404, statusMessage: 'Visualization folder not found' })

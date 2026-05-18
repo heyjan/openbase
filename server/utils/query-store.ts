@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { query } from './db'
+import { ensureQueryOrganizationSchema } from './query-organization-schema'
 
 type SavedQueryRow = {
   id: string
@@ -54,6 +55,7 @@ const toDataSourceError = (error: unknown) => {
 }
 
 export const listSavedQueries = async (): Promise<SavedQueryRecord[]> => {
+  await ensureQueryOrganizationSchema()
   const result = await query<SavedQueryRow>(
     `SELECT
        sq.id,
@@ -74,6 +76,7 @@ export const listSavedQueries = async (): Promise<SavedQueryRecord[]> => {
 }
 
 export const getSavedQueryById = async (id: string): Promise<SavedQueryRecord> => {
+  await ensureQueryOrganizationSchema()
   const result = await query<SavedQueryRow>(
     `SELECT
        sq.id,
@@ -105,6 +108,7 @@ export const createSavedQuery = async (input: {
   queryText: string
   parameters?: Record<string, unknown>
 }): Promise<SavedQueryRecord> => {
+  await ensureQueryOrganizationSchema()
   try {
     const result = await query<SavedQueryRow>(
       `INSERT INTO saved_queries (
@@ -142,6 +146,7 @@ export const updateSavedQuery = async (
     parameters: Record<string, unknown>
   }>
 ): Promise<SavedQueryRecord> => {
+  await ensureQueryOrganizationSchema()
   const fields: string[] = []
   const values: unknown[] = []
   let index = 1
@@ -193,6 +198,7 @@ export const updateSavedQuery = async (
 }
 
 export const deleteSavedQuery = async (id: string) => {
+  await ensureQueryOrganizationSchema()
   const result = await query('DELETE FROM saved_queries WHERE id = $1', [id])
   if (result.rowCount === 0) {
     throw createError({ statusCode: 404, statusMessage: 'Saved query not found' })
@@ -203,6 +209,7 @@ export const assignQueryToFolder = async (
   queryId: string,
   folderId: string | null
 ) => {
+  await ensureQueryOrganizationSchema()
   const result = await query(
     `UPDATE saved_queries
      SET folder_id = $1, updated_at = now()
