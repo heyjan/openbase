@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     message: str
     publicOrigin: str | None = None
     admin: dict[str, Any] | None = None
+    aiProviderSettings: dict[str, Any] | None = None
 
 
 class ChatResponse(BaseModel):

@@ -1,5 +1,6 @@
 import { createError, defineEventHandler, getRequestURL, readBody } from 'h3'
 import type { H3Event } from 'h3'
+import { getAiProviderRuntimeSettings } from '~~/server/utils/app-settings-store'
 
 const publicOriginFromEvent = (event: H3Event) => {
   const forwardedProto = event.node.req.headers['x-forwarded-proto']
@@ -32,6 +33,8 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const aiProviderSettings = await getAiProviderRuntimeSettings()
+
     return await $fetch(`${serviceUrl}/chat`, {
       method: 'POST',
       headers: {
@@ -46,7 +49,8 @@ export default defineEventHandler(async (event) => {
               email: event.context.admin.email,
               name: event.context.admin.name
             }
-          : undefined
+          : undefined,
+        aiProviderSettings: aiProviderSettings ?? undefined
       }
     })
   } catch (error) {

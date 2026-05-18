@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Database, Link2, Palette, Table2, Upload, Users } from 'lucide-vue-next'
+import { Bot, Database, Link2, Palette, Table2, Upload, Users } from 'lucide-vue-next'
 import SettingsNavCard from '~/components/ui/SettingsNavCard.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 
@@ -20,6 +20,11 @@ const navigationItems = [
     label: 'Data Sources',
     to: '/admin/settings/data-sources',
     icon: Database
+  },
+  {
+    label: 'AI Provider',
+    to: '/admin/settings/ai-provider',
+    icon: Bot
   },
   {
     label: 'Shared Links',

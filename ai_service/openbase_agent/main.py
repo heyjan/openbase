@@ -28,4 +28,4 @@ async def chat(request: ChatRequest) -> ChatResponse:
     message = request.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="message is required")
-    return await run_chat(message, request.publicOrigin)
+    return await run_chat(message, request.publicOrigin, request.aiProviderSettings)
