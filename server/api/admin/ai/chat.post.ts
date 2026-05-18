@@ -1,6 +1,17 @@
 import { createError, defineEventHandler, getRequestURL, readBody } from 'h3'
 import type { H3Event } from 'h3'
-import { getAiProviderRuntimeSettings } from '~~/server/utils/app-settings-store'
+import {
+  getAiProviderRuntimeSettings,
+  getAiProviderSettings
+} from '~~/server/utils/app-settings-store'
+import type { AiProviderId } from '~~/shared/ai/provider-settings'
+
+const AI_PROVIDER_LABELS: Record<AiProviderId, string> = {
+  openai: 'OpenAI',
+  'azure-openai': 'Azure OpenAI',
+  anthropic: 'Anthropic Claude',
+  deepseek: 'DeepSeek'
+}
 
 const publicOriginFromEvent = (event: H3Event) => {
   const forwardedProto = event.node.req.headers['x-forwarded-proto']
@@ -32,9 +43,23 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  try {
-    const aiProviderSettings = await getAiProviderRuntimeSettings()
+  const [aiProviderSettings, publicProviderSettings] = await Promise.all([
+    getAiProviderRuntimeSettings(),
+    getAiProviderSettings()
+  ])
+  if (!aiProviderSettings) {
+    const providerLabel = AI_PROVIDER_LABELS[publicProviderSettings.activeProvider]
+    const missingDetails = publicProviderSettings.activeProvider === 'azure-openai'
+      ? 'API key, endpoint, and deployment'
+      : 'API key'
 
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${providerLabel} is selected but missing required credentials (${missingDetails}). Configure it in AI Provider settings.`
+    })
+  }
+
+  try {
     return await $fetch(`${serviceUrl}/chat`, {
       method: 'POST',
       headers: {
@@ -50,7 +75,7 @@ export default defineEventHandler(async (event) => {
               name: event.context.admin.name
             }
           : undefined,
-        aiProviderSettings: aiProviderSettings ?? undefined
+        aiProviderSettings
       }
     })
   } catch (error) {
