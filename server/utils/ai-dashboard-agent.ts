@@ -15,6 +15,7 @@ import type { ModuleType } from '~/types/module'
 
 type AgentChatInput = {
   message: string
+  publicOrigin?: string
 }
 
 type SampledTable = {
@@ -397,7 +398,11 @@ const createUniqueDashboard = async (name: string, description: string) => {
   throw createError({ statusCode: 409, statusMessage: 'Unable to create unique dashboard slug' })
 }
 
-const originFromEvent = (event: H3Event) => {
+const originFromEvent = (event: H3Event, publicOrigin?: string) => {
+  if (publicOrigin && /^https?:\/\//.test(publicOrigin)) {
+    return publicOrigin.replace(/\/$/, '')
+  }
+
   const protocol = event.node.req.headers['x-forwarded-proto'] || 'http'
   const host = event.node.req.headers['x-forwarded-host'] || event.node.req.headers.host || 'localhost:3000'
   return `${protocol}://${host}`
@@ -483,7 +488,7 @@ export const runDashboardAgent = async (event: H3Event, input: AgentChatInput): 
   steps.push('Created dashboard and chart module.')
 
   const shareLink = await createShareLink(dashboard.id, 'AI generated')
-  const shareUrl = `${originFromEvent(event)}/d/${dashboard.slug}?token=${shareLink.token}`
+  const shareUrl = `${originFromEvent(event, input.publicOrigin)}/d/${dashboard.slug}?token=${shareLink.token}`
   steps.push('Created shared dashboard link.')
 
   return {
