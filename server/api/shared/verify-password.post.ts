@@ -75,7 +75,7 @@ export default defineEventHandler(async (event) => {
     httpOnly: true,
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',
-    path: '/api/dashboards',
+    path: '/',
     expires: session.expiresAt,
     maxAge: session.maxAgeSeconds
   })

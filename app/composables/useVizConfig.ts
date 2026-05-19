@@ -5,6 +5,8 @@ import type {
   QueryPreviewVisualization,
   ScatterCompareSeriesOption,
   ScatterVizMode,
+  TableColumnFormatMatchMode,
+  TableColumnFormatRule,
   TableColumnValueFormat,
   VizOptionsByType,
   VizSeriesOption
@@ -36,6 +38,21 @@ const THOUSANDS_SEPARATOR_FORMATTER = new Intl.NumberFormat('de-DE', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
 })
+const createFractionDigitsFormatter = (
+  fractionDigits: number,
+  useThousandsSeparator: boolean
+) =>
+  new Intl.NumberFormat('de-DE', {
+    useGrouping: useThousandsSeparator,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
+  })
+const TABLE_COLUMN_FORMAT_MATCH_MODES = new Set<TableColumnFormatMatchMode>([
+  'exact',
+  'startsWith',
+  'endsWith',
+  'contains'
+])
 
 const formatWithThousandsSeparator = (value: unknown) => {
   const numeric = toNumber(value)
@@ -184,16 +201,98 @@ const parseTableColumnValueFormat = (value: unknown): TableColumnValueFormat | n
     typeof value.prefix === 'string' && value.prefix.trim() ? value.prefix : undefined
   const suffix =
     typeof value.suffix === 'string' && value.suffix.trim() ? value.suffix : undefined
+  const fractionDigits =
+    typeof value.fractionDigits === 'number' && Number.isFinite(value.fractionDigits)
+      ? Math.max(0, Math.min(20, Math.trunc(value.fractionDigits)))
+      : typeof value.fraction_digits === 'number' && Number.isFinite(value.fraction_digits)
+        ? Math.max(0, Math.min(20, Math.trunc(value.fraction_digits)))
+      : undefined
 
-  if (!prefix && !suffix) {
+  if (!prefix && !suffix && fractionDigits === undefined) {
     return null
   }
 
   return {
     prefix,
-    suffix
+    suffix,
+    fractionDigits
   }
 }
+
+const parseTableColumnFormatRule = (value: unknown): TableColumnFormatRule | null => {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const matchMode =
+    typeof value.matchMode === 'string' &&
+    TABLE_COLUMN_FORMAT_MATCH_MODES.has(value.matchMode as TableColumnFormatMatchMode)
+      ? value.matchMode as TableColumnFormatMatchMode
+      : null
+  const pattern = typeof value.pattern === 'string' ? value.pattern : ''
+  const prefix =
+    typeof value.prefix === 'string' && value.prefix.trim() ? value.prefix : undefined
+  const suffix =
+    typeof value.suffix === 'string' && value.suffix.trim() ? value.suffix : undefined
+  const fractionDigits =
+    typeof value.fractionDigits === 'number' && Number.isFinite(value.fractionDigits)
+      ? Math.max(0, Math.min(20, Math.trunc(value.fractionDigits)))
+      : typeof value.fraction_digits === 'number' && Number.isFinite(value.fraction_digits)
+        ? Math.max(0, Math.min(20, Math.trunc(value.fraction_digits)))
+        : undefined
+  const color = normalizeHexColor(value.color)
+
+  if (!matchMode) {
+    return null
+  }
+
+  return {
+    matchMode,
+    pattern,
+    prefix,
+    suffix,
+    fractionDigits,
+    color: color ?? undefined
+  }
+}
+
+export const parseTableColumnFormatRules = (value: unknown): TableColumnFormatRule[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map(parseTableColumnFormatRule)
+    .filter((rule): rule is TableColumnFormatRule => rule !== null)
+}
+
+const readConfiguredTableColumnFormatRules = (config: Record<string, unknown>) => {
+  const configured = parseTableColumnFormatRules(config.columnFormatRules)
+  if (configured.length) {
+    return configured
+  }
+  return parseTableColumnFormatRules(config.column_format_rules)
+}
+
+const matchesTableColumnFormatRule = (column: string, rule: TableColumnFormatRule) => {
+  const pattern = rule.pattern.trim()
+  if (!pattern) {
+    return false
+  }
+  if (rule.matchMode === 'exact') {
+    return column === pattern
+  }
+  if (rule.matchMode === 'startsWith') {
+    return column.startsWith(pattern)
+  }
+  if (rule.matchMode === 'endsWith') {
+    return column.endsWith(pattern)
+  }
+  return column.includes(pattern)
+}
+
+const hasTableColumnValueFormat = (format: TableColumnValueFormat) =>
+  Boolean(format.prefix || format.suffix || format.fractionDigits !== undefined)
 
 export const parseTableColumnValueFormats = (
   value: unknown,
@@ -506,6 +605,7 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
       columnColors: {},
       columnGradients: {},
       columnValueFormats: {},
+      columnFormatRules: [],
       conditionalFormatting: []
     } as VizOptionsByType[T]
   }
@@ -648,13 +748,7 @@ const sanitizeVizConfigForType = (
       ...columns.filter((column) => !deduplicatedOrder.includes(column))
     ]
 
-    const configuredVisible = readConfiguredStringArray(
-      normalized,
-      ['visibleColumns', 'visible_columns']
-    )
-    const visibleColumns = configuredVisible.length
-      ? ordered.filter((column) => configuredVisible.includes(column))
-      : ordered
+    const visibleColumns = resolveTableVisibleColumns(ordered, normalized)
 
     normalized.columnOrder = ordered
     normalized.visibleColumns = visibleColumns
@@ -679,9 +773,10 @@ const sanitizeVizConfigForType = (
       typeof tabSeparator === 'string' && tabSeparator.length ? tabSeparator : ' '
     normalized.tabSharedColumns = resolveTableTabSharedColumns(ordered, normalized)
     normalized.tabDefault = readConfiguredString(normalized, ['tabDefault', 'tab_default'])
-    normalized.columnColors = resolveColumnColors(columns, normalized)
+    normalized.columnColors = resolveExplicitColumnColors(columns, normalized)
     normalized.columnGradients = resolveColumnGradients(columns, normalized)
     normalized.columnValueFormats = readConfiguredTableColumnValueFormats(normalized, columns)
+    normalized.columnFormatRules = readConfiguredTableColumnFormatRules(normalized)
     normalized.conditionalFormatting = parseConditionalFormattingRules(
       normalized.conditionalFormatting
     )
@@ -1085,29 +1180,91 @@ export const stripTableTabGroupPrefix = (
 export const resolveTableColumnValueFormats = (
   columns: string[],
   config: Record<string, unknown>
-) =>
-  readConfiguredTableColumnValueFormats(config, columns)
-
-export const resolveColumnColors = (columns: string[], config: Record<string, unknown>) => {
-  const raw = readConfiguredValue(config, ['columnColors', 'column_colors'])
-  if (!isRecord(raw)) {
-    return {} as Record<string, string>
+) => {
+  const exactFormats = readConfiguredTableColumnValueFormats(config, columns)
+  const rules = readConfiguredTableColumnFormatRules(config)
+  if (!rules.length) {
+    return exactFormats
   }
+
+  const resolved: TableColumnValueFormatMap = { ...exactFormats }
+
+  for (const column of columns) {
+    if (resolved[column]) {
+      continue
+    }
+
+    let matchingRule: TableColumnFormatRule | null = null
+    for (let index = rules.length - 1; index >= 0; index -= 1) {
+      const rule = rules[index]
+      if (!rule || !hasTableColumnValueFormat(rule)) {
+        continue
+      }
+      if (matchesTableColumnFormatRule(column, rule)) {
+        matchingRule = rule
+        break
+      }
+    }
+
+    if (!matchingRule) {
+      continue
+    }
+
+    resolved[column] = {
+      prefix: matchingRule.prefix,
+      suffix: matchingRule.suffix,
+      fractionDigits: matchingRule.fractionDigits
+    }
+  }
+
+  return resolved
+}
+
+export const resolveExplicitColumnColors = (columns: string[], config: Record<string, unknown>) => {
+  const raw = readConfiguredValue(config, ['columnColors', 'column_colors'])
 
   const allowed = new Set(columns)
   const next: Record<string, string> = {}
 
-  for (const [column, value] of Object.entries(raw)) {
-    if (!allowed.has(column)) {
+  if (isRecord(raw)) {
+    for (const [column, value] of Object.entries(raw)) {
+      if (!allowed.has(column)) {
+        continue
+      }
+
+      const color = normalizeHexColor(value)
+      if (!color) {
+        continue
+      }
+
+      next[column] = color
+    }
+  }
+
+  return next
+}
+
+export const resolveColumnColors = (columns: string[], config: Record<string, unknown>) => {
+  const next = resolveExplicitColumnColors(columns, config)
+  const rules = readConfiguredTableColumnFormatRules(config)
+  if (!rules.length) {
+    return next
+  }
+
+  for (const column of columns) {
+    if (next[column]) {
       continue
     }
 
-    const color = normalizeHexColor(value)
-    if (!color) {
-      continue
-    }
+    for (let index = rules.length - 1; index >= 0; index -= 1) {
+      const rule = rules[index]
+      if (!rule?.color || !matchesTableColumnFormatRule(column, rule)) {
+        continue
+      }
 
-    next[column] = color
+      next[column] = rule.color
+      break
+    }
   }
 
   return next
@@ -1164,14 +1321,28 @@ export const formatTableCellDisplayValue = (
   value?: unknown,
   useThousandsSeparator = false
 ) => {
+  const columnFormat = formats[columnKey]
+  const numericValue = toNumber(value)
+
+  if (columnFormat?.fractionDigits !== undefined && numericValue === null) {
+    return defaultValue
+  }
+
+  const formattedWithFractionDigits =
+    columnFormat?.fractionDigits !== undefined
+      ? createFractionDigitsFormatter(
+          columnFormat.fractionDigits,
+          useThousandsSeparator
+        ).format(numericValue as number)
+      : null
   const normalizedDisplay =
-    useThousandsSeparator ? (formatWithThousandsSeparator(value) ?? defaultValue) : defaultValue
+    formattedWithFractionDigits ??
+    (useThousandsSeparator ? (formatWithThousandsSeparator(value) ?? defaultValue) : defaultValue)
 
   if (!normalizedDisplay.length) {
     return normalizedDisplay
   }
 
-  const columnFormat = formats[columnKey]
   if (!columnFormat) {
     return normalizedDisplay
   }
