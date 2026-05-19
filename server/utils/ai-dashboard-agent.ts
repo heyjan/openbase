@@ -1,6 +1,5 @@
 import { createError, type H3Event } from 'h3'
-import { createDashboard } from './dashboard-store'
-import { createModule } from './dashboard-store'
+import { createDashboard, createModule } from './dashboard-store'
 import { listDataSources, getDataSourceById, type DataSourceRecord } from './data-source-store'
 import { createQueryVisualization } from './query-visualization-store'
 import { runQuery } from './query-runner'
@@ -428,6 +427,13 @@ const buildRevenueSql = (plan: FieldPlan) => {
   const dateSql = quoteIdentifier(plan.dateColumn, dataSourceType)
   const revenueSql = numberExpression(quoteIdentifier(plan.revenueColumn, dataSourceType), dataSourceType)
   const countrySql = quoteIdentifier(plan.countryColumn, dataSourceType)
+  const subqueryAlias = 'monthly_revenue'
+  const monthAlias = quoteIdentifier('month', dataSourceType)
+  const marketAlias = quoteIdentifier('market', dataSourceType)
+  const revenueAlias = quoteIdentifier('revenue', dataSourceType)
+  const outerMonthSql = `${subqueryAlias}.${monthAlias}`
+  const outerMarketSql = `${subqueryAlias}.${marketAlias}`
+  const outerRevenueSql = `${subqueryAlias}.${revenueAlias}`
   const normalizedCountryCases = plan.countries
     .map((country) => {
       const aliases = country.aliases.map(sqlStringLiteral).join(', ')
@@ -442,26 +448,26 @@ const buildRevenueSql = (plan: FieldPlan) => {
   const pivotColumns = plan.countries
     .map((country) => {
       const alias = `revenue_${country.label.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`
-      return `SUM(CASE WHEN market = ${sqlStringLiteral(country.label)} THEN revenue ELSE 0 END) AS ${quoteIdentifier(alias, dataSourceType)}`
+      return `SUM(CASE WHEN ${outerMarketSql} = ${sqlStringLiteral(country.label)} THEN ${outerRevenueSql} ELSE 0 END) AS ${quoteIdentifier(alias, dataSourceType)}`
     })
     .join(',\n  ')
 
   return `SELECT
-  month,
+  ${outerMonthSql} AS ${monthAlias},
   ${pivotColumns}
 FROM (
   SELECT
-    ${monthExpression(dateSql, dataSourceType)} AS month,
+    ${monthExpression(dateSql, dataSourceType)} AS ${monthAlias},
     CASE
       ${normalizedCountryCases}
       ELSE CAST(${countrySql} AS VARCHAR)
-    END AS market,
-    ${revenueSql} AS revenue
+    END AS ${marketAlias},
+    ${revenueSql} AS ${revenueAlias}
   FROM ${tableSql}
   WHERE ${countrySql} IN (${countryFilter})
-) monthly_revenue
-GROUP BY month
-ORDER BY month`
+) ${subqueryAlias}
+GROUP BY ${outerMonthSql}
+ORDER BY ${outerMonthSql}`
 }
 
 const createUniqueDashboard = async (name: string, description: string) => {
