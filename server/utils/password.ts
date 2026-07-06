@@ -18,7 +18,10 @@ export const verifyPassword = async (
   try {
     const matches = await bcrypt.compare(password, comparisonHash)
     return Boolean(hash) && matches
-  } catch {
+  } catch (error) {
+    console.warn('Stored password hash could not be verified', {
+      error: error instanceof Error ? error.message : 'Unknown bcrypt error'
+    })
     await bcrypt.compare(password, DUMMY_PASSWORD_HASH)
     return false
   }
