@@ -4,11 +4,9 @@ import HomeQuickActions from '~/components/admin/HomeQuickActions.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 import type { AdminUser } from '~/types/admin'
 
-const authFetch = process.server ? useRequestFetch() : $fetch
-
-const { data: session } = await useAsyncData('admin-home-session', () =>
-  authFetch<{ admin: AdminUser }>('/api/auth/me')
-)
+const { data: session } = await useAppFetch<{ admin: AdminUser }>('/api/auth/me', {
+  key: 'admin-home-session'
+})
 
 const greeting = computed(() => {
   const hour = new Date().getHours()

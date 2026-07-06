@@ -6,6 +6,7 @@ const makeToastId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8
 
 export const useAppToast = () => {
   const toasts = useState<ToastMessage[]>('toast-messages', () => [])
+  const announcer = useAnnouncer()
 
   const dismiss = (id: string) => {
     const timer = timers.get(id)
@@ -34,6 +35,18 @@ export const useAppToast = () => {
         description: options.description
       }
     ]
+
+    if (process.client) {
+      const announcement = [options.title, options.description]
+        .filter((value): value is string => Boolean(value))
+        .join(': ')
+
+      if (options.tone === 'error') {
+        announcer.assertive(announcement)
+      } else {
+        announcer.polite(announcement)
+      }
+    }
 
     if (process.client && durationMs > 0) {
       const timer = setTimeout(() => {
