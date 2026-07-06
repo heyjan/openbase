@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nuxt build",
+    "build:profile": "nuxt build --profile",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
@@ -15,7 +16,7 @@
   },
   "dependencies": {
     "@ai-sdk/vue": "^2.0.155",
-    "@nuxt/ui": "^4.5.1",
+    "@nuxt/ui": "^4.9.0",
     "@nuxtjs/google-fonts": "^3.2.0",
     "@nuxtjs/mdc": "^0.18.4",
     "ai": "^5.0.155",
@@ -31,11 +32,10 @@
     "mongodb": "^7.1.0",
     "mysql2": "^3.15.3",
     "nodemailer": "^8.0.1",
-    "nuxt": "^4.3.1",
+    "nuxt": "^4.4.5",
     "pg": "^8.18.0",
     "vue": "^3.5.28",
-    "vue-echarts": "^7.0.3",
-    "vue-router": "^4.6.4"
+    "vue-echarts": "^7.0.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
