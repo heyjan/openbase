@@ -49,6 +49,13 @@ const props = withDefaults(
     editingCell?: EditingCell | null
     editValue?: string
     editableColumns?: string[]
+    summaryRow?: {
+      values: Record<string, unknown>
+      label?: {
+        column: string
+        text: string
+      }
+    } | null
     saving?: boolean
     onStartEdit?: (rowIndex: number, columnKey: string) => void
     onEditValueChange?: (value: string) => void
@@ -64,6 +71,7 @@ const props = withDefaults(
     editingCell: null,
     editValue: '',
     editableColumns: () => [],
+    summaryRow: null,
     saving: false,
     onStartEdit: undefined,
     onEditValueChange: undefined,
@@ -100,6 +108,38 @@ const tableColumns = computed(() =>
     id: column.key,
     accessorFn: (row: TableRow) => row[column.key],
     enableSorting: true,
+    footer: props.summaryRow
+      ? () => {
+          const summary = props.summaryRow
+          if (!summary) {
+            return null
+          }
+
+          if (column.key === summary.label?.column) {
+            return h(
+              'span',
+              { class: 'ob-totals-label font-semibold text-gray-900' },
+              summary.label.text
+            )
+          }
+
+          const raw = summary.values[column.key]
+          if (raw === undefined || raw === null) {
+            return h('span', { class: 'text-gray-400' }, '—')
+          }
+
+          const defaultValue = toDisplayValue(raw)
+          const rendered = props.cellValueFormatter?.({
+            row: summary.values,
+            rowIndex: -1,
+            columnKey: column.key,
+            value: raw,
+            defaultValue
+          }) ?? defaultValue
+
+          return h('span', { class: 'font-semibold text-gray-900' }, rendered)
+        }
+      : undefined,
     header: ({ column: tableColumn }: { column: { getIsSorted: () => false | 'asc' | 'desc'; toggleSorting: (desc?: boolean) => void } }) => {
       const sort = tableColumn.getIsSorted()
       const indicator = sort === 'asc' ? ' ↑' : sort === 'desc' ? ' ↓' : ''
@@ -330,5 +370,20 @@ const tableColumns = computed(() =>
 
 .ob-table :deep(tbody tr:hover) {
   background-color: #f9fafb;
+}
+
+.ob-table :deep(tfoot th),
+.ob-table :deep(tfoot td) {
+  background-color: #f6ebe8;
+  background-color: color-mix(in srgb, var(--color-brand-secondary, #d97556) 10%, white);
+  border-top: 2px solid #9ca3af;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ob-table :deep(tfoot [data-slot="separator"]) {
+  display: none;
 }
 </style>

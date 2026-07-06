@@ -5,6 +5,7 @@ import Table from '~/components/ui/Table.vue'
 import { useInlineCellEdit } from '~/composables/useInlineCellEdit'
 import {
   applyTableSortAndLimit,
+  buildTableTotalsRow,
   detectTableTabGroups,
   formatTableCellDisplayValue,
   getColumnGradientStyle,
@@ -199,6 +200,10 @@ const tableColumns = computed(() =>
   }))
 )
 
+const activeColumnLabels = computed(() =>
+  Object.fromEntries(tableColumns.value.map((column) => [column.key, column.label]))
+)
+
 const columnValueFormats = computed(() =>
   resolveTableColumnValueFormats(visibleColumns.value, props.module.config)
 )
@@ -254,6 +259,24 @@ const cellValueFormatter = (input: { columnKey: string; defaultValue: string; va
     input.value,
     useThousandsSeparator.value
   )
+
+const summaryRow = computed(() => {
+  const built = buildTableTotalsRow({
+    rows: filteredRows.value,
+    columns: activeColumns.value,
+    labelColumns: sharedColumns.value,
+    displayLabels: activeColumnLabels.value,
+    valueFormats: columnValueFormats.value,
+    config: props.module.config ?? {}
+  })
+
+  return built
+    ? {
+        values: built.row,
+        label: built.label
+      }
+    : null
+})
 
 const moduleId = computed(() => props.module.id)
 const inlineEditEnabled = computed(() => Boolean(props.editable))
@@ -321,6 +344,7 @@ const onSaveEdit = () => inlineCellEdit.saveCell(filteredRows.value)
         :columns="tableColumns"
         :cell-style-resolver="cellStyleResolver"
         :cell-value-formatter="cellValueFormatter"
+        :summary-row="summaryRow"
         :editing-cell="isInlineEditable ? inlineCellEdit.editingCell.value : null"
         :edit-value="inlineCellEdit.editValue.value"
         :editable-columns="editableColumns"

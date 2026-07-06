@@ -58,6 +58,12 @@ export type TableColumnFormatRule = TableColumnValueFormat & {
   color?: string
 }
 
+export type TableTotalsPercentRecompute = {
+  numerator: string
+  denominator: string
+  mode?: 'ratio' | 'delta'
+}
+
 export type TableVizOptions = SharedVizOptions & {
   visibleColumns?: string[]
   columnOrder?: string[]
@@ -66,6 +72,11 @@ export type TableVizOptions = SharedVizOptions & {
   rowLimit?: number
   showSearch?: boolean
   useThousandsSeparator?: boolean
+  showTotalsRow?: boolean
+  totalsRowLabel?: string
+  totalsExcludeColumns?: string[]
+  totalsPercentColumns?: string[]
+  totalsPercentRecompute?: Record<string, TableTotalsPercentRecompute>
   tabbed?: boolean
   tabGroupSeparator?: string
   tabSharedColumns?: string[]

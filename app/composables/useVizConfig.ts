@@ -7,6 +7,7 @@ import type {
   ScatterVizMode,
   TableColumnFormatMatchMode,
   TableColumnFormatRule,
+  TableTotalsPercentRecompute,
   TableColumnValueFormat,
   VizOptionsByType,
   VizSeriesOption
@@ -33,6 +34,7 @@ const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === 'string')
 
 const DECIMAL_COMMA_PATTERN = /^-?\d+(?:,\d+)?$/
+const GERMAN_THOUSANDS_PATTERN = /^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 const THOUSANDS_SEPARATOR_FORMATTER = new Intl.NumberFormat('de-DE', {
   minimumFractionDigits: 2,
@@ -77,6 +79,10 @@ export const toNumber = (value: unknown) => {
     const parsed = Number(trimmed)
     if (Number.isFinite(parsed)) {
       return parsed
+    }
+    if (GERMAN_THOUSANDS_PATTERN.test(trimmed)) {
+      const thousandsParsed = Number(trimmed.replace(/\./g, '').replace(',', '.'))
+      return Number.isFinite(thousandsParsed) ? thousandsParsed : null
     }
     if (!DECIMAL_COMMA_PATTERN.test(trimmed)) {
       return null
@@ -330,6 +336,48 @@ const readConfiguredTableColumnValueFormats = (
     return configured
   }
   return parseTableColumnValueFormats(config.column_value_formats, columns)
+}
+
+const parseTableTotalsPercentRecomputeEntry = (
+  value: unknown
+): TableTotalsPercentRecompute | null => {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const numerator = typeof value.numerator === 'string' ? value.numerator.trim() : ''
+  const denominator = typeof value.denominator === 'string' ? value.denominator.trim() : ''
+  const mode = value.mode === 'delta' ? 'delta' : 'ratio'
+
+  if (!numerator || !denominator) {
+    return null
+  }
+
+  return {
+    numerator,
+    denominator,
+    mode
+  }
+}
+
+const parseTableTotalsPercentRecompute = (
+  value: unknown
+): Record<string, TableTotalsPercentRecompute> => {
+  if (!isRecord(value)) {
+    return {}
+  }
+
+  const parsed: Record<string, TableTotalsPercentRecompute> = {}
+
+  for (const [column, rawConfig] of Object.entries(value)) {
+    const recompute = parseTableTotalsPercentRecomputeEntry(rawConfig)
+    if (!recompute) {
+      continue
+    }
+    parsed[column] = recompute
+  }
+
+  return parsed
 }
 
 const getDefaultSeries = (
@@ -598,6 +646,11 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
       rowLimit: 500,
       showSearch: false,
       useThousandsSeparator: false,
+      showTotalsRow: false,
+      totalsRowLabel: 'Total',
+      totalsExcludeColumns: [],
+      totalsPercentColumns: [],
+      totalsPercentRecompute: {},
       tabbed: false,
       tabGroupSeparator: ' ',
       tabSharedColumns: [],
@@ -763,6 +816,36 @@ const sanitizeVizConfigForType = (
       normalized,
       ['useThousandsSeparator', 'use_thousands_separator'],
       false
+    )
+    normalized.showTotalsRow = readConfiguredBoolean(
+      config,
+      ['showTotalsRow', 'show_totals_row'],
+      false
+    )
+    normalized.totalsRowLabel =
+      readConfiguredText(config, ['totalsRowLabel', 'totals_row_label'], 'Total') || 'Total'
+    normalized.totalsExcludeColumns = readConfiguredStringArray(
+      config,
+      ['totalsExcludeColumns', 'totals_exclude_columns']
+    ).filter((column) => columns.includes(column))
+    normalized.totalsPercentColumns = readConfiguredStringArray(
+      config,
+      ['totalsPercentColumns', 'totals_percent_columns']
+    ).filter((column) => columns.includes(column))
+    normalized.totalsPercentRecompute = Object.fromEntries(
+      Object.entries(
+        parseTableTotalsPercentRecompute(
+          readConfiguredValue(config, [
+            'totalsPercentRecompute',
+            'totals_percent_recompute'
+          ])
+        )
+      ).filter(
+        ([column, recompute]) =>
+          columns.includes(column) &&
+          columns.includes(recompute.numerator) &&
+          columns.includes(recompute.denominator)
+      )
     )
     normalized.tabbed = readConfiguredBoolean(normalized, ['tabbed'], false)
     const tabSeparator = readConfiguredValue(normalized, [
@@ -1062,6 +1145,58 @@ export const resolveTableTabSharedColumns = (
 export const resolveTableTabDefault = (config: Record<string, unknown>) =>
   readConfiguredString(config, ['tabDefault', 'tab_default'])
 
+export const resolveTableShowTotalsRow = (config: Record<string, unknown>) =>
+  readConfiguredBoolean(config, ['showTotalsRow', 'show_totals_row'], false)
+
+export const resolveTableTotalsLabel = (config: Record<string, unknown>) =>
+  readConfiguredText(config, ['totalsRowLabel', 'totals_row_label'], 'Total') || 'Total'
+
+export const resolveTableTotalsExcludeColumns = (
+  columns: string[],
+  config: Record<string, unknown>
+) =>
+  readConfiguredStringArray(config, ['totalsExcludeColumns', 'totals_exclude_columns'])
+    .filter(
+      (column, index, source) =>
+        columns.includes(column) && source.indexOf(column) === index
+    )
+
+export const resolveTableTotalsPercentColumns = (
+  columns: string[],
+  config: Record<string, unknown>
+) =>
+  readConfiguredStringArray(config, ['totalsPercentColumns', 'totals_percent_columns'])
+    .filter(
+      (column, index, source) =>
+        columns.includes(column) && source.indexOf(column) === index
+    )
+
+export const resolveTableTotalsPercentRecompute = (
+  columns: string[],
+  config: Record<string, unknown>
+) => {
+  const raw = readConfiguredValue(config, [
+    'totalsPercentRecompute',
+    'totals_percent_recompute'
+  ])
+  const parsed = parseTableTotalsPercentRecompute(raw)
+  const resolved: Record<string, TableTotalsPercentRecompute> = {}
+
+  for (const [column, recompute] of Object.entries(parsed)) {
+    if (
+      !columns.includes(column) ||
+      !columns.includes(recompute.numerator) ||
+      !columns.includes(recompute.denominator)
+    ) {
+      continue
+    }
+
+    resolved[column] = recompute
+  }
+
+  return resolved
+}
+
 export const detectTableTabGroups = (
   columns: string[],
   separator: string,
@@ -1218,6 +1353,118 @@ export const resolveTableColumnValueFormats = (
   }
 
   return resolved
+}
+
+const sumColumnValues = (rows: Record<string, unknown>[], column: string) =>
+  rows.reduce((total, row) => total + (toNumber(row[column]) ?? 0), 0)
+
+const isTotalsPercentageColumn = (
+  column: string,
+  displayLabel: string,
+  valueFormats: TableColumnValueFormatMap,
+  explicitPercentColumns: Set<string>
+) => {
+  const suffix = valueFormats[column]?.suffix?.trim()
+  return (
+    explicitPercentColumns.has(column) ||
+    (suffix !== undefined && suffix.startsWith('%')) ||
+    column.includes('%') ||
+    displayLabel.includes('%')
+  )
+}
+
+export const buildTableTotalsRow = (input: {
+  rows: Record<string, unknown>[]
+  columns: string[]
+  labelColumns?: string[]
+  displayLabels?: Record<string, string>
+  valueFormats: TableColumnValueFormatMap
+  config: Record<string, unknown>
+}): { row: Record<string, unknown>; label: { column: string; text: string } } | null => {
+  if (!resolveTableShowTotalsRow(input.config) || !input.rows.length || !input.columns.length) {
+    return null
+  }
+
+  const columnsSet = new Set(input.columns)
+  const excludedColumns = new Set(
+    resolveTableTotalsExcludeColumns(input.columns, input.config)
+  )
+  const explicitPercentColumns = new Set(
+    resolveTableTotalsPercentColumns(input.columns, input.config)
+  )
+  const percentRecompute = resolveTableTotalsPercentRecompute(input.columns, input.config)
+  const numericColumns = new Set(
+    input.columns.filter((column) => columnIsNumeric(input.rows, column))
+  )
+  const labelColumn =
+    input.labelColumns?.find((column) => columnsSet.has(column)) ??
+    input.columns.find((column) => !numericColumns.has(column)) ??
+    input.columns[0]
+  const row: Record<string, unknown> = {}
+
+  for (const column of input.columns) {
+    if (column === labelColumn) {
+      row[column] = undefined
+      continue
+    }
+
+    if (excludedColumns.has(column)) {
+      row[column] = undefined
+      continue
+    }
+
+    const displayLabel = input.displayLabels?.[column] ?? column
+    if (
+      isTotalsPercentageColumn(
+        column,
+        displayLabel,
+        input.valueFormats,
+        explicitPercentColumns
+      )
+    ) {
+      const recompute = percentRecompute[column]
+      if (!recompute) {
+        row[column] = undefined
+        continue
+      }
+
+      if (
+        !numericColumns.has(recompute.numerator) ||
+        !numericColumns.has(recompute.denominator)
+      ) {
+        row[column] = undefined
+        continue
+      }
+
+      const numerator = sumColumnValues(input.rows, recompute.numerator)
+      const denominator = sumColumnValues(input.rows, recompute.denominator)
+      if (denominator === 0) {
+        row[column] = undefined
+        continue
+      }
+
+      row[column] =
+        recompute.mode === 'delta'
+          ? (numerator - denominator) / denominator
+          : numerator / denominator
+      continue
+    }
+
+    if (numericColumns.has(column)) {
+      row[column] = sumColumnValues(input.rows, column)
+      continue
+    }
+
+    row[column] = undefined
+  }
+
+  return {
+    row,
+    label: {
+      column: labelColumn,
+      text: resolveTableTotalsLabel(input.config)
+    }
+  }
 }
 
 export const resolveExplicitColumnColors = (columns: string[], config: Record<string, unknown>) => {

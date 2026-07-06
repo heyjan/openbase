@@ -63,6 +63,7 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const draggingColumn = ref('')
 const sharedColumnSearch = ref('')
+const totalsExcludeColumnSearch = ref('')
 const SELECT_NONE_VALUE = '__none__'
 const DEFAULT_SERIES_COLORS = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
 const sharedSelectProps = {
@@ -245,6 +246,32 @@ const filteredTableTabSharedColumns = computed(() => {
     .slice(0, 12)
 })
 
+const totalsRowEnabled = computed(() =>
+  readBoolean('showTotalsRow', false)
+)
+
+const totalsExcludedColumns = computed(() => {
+  const value = props.modelValue.totalsExcludeColumns
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .filter((column): column is string => typeof column === 'string')
+    .filter(
+      (column, index, source) =>
+        visibleColumns.value.includes(column) && source.indexOf(column) === index
+    )
+})
+
+const filteredTotalsExcludeColumns = computed(() => {
+  const query = totalsExcludeColumnSearch.value.trim().toLowerCase()
+
+  return visibleColumns.value
+    .filter((column) => !query || column.toLowerCase().includes(query))
+    .slice(0, 24)
+})
+
 const formatRuleMatchModes: Array<{ label: string; value: TableColumnFormatMatchMode }> = [
   { label: 'Exact', value: 'exact' },
   { label: 'Starts with', value: 'startsWith' },
@@ -410,6 +437,35 @@ const addTabSharedColumn = (column: string) => {
 
 const removeTabSharedColumn = (column: string) => {
   updateTabSharedColumns(tableTabSharedColumns.value.filter((entry) => entry !== column))
+}
+
+const updateTotalsExcludedColumns = (columns: string[]) => {
+  const nextColumns = visibleColumns.value.filter((entry) => columns.includes(entry))
+  const nextConfig = Object.fromEntries(
+    Object.entries(props.modelValue).filter(
+      ([key]) => key !== 'totalsExcludeColumns' && key !== 'totals_exclude_columns'
+    )
+  )
+
+  if (nextColumns.length) {
+    nextConfig.totalsExcludeColumns = nextColumns
+  }
+  emitNext(nextConfig)
+}
+
+const toggleTotalsExcludedColumn = (column: string) => {
+  if (!visibleColumns.value.includes(column)) {
+    return
+  }
+
+  const selected = new Set(totalsExcludedColumns.value)
+  if (selected.has(column)) {
+    selected.delete(column)
+  } else {
+    selected.add(column)
+  }
+
+  updateTotalsExcludedColumns([...selected])
 }
 
 const updateColumnColor = (column: string, color: string) => {
@@ -1105,6 +1161,63 @@ watch(
                 :model-value="readBoolean('useThousandsSeparator', false)"
                 @update:model-value="updateBoolean('useThousandsSeparator', $event)"
               />
+            </div>
+          </div>
+
+          <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+            <div class="flex items-center justify-between gap-3">
+              <p class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
+                <Calculator class="h-3.5 w-3.5" />
+                Totals row
+              </p>
+              <USwitch
+                :model-value="totalsRowEnabled"
+                @update:model-value="updateBoolean('showTotalsRow', $event)"
+              />
+            </div>
+
+            <div v-if="totalsRowEnabled" class="mt-3 space-y-3">
+              <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                Label
+                <UInput
+                  class="mt-1"
+                  :model-value="readString('totalsRowLabel', 'Total')"
+                  @update:model-value="updateString('totalsRowLabel', $event)"
+                />
+              </label>
+
+              <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Exclude columns</p>
+                <UInput
+                  v-model="totalsExcludeColumnSearch"
+                  class="mt-2"
+                  placeholder="Search columns"
+                />
+
+                <div class="mt-2 max-h-48 overflow-y-auto rounded border border-gray-200 bg-white p-1">
+                  <label
+                    v-for="column in filteredTotalsExcludeColumns"
+                    :key="`totals-exclude-${column}`"
+                    class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      class="h-3.5 w-3.5 rounded border-gray-300"
+                      :checked="totalsExcludedColumns.includes(column)"
+                      @change="toggleTotalsExcludedColumn(column)"
+                    >
+                    <span class="truncate">{{ column }}</span>
+                  </label>
+                  <p v-if="!filteredTotalsExcludeColumns.length" class="px-2 py-1.5 text-xs text-gray-500">
+                    No matches
+                  </p>
+                </div>
+
+                <p class="mt-2 text-xs text-gray-500">
+                  Percentage columns (e.g. Abw.%) are detected automatically and left blank.
+                  Configure recompute in advanced config if needed.
+                </p>
+              </div>
             </div>
           </div>
         </div>
