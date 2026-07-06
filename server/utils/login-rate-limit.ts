@@ -16,15 +16,6 @@ const buildAccountLoginKey = (scope: LoginScope, email: string) => {
   return `login-account:${scope}:${digest}`
 }
 
-const setAccountRateLimitHeaders = (
-  event: H3Event,
-  result: { remaining: number; resetMs: number }
-) => {
-  setHeader(event, 'X-Login-RateLimit-Limit', String(ACCOUNT_FAILURE_LIMIT))
-  setHeader(event, 'X-Login-RateLimit-Remaining', String(result.remaining))
-  setHeader(event, 'X-Login-RateLimit-Reset', String(Math.ceil(result.resetMs / 1000)))
-}
-
 export const assertLoginAccountAllowed = (
   event: H3Event,
   scope: LoginScope,
@@ -36,7 +27,6 @@ export const assertLoginAccountAllowed = (
     ACCOUNT_FAILURE_LIMIT,
     ACCOUNT_FAILURE_WINDOW_MS
   )
-  setAccountRateLimitHeaders(event, result)
 
   if (result.allowed) {
     return
@@ -60,7 +50,6 @@ export const recordFailedLogin = (
     ACCOUNT_FAILURE_LIMIT,
     ACCOUNT_FAILURE_WINDOW_MS
   )
-  setAccountRateLimitHeaders(event, result)
 
   if (result.allowed) {
     return
