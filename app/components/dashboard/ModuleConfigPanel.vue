@@ -75,6 +75,8 @@ const writableTables = ref<Array<{ id: string; tableName: string; dataSourceName
 const writableTablesLoading = ref(false)
 const writableTableError = ref('')
 const showTitle = ref(true)
+const descriptionEnabled = ref(false)
+const descriptionText = ref('')
 const barCategoryLabelRotation = ref<BarLabelRotation>(0)
 const selectedWritableTableId = ref('')
 const tabbedEnabled = ref(false)
@@ -287,6 +289,21 @@ const readConfigNumber = (
 
 const readShowTitleConfig = (config: Record<string, unknown> | null | undefined) =>
   readConfigBoolean(config, ['showTitle', 'show_title'], true)
+
+const readDescriptionEnabledConfig = (config: Record<string, unknown> | null | undefined) =>
+  readConfigBoolean(config, ['descriptionEnabled', 'description_enabled'], false)
+
+const readDescriptionTextConfig = (config: Record<string, unknown> | null | undefined) =>
+  readConfigRawString(config, [
+    'description',
+    'visualizationDescription',
+    'visualization_description'
+  ])
+
+const syncDescriptionControls = (config: Record<string, unknown> | null | undefined) => {
+  descriptionEnabled.value = readDescriptionEnabledConfig(config)
+  descriptionText.value = readDescriptionTextConfig(config)
+}
 
 const normalizeBarLabelRotation = (value: number | null): BarLabelRotation => {
   if (value === 45 || value === 90) {
@@ -735,6 +752,51 @@ const onShowTitleChange = () => {
   parseError.value = ''
 }
 
+const onDescriptionEnabledChange = () => {
+  if (!props.module || isTextModuleType(props.module.type)) {
+    return
+  }
+
+  const applied = applyConfigPatch((config) => {
+    if (descriptionEnabled.value) {
+      config.descriptionEnabled = true
+    } else {
+      delete config.descriptionEnabled
+    }
+    delete config.description_enabled
+
+    const nextDescription = descriptionText.value.trim()
+    if (nextDescription) {
+      config.description = nextDescription
+    } else {
+      delete config.description
+    }
+    delete config.visualizationDescription
+    delete config.visualization_description
+  })
+
+  if (!applied) {
+    descriptionEnabled.value = readDescriptionEnabledConfig(props.module?.config)
+  }
+}
+
+const onDescriptionTextInput = () => {
+  if (!props.module || isTextModuleType(props.module.type)) {
+    return
+  }
+
+  applyConfigPatch((config) => {
+    const nextDescription = descriptionText.value.trim()
+    if (nextDescription) {
+      config.description = nextDescription
+    } else {
+      delete config.description
+    }
+    delete config.visualizationDescription
+    delete config.visualization_description
+  })
+}
+
 const onBarCategoryLabelRotationChange = () => {
   if (!isBarChartModule.value) {
     return
@@ -852,6 +914,7 @@ watch(
     draft.gridH = module.gridH
     configText.value = JSON.stringify(module.config ?? {}, null, 2)
     showTitle.value = readShowTitleConfig(module.config)
+    syncDescriptionControls(module.config)
     barCategoryLabelRotation.value = readBarCategoryLabelRotation(module.config)
     selectedWritableTableId.value = readWritableTableId(module.config)
     syncDataTableTabControls(module.config)
@@ -882,6 +945,8 @@ watch(
   () => {
     if (isTextModule.value) {
       showTitle.value = true
+      descriptionEnabled.value = false
+      descriptionText.value = ''
       barCategoryLabelRotation.value = 0
       selectedWritableTableId.value = ''
       tabbedEnabled.value = false
@@ -897,6 +962,16 @@ watch(
       const nextShowTitle = readShowTitleConfig(parsedConfig)
       if (nextShowTitle !== showTitle.value) {
         showTitle.value = nextShowTitle
+      }
+
+      const nextDescriptionEnabled = readDescriptionEnabledConfig(parsedConfig)
+      if (nextDescriptionEnabled !== descriptionEnabled.value) {
+        descriptionEnabled.value = nextDescriptionEnabled
+      }
+
+      const nextDescriptionText = readDescriptionTextConfig(parsedConfig)
+      if (nextDescriptionText !== descriptionText.value) {
+        descriptionText.value = nextDescriptionText
       }
 
       if (isBarChartModule.value) {
@@ -1090,6 +1165,28 @@ onMounted(() => {
         >
         Show Title
       </label>
+
+      <div v-if="!isTextModule" class="space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
+        <label class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
+          <input
+            v-model="descriptionEnabled"
+            type="checkbox"
+            class="h-4 w-4 rounded border-gray-300"
+            @change="onDescriptionEnabledChange"
+          >
+          Description
+        </label>
+
+        <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+          Text
+          <textarea
+            v-model="descriptionText"
+            rows="3"
+            class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm normal-case"
+            @input="onDescriptionTextInput"
+          ></textarea>
+        </label>
+      </div>
 
       <span
         v-if="isBarChartModule"

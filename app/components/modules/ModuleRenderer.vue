@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Info } from 'lucide-vue-next'
 import { isTextModuleType, type ModuleConfig } from '~/types/module'
 import type { QueryVariable, SelectorMode } from '~/types/query-variable'
 import Spinner from '~/components/ui/Spinner.vue'
@@ -116,6 +117,44 @@ const showModuleTitle = computed(() => {
   const candidate = config.showTitle ?? config.show_title
   return typeof candidate === 'boolean' ? candidate : true
 })
+const descriptionText = computed(() => {
+  const config = props.module.config
+  if (!config || typeof config !== 'object') {
+    return ''
+  }
+
+  const candidate =
+    config.description ?? config.visualizationDescription ?? config.visualization_description
+  return typeof candidate === 'string' ? candidate.trim() : ''
+})
+const showDescription = computed(() => {
+  const config = props.module.config
+  if (!config || typeof config !== 'object') {
+    return false
+  }
+
+  const enabled = config.descriptionEnabled ?? config.description_enabled
+  return enabled === true && descriptionText.value.length > 0
+})
+const descriptionExpanded = ref(false)
+const descriptionRef = ref<HTMLElement | null>(null)
+const descriptionOverflows = ref(false)
+const canExpandDescription = computed(
+  () => descriptionExpanded.value || descriptionOverflows.value || descriptionText.value.length > 96
+)
+
+let descriptionResizeObserver: ResizeObserver | null = null
+
+const updateDescriptionOverflow = async () => {
+  await nextTick()
+  const element = descriptionRef.value
+  descriptionOverflows.value = !!element && element.scrollWidth > element.clientWidth + 1
+}
+
+const resetDescriptionState = () => {
+  descriptionExpanded.value = false
+  void updateDescriptionOverflow()
+}
 
 const moduleRef = toRef(props, 'module')
 const { data, pending, error, refresh } = useModuleData(moduleRef)
@@ -264,6 +303,44 @@ watch(
   },
   { immediate: true }
 )
+
+watch(
+  () => [props.module.id, descriptionText.value, showDescription.value] as const,
+  resetDescriptionState,
+  { immediate: true }
+)
+
+onMounted(() => {
+  if (typeof ResizeObserver !== 'undefined') {
+    descriptionResizeObserver = new ResizeObserver(() => {
+      void updateDescriptionOverflow()
+    })
+    if (descriptionRef.value) {
+      descriptionResizeObserver.observe(descriptionRef.value)
+    }
+  }
+
+  window.addEventListener('resize', updateDescriptionOverflow)
+  void updateDescriptionOverflow()
+})
+
+watch(descriptionRef, (element, previousElement) => {
+  if (!descriptionResizeObserver) {
+    return
+  }
+  if (previousElement) {
+    descriptionResizeObserver.unobserve(previousElement)
+  }
+  if (element) {
+    descriptionResizeObserver.observe(element)
+  }
+  void updateDescriptionOverflow()
+})
+
+onBeforeUnmount(() => {
+  descriptionResizeObserver?.disconnect()
+  window.removeEventListener('resize', updateDescriptionOverflow)
+})
 </script>
 
 <template>
@@ -281,6 +358,30 @@ watch(
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
         <h3 v-if="showModuleTitle" class="text-sm font-semibold text-gray-900">{{ title }}</h3>
+        <div
+          v-if="showDescription"
+          class="mt-1 flex min-w-0 items-start gap-1.5 text-xs leading-5 text-gray-600"
+        >
+          <Info class="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden="true" />
+          <p
+            ref="descriptionRef"
+            :class="[
+              'min-w-0 flex-1',
+              descriptionExpanded ? 'whitespace-pre-line' : 'truncate'
+            ]"
+          >
+            {{ descriptionText }}
+          </p>
+          <button
+            v-if="canExpandDescription"
+            type="button"
+            class="shrink-0 rounded px-1 text-[11px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            :aria-expanded="descriptionExpanded"
+            @click="descriptionExpanded = !descriptionExpanded"
+          >
+            {{ descriptionExpanded ? 'Less' : 'More' }}
+          </button>
+        </div>
         <p
           v-if="showTypeLabel"
           :class="[
