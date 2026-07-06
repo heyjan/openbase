@@ -105,6 +105,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <NuxtAnnouncer />
+  <NuxtRouteAnnouncer />
   <div v-if="shouldShowTopBar" class="h-12 border-b border-gray-200 bg-white">
     <div class="flex h-full items-center justify-between gap-4 px-6">
       <div class="flex min-w-0 items-center gap-10">
