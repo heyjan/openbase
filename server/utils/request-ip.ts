@@ -7,48 +7,8 @@ type TrustedProxyRule = {
 
 const IPV4_BITS = 32
 
-const normalizeIp = (value: string | null | undefined) => {
-  const trimmed = value?.trim()
-  if (!trimmed) {
-    return ''
-  }
-
-  if (trimmed.startsWith('::ffff:')) {
-    return trimmed.slice('::ffff:'.length)
-  }
-
-  return trimmed
-}
-
-const parseTrustedProxyRule = (value: string): TrustedProxyRule | null => {
-  const trimmed = normalizeIp(value)
-  if (!trimmed) {
-    return null
-  }
-
-  const [ip, prefix] = trimmed.split('/')
-  if (prefix === undefined) {
-    return { value: ip }
-  }
-
-  const prefixBits = Number(prefix)
-  if (
-    !Number.isInteger(prefixBits) ||
-    prefixBits < 0 ||
-    prefixBits > IPV4_BITS ||
-    ipv4ToNumber(ip) === null
-  ) {
-    return null
-  }
-
-  return { value: ip, prefixBits }
-}
-
-const getTrustedProxyRules = () =>
-  (process.env.OPENBASE_TRUSTED_PROXIES || '')
-    .split(',')
-    .map(parseTrustedProxyRule)
-    .filter((rule): rule is TrustedProxyRule => Boolean(rule))
+let cachedTrustedProxyEnv: string | null = null
+let cachedTrustedProxyRules: TrustedProxyRule[] = []
 
 const ipv4ToNumber = (value: string) => {
   const parts = value.split('.')
@@ -70,6 +30,75 @@ const ipv4ToNumber = (value: string) => {
   }
 
   return octets.reduce((result, octet) => (result << 8) + octet, 0) >>> 0
+}
+
+const normalizeIp = (value: string | null | undefined) => {
+  let trimmed = value?.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  if (trimmed.startsWith('[')) {
+    const closingBracketIndex = trimmed.indexOf(']')
+    if (closingBracketIndex > 0) {
+      trimmed = trimmed.slice(1, closingBracketIndex)
+    }
+  } else {
+    const ipv4WithPort = trimmed.match(/^(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/)
+    if (ipv4WithPort) {
+      trimmed = ipv4WithPort[1]
+    }
+  }
+
+  const normalized = trimmed.toLowerCase()
+  if (normalized.startsWith('::ffff:')) {
+    return normalized.slice('::ffff:'.length)
+  }
+
+  return normalized
+}
+
+const parseTrustedProxyRule = (value: string): TrustedProxyRule | null => {
+  const trimmed = normalizeIp(value)
+  if (!trimmed) {
+    return null
+  }
+
+  const parts = trimmed.split('/')
+  if (parts.length > 2) {
+    return null
+  }
+
+  const [ip, prefix] = parts
+  if (prefix === undefined) {
+    return { value: ip }
+  }
+
+  const prefixBits = Number(prefix)
+  if (
+    !Number.isInteger(prefixBits) ||
+    prefixBits < 0 ||
+    prefixBits > IPV4_BITS ||
+    ipv4ToNumber(ip) === null
+  ) {
+    return null
+  }
+
+  return { value: ip, prefixBits }
+}
+
+const getTrustedProxyRules = () => {
+  const source = process.env.OPENBASE_TRUSTED_PROXIES || ''
+  if (source === cachedTrustedProxyEnv) {
+    return cachedTrustedProxyRules
+  }
+
+  cachedTrustedProxyEnv = source
+  cachedTrustedProxyRules = source
+    .split(',')
+    .map(parseTrustedProxyRule)
+    .filter((rule): rule is TrustedProxyRule => Boolean(rule))
+  return cachedTrustedProxyRules
 }
 
 const matchesTrustedProxyRule = (ip: string, rule: TrustedProxyRule) => {

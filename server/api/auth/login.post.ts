@@ -33,8 +33,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Email and password required' })
   }
 
-  const admin = await getAdminByEmail(email)
   assertLoginAccountAllowed(event, 'admin', email)
+  const admin = await getAdminByEmail(email)
 
   // Verify against a constant-time helper that always runs bcrypt (even for a
   // missing account) so response timing does not reveal account existence.
