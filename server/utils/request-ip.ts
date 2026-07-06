@@ -1,3 +1,4 @@
+import { isIP } from 'node:net'
 import { getHeader, type H3Event } from 'h3'
 
 type TrustedProxyRule = {
@@ -6,6 +7,7 @@ type TrustedProxyRule = {
 }
 
 const IPV4_BITS = 32
+const DECIMAL_INTEGER_PATTERN = /^\d+$/
 
 let cachedTrustedProxyEnv: string | null = null
 let cachedTrustedProxyRules: TrustedProxyRule[] = []
@@ -70,17 +72,20 @@ const parseTrustedProxyRule = (value: string): TrustedProxyRule | null => {
   }
 
   const [ip, prefix] = parts
+  if (isIP(ip) === 0) {
+    return null
+  }
+
   if (prefix === undefined) {
     return { value: ip }
   }
 
-  const prefixBits = Number(prefix)
-  if (
-    !Number.isInteger(prefixBits) ||
-    prefixBits < 0 ||
-    prefixBits > IPV4_BITS ||
-    ipv4ToNumber(ip) === null
-  ) {
+  if (!DECIMAL_INTEGER_PATTERN.test(prefix) || ipv4ToNumber(ip) === null) {
+    return null
+  }
+
+  const prefixBits = Number.parseInt(prefix, 10)
+  if (prefixBits < 0 || prefixBits > IPV4_BITS) {
     return null
   }
 
@@ -154,5 +159,5 @@ export const getClientIp = (event: H3Event) => {
     }
   }
 
-  return forwardedFor[0] ?? remoteIp
+  return remoteIp
 }

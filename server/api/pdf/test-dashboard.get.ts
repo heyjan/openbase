@@ -1,11 +1,10 @@
-import { createError, defineEventHandler, setHeader } from 'h3'
+import { defineEventHandler, setHeader } from 'h3'
 import { createPdfTestDashboardSpec } from '~~/server/utils/pdf-export-samples'
 import { renderPdfDashboardBuffer } from '~~/server/utils/pdf-export'
+import { assertPdfTestEndpointsEnabled } from '~~/server/utils/pdf-test-endpoints'
 
 export default defineEventHandler(async (event) => {
-  if (process.env.NODE_ENV === 'production') {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
-  }
+  assertPdfTestEndpointsEnabled()
 
   const pdf = await renderPdfDashboardBuffer(createPdfTestDashboardSpec())
   setHeader(event, 'content-type', 'application/pdf')
