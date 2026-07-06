@@ -1,11 +1,9 @@
 import {
   createError,
   defineEventHandler,
-  getRequestIP,
   readBody,
   setCookie
 } from 'h3'
-import bcrypt from 'bcryptjs'
 import { createAuditEntry } from '~~/server/utils/audit-store'
 import { EDITOR_SESSION_COOKIE, SESSION_TTL_DAYS } from '~~/server/utils/auth'
 import {
@@ -13,6 +11,13 @@ import {
   getEditorByEmail,
   updateEditorLastLogin
 } from '~~/server/utils/editor-store'
+import {
+  assertLoginAccountAllowed,
+  recordFailedLogin,
+  resetLoginAccountLimit
+} from '~~/server/utils/login-rate-limit'
+import { verifyPassword } from '~~/server/utils/password'
+import { getClientIp } from '~~/server/utils/request-ip'
 
 type Body = {
   email?: string
@@ -29,15 +34,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const editor = await getEditorByEmail(email)
-  if (!editor || !editor.is_active) {
+  assertLoginAccountAllowed(event, 'editor', email)
+
+  // Verify against a constant-time helper that always runs bcrypt (even for a
+  // missing account) so response timing does not reveal account existence.
+  const matches = await verifyPassword(password, editor?.password_hash)
+
+  if (!editor || !editor.is_active || !matches) {
+    recordFailedLogin(event, 'editor', email)
     throw createError({ statusCode: 401, statusMessage: 'Invalid credentials' })
   }
 
-  const matches = await bcrypt.compare(password, editor.password_hash)
-  if (!matches) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid credentials' })
-  }
-
+  resetLoginAccountLimit('editor', email)
   await updateEditorLastLogin(editor.id)
 
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)
@@ -60,7 +68,7 @@ export default defineEventHandler(async (event) => {
       action: 'auth.login',
       resource: 'editor_session',
       details: { email: editor.email },
-      ipAddress: getRequestIP(event, { xForwardedFor: true }) ?? null
+      ipAddress: getClientIp(event)
     })
   } catch {
     // Audit logging failures should not block auth.

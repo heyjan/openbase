@@ -3,11 +3,11 @@ import {
   defineEventHandler,
   getHeader,
   getQuery,
-  getRequestIP,
   getRouterParam
 } from 'h3'
 import { listModules } from '~~/server/utils/dashboard-store'
 import { query as dbQuery } from '~~/server/utils/db'
+import { getClientIp } from '~~/server/utils/request-ip'
 import { requireSharedDashboardAccess } from '~~/server/utils/share-access'
 import { incrementViewCount } from '~~/server/utils/share-link-store'
 
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
 
   const { dashboard, shareLink } = await requireSharedDashboardAccess(event, slug, token)
 
-  const ipAddress = getRequestIP(event, { xForwardedFor: true }) ?? null
+  const ipAddress = getClientIp(event)
   const userAgent = getHeader(event, 'user-agent') ?? null
   try {
     await incrementViewCount(shareLink.id)

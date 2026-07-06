@@ -3,7 +3,6 @@ import {
   defineEventHandler,
   getCookie,
   getMethod,
-  getRequestIP,
   setHeader,
   type H3Event
 } from 'h3'
@@ -12,11 +11,12 @@ import {
   EDITOR_SESSION_COOKIE
 } from '~~/server/utils/auth'
 import { consumeRateLimit } from '~~/server/utils/rate-limiter'
+import { getClientIp } from '~~/server/utils/request-ip'
 
 const ONE_MINUTE_MS = 60_000
 
 const buildIpKey = (event: H3Event) =>
-  getRequestIP(event, { xForwardedFor: true }) || 'unknown'
+  getClientIp(event) || 'unknown'
 
 const resolveRule = (event: H3Event) => {
   const path = event.path || ''
@@ -25,6 +25,16 @@ const resolveRule = (event: H3Event) => {
   if (method === 'POST' && (path === '/api/auth/login' || path === '/api/auth/editor-login')) {
     return {
       key: `login:${buildIpKey(event)}`,
+      maxRequests: 10,
+      windowMs: ONE_MINUTE_MS
+    }
+  }
+
+  if (method === 'POST' && path === '/api/pdf/dashboard') {
+    const sessionToken = getCookie(event, ADMIN_SESSION_COOKIE)
+    const keyPart = sessionToken || buildIpKey(event)
+    return {
+      key: `pdf-render:${keyPart}`,
       maxRequests: 10,
       windowMs: ONE_MINUTE_MS
     }
