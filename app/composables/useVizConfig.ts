@@ -649,6 +649,7 @@ export const buildAutoVizConfig = <T extends QueryPreviewVisualization>(
       showTotalsRow: false,
       totalsRowLabel: 'Total',
       totalsExcludeColumns: [],
+      totalsExcludeLabels: [],
       totalsPercentColumns: [],
       totalsPercentRecompute: {},
       tabbed: false,
@@ -828,6 +829,12 @@ const sanitizeVizConfigForType = (
       config,
       ['totalsExcludeColumns', 'totals_exclude_columns']
     ).filter((column) => columns.includes(column))
+    normalized.totalsExcludeLabels = readConfiguredStringArray(
+      config,
+      ['totalsExcludeLabels', 'totals_exclude_labels']
+    )
+      .map((label) => label.trim())
+      .filter((label, index, source) => label.length > 0 && source.indexOf(label) === index)
     normalized.totalsPercentColumns = readConfiguredStringArray(
       config,
       ['totalsPercentColumns', 'totals_percent_columns']
@@ -1161,6 +1168,11 @@ export const resolveTableTotalsExcludeColumns = (
         columns.includes(column) && source.indexOf(column) === index
     )
 
+export const resolveTableTotalsExcludeLabels = (config: Record<string, unknown>) =>
+  readConfiguredStringArray(config, ['totalsExcludeLabels', 'totals_exclude_labels'])
+    .map((label) => label.trim())
+    .filter((label, index, source) => label.length > 0 && source.indexOf(label) === index)
+
 export const resolveTableTotalsPercentColumns = (
   columns: string[],
   config: Record<string, unknown>
@@ -1389,6 +1401,7 @@ export const buildTableTotalsRow = (input: {
   const excludedColumns = new Set(
     resolveTableTotalsExcludeColumns(input.columns, input.config)
   )
+  const excludedLabels = new Set(resolveTableTotalsExcludeLabels(input.config))
   const explicitPercentColumns = new Set(
     resolveTableTotalsPercentColumns(input.columns, input.config)
   )
@@ -1414,6 +1427,11 @@ export const buildTableTotalsRow = (input: {
     }
 
     const displayLabel = input.displayLabels?.[column] ?? column
+    if (excludedLabels.has(displayLabel.trim())) {
+      row[column] = undefined
+      continue
+    }
+
     if (
       isTotalsPercentageColumn(
         column,

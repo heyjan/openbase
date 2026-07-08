@@ -37,6 +37,7 @@ import {
   resolveTableTabGroupSeparator,
   resolveTableTabSharedColumns,
   resolveTableVisibleColumns,
+  stripTableTabGroupPrefix,
   toNumber
 } from '~/composables/useVizConfig'
 
@@ -236,6 +237,14 @@ const tableTabGroups = computed(() =>
   ).groups.keys()]
 )
 
+const tableVisibleTabGrouping = computed(() =>
+  detectTableTabGroups(
+    visibleColumns.value,
+    tableTabGroupSeparator.value,
+    resolveTableTabSharedColumns(visibleColumns.value, props.modelValue)
+  )
+)
+
 const filteredTableTabSharedColumns = computed(() => {
   const query = sharedColumnSearch.value.trim().toLowerCase()
   const selected = new Set(tableTabSharedColumns.value)
@@ -262,6 +271,47 @@ const totalsExcludedColumns = computed(() => {
       (column, index, source) =>
         visibleColumns.value.includes(column) && source.indexOf(column) === index
     )
+})
+
+const totalsExcludeLabelOptions = computed(() => {
+  const labels = new Set<string>()
+
+  if (tableTabbedEnabled.value && tableVisibleTabGrouping.value.groups.size) {
+    tableVisibleTabGrouping.value.shared.forEach((column) => labels.add(column))
+
+    for (const [groupName, columns] of tableVisibleTabGrouping.value.groups.entries()) {
+      columns.forEach((column) => {
+        labels.add(stripTableTabGroupPrefix(column, groupName, tableTabGroupSeparator.value))
+      })
+    }
+
+    return [...labels]
+  }
+
+  return visibleColumns.value
+})
+
+const totalsExcludedLabels = computed(() => {
+  const value = props.modelValue.totalsExcludeLabels ?? props.modelValue.totals_exclude_labels
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .filter((label): label is string => typeof label === 'string')
+    .map((label) => label.trim())
+    .filter(
+      (label, index, source) =>
+        totalsExcludeLabelOptions.value.includes(label) && source.indexOf(label) === index
+    )
+})
+
+const filteredTotalsExcludeLabels = computed(() => {
+  const query = totalsExcludeColumnSearch.value.trim().toLowerCase()
+
+  return totalsExcludeLabelOptions.value
+    .filter((label) => !query || label.toLowerCase().includes(query))
+    .slice(0, 24)
 })
 
 const filteredTotalsExcludeColumns = computed(() => {
@@ -453,6 +503,20 @@ const updateTotalsExcludedColumns = (columns: string[]) => {
   emitNext(nextConfig)
 }
 
+const updateTotalsExcludedLabels = (labels: string[]) => {
+  const nextLabels = totalsExcludeLabelOptions.value.filter((entry) => labels.includes(entry))
+  const nextConfig = Object.fromEntries(
+    Object.entries(props.modelValue).filter(
+      ([key]) => key !== 'totalsExcludeLabels' && key !== 'totals_exclude_labels'
+    )
+  )
+
+  if (nextLabels.length) {
+    nextConfig.totalsExcludeLabels = nextLabels
+  }
+  emitNext(nextConfig)
+}
+
 const toggleTotalsExcludedColumn = (column: string) => {
   if (!visibleColumns.value.includes(column)) {
     return
@@ -466,6 +530,21 @@ const toggleTotalsExcludedColumn = (column: string) => {
   }
 
   updateTotalsExcludedColumns([...selected])
+}
+
+const toggleTotalsExcludedLabel = (label: string) => {
+  if (!totalsExcludeLabelOptions.value.includes(label)) {
+    return
+  }
+
+  const selected = new Set(totalsExcludedLabels.value)
+  if (selected.has(label)) {
+    selected.delete(label)
+  } else {
+    selected.add(label)
+  }
+
+  updateTotalsExcludedLabels([...selected])
 }
 
 const updateColumnColor = (column: string, color: string) => {
@@ -1187,14 +1266,36 @@ watch(
               </label>
 
               <div>
-                <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Exclude columns</p>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Exclude labels</p>
                 <UInput
                   v-model="totalsExcludeColumnSearch"
                   class="mt-2"
-                  placeholder="Search columns"
+                  placeholder="Search labels"
                 />
 
                 <div class="mt-2 max-h-48 overflow-y-auto rounded border border-gray-200 bg-white p-1">
+                  <label
+                    v-for="label in filteredTotalsExcludeLabels"
+                    :key="`totals-exclude-label-${label}`"
+                    class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      class="h-3.5 w-3.5 rounded border-gray-300"
+                      :checked="totalsExcludedLabels.includes(label)"
+                      @change="toggleTotalsExcludedLabel(label)"
+                    >
+                    <span class="truncate">{{ label }}</span>
+                  </label>
+                  <p v-if="!filteredTotalsExcludeLabels.length" class="px-2 py-1.5 text-xs text-gray-500">
+                    No matches
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Exclude exact columns</p>
+                <div class="mt-2 max-h-36 overflow-y-auto rounded border border-gray-200 bg-white p-1">
                   <label
                     v-for="column in filteredTotalsExcludeColumns"
                     :key="`totals-exclude-${column}`"
@@ -1212,11 +1313,6 @@ watch(
                     No matches
                   </p>
                 </div>
-
-                <p class="mt-2 text-xs text-gray-500">
-                  Percentage columns (e.g. Abw.%) are detected automatically and left blank.
-                  Configure recompute in advanced config if needed.
-                </p>
               </div>
             </div>
           </div>
