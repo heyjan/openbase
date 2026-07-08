@@ -75,6 +75,7 @@ export type TableVizOptions = SharedVizOptions & {
   showTotalsRow?: boolean
   totalsRowLabel?: string
   totalsExcludeColumns?: string[]
+  totalsExcludeLabels?: string[]
   totalsPercentColumns?: string[]
   totalsPercentRecompute?: Record<string, TableTotalsPercentRecompute>
   tabbed?: boolean
