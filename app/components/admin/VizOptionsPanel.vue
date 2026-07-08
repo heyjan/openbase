@@ -64,6 +64,7 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const draggingColumn = ref('')
 const sharedColumnSearch = ref('')
+const totalsExcludeLabelSearch = ref('')
 const totalsExcludeColumnSearch = ref('')
 const SELECT_NONE_VALUE = '__none__'
 const DEFAULT_SERIES_COLORS = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
@@ -307,7 +308,7 @@ const totalsExcludedLabels = computed(() => {
 })
 
 const filteredTotalsExcludeLabels = computed(() => {
-  const query = totalsExcludeColumnSearch.value.trim().toLowerCase()
+  const query = totalsExcludeLabelSearch.value.trim().toLowerCase()
 
   return totalsExcludeLabelOptions.value
     .filter((label) => !query || label.toLowerCase().includes(query))
@@ -1268,7 +1269,7 @@ watch(
               <div>
                 <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Exclude labels</p>
                 <UInput
-                  v-model="totalsExcludeColumnSearch"
+                  v-model="totalsExcludeLabelSearch"
                   class="mt-2"
                   placeholder="Search labels"
                 />
@@ -1295,6 +1296,12 @@ watch(
 
               <div>
                 <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Exclude exact columns</p>
+                <UInput
+                  v-model="totalsExcludeColumnSearch"
+                  class="mt-2"
+                  placeholder="Search columns"
+                />
+
                 <div class="mt-2 max-h-36 overflow-y-auto rounded border border-gray-200 bg-white p-1">
                   <label
                     v-for="column in filteredTotalsExcludeColumns"
