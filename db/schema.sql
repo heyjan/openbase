@@ -123,17 +123,34 @@ CREATE TABLE IF NOT EXISTS editor_sessions (
 );
 
 CREATE TABLE IF NOT EXISTS writable_tables (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  data_source_id  UUID NOT NULL REFERENCES data_sources(id) ON DELETE CASCADE,
-  table_name      VARCHAR(255) NOT NULL,
-  allowed_columns TEXT[],
-  allow_insert    BOOLEAN DEFAULT true,
-  allow_update    BOOLEAN DEFAULT true,
-  description     TEXT,
-  created_at      TIMESTAMPTZ DEFAULT now(),
-  updated_at      TIMESTAMPTZ DEFAULT now(),
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  data_source_id    UUID NOT NULL REFERENCES data_sources(id) ON DELETE CASCADE,
+  table_name        VARCHAR(255) NOT NULL,
+  allowed_columns   TEXT[],
+  identifier_columns TEXT[],
+  allow_insert      BOOLEAN DEFAULT true,
+  allow_update      BOOLEAN DEFAULT true,
+  description       TEXT,
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  updated_at        TIMESTAMPTZ DEFAULT now(),
   UNIQUE(data_source_id, table_name)
 );
+
+-- Views have no primary key; identifier_columns lets an admin declare the
+-- natural row key so inline editing can target rows through a writable view.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'writable_tables'
+      AND column_name = 'identifier_columns'
+  ) THEN
+    ALTER TABLE writable_tables
+    ADD COLUMN identifier_columns TEXT[];
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS editor_table_permissions (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
