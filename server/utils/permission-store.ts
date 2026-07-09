@@ -101,6 +101,7 @@ export const getEditorWritableTables = async (editorId: string) => {
     data_source_id: string
     table_name: string
     allowed_columns: string[] | null
+    identifier_columns: string[] | null
     allow_insert: boolean
     allow_update: boolean
     description: string | null
@@ -114,6 +115,7 @@ export const getEditorWritableTables = async (editorId: string) => {
        wt.data_source_id,
        wt.table_name,
        wt.allowed_columns,
+       wt.identifier_columns,
        wt.allow_insert,
        wt.allow_update,
        wt.description,
@@ -136,6 +138,7 @@ export const getEditorWritableTables = async (editorId: string) => {
     dataSourceType: row.data_source_type,
     tableName: row.table_name,
     allowedColumns: row.allowed_columns,
+    identifierColumns: row.identifier_columns,
     allowInsert: row.allow_insert,
     allowUpdate: row.allow_update,
     description: row.description ?? undefined,

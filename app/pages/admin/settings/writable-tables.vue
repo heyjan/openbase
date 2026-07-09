@@ -5,6 +5,7 @@ import type { WritableTable } from '~/types/editor'
 
 type WritableTableForm = WritableTable & {
   allowedColumnsText: string
+  identifierColumnsText: string
   descriptionInput: string
 }
 
@@ -24,6 +25,7 @@ const newTable = reactive({
   dataSourceId: '',
   tableName: '',
   allowedColumnsText: '',
+  identifierColumnsText: '',
   allowInsert: true,
   allowUpdate: true,
   description: ''
@@ -33,7 +35,7 @@ const updatingId = ref<string | null>(null)
 const updateError = ref('')
 const deletingId = ref<string | null>(null)
 
-const parseAllowedColumns = (value: string) => {
+const parseColumnList = (value: string) => {
   const items = value
     .split(',')
     .map((item) => item.trim())
@@ -45,6 +47,7 @@ const parseAllowedColumns = (value: string) => {
 const mapWritableTable = (table: WritableTable): WritableTableForm => ({
   ...table,
   allowedColumnsText: table.allowedColumns?.join(', ') ?? '',
+  identifierColumnsText: table.identifierColumns?.join(', ') ?? '',
   descriptionInput: table.description ?? ''
 })
 
@@ -78,7 +81,8 @@ const addWritableTable = async () => {
     await create({
       dataSourceId: newTable.dataSourceId,
       tableName: newTable.tableName,
-      allowedColumns: parseAllowedColumns(newTable.allowedColumnsText),
+      allowedColumns: parseColumnList(newTable.allowedColumnsText),
+      identifierColumns: parseColumnList(newTable.identifierColumnsText),
       allowInsert: newTable.allowInsert,
       allowUpdate: newTable.allowUpdate,
       description: newTable.description.trim() || null
@@ -86,6 +90,7 @@ const addWritableTable = async () => {
 
     newTable.tableName = ''
     newTable.allowedColumnsText = ''
+    newTable.identifierColumnsText = ''
     newTable.allowInsert = true
     newTable.allowUpdate = true
     newTable.description = ''
@@ -109,7 +114,8 @@ const saveWritableTable = async (table: WritableTableForm) => {
     await update(table.id, {
       dataSourceId: table.dataSourceId,
       tableName: table.tableName,
-      allowedColumns: parseAllowedColumns(table.allowedColumnsText),
+      allowedColumns: parseColumnList(table.allowedColumnsText),
+      identifierColumns: parseColumnList(table.identifierColumnsText),
       allowInsert: table.allowInsert,
       allowUpdate: table.allowUpdate,
       description: table.descriptionInput.trim() || null
@@ -182,6 +188,19 @@ onMounted(loadData)
             v-model="newTable.allowedColumnsText"
             class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
+        </label>
+
+        <label class="block text-sm font-medium text-gray-700 md:col-span-2">
+          Identifier columns
+          <input
+            v-model="newTable.identifierColumnsText"
+            placeholder="Required for views (no primary key), e.g. country, year, month"
+            class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <span class="mt-1 block text-xs font-normal text-gray-500">
+            Comma-separated columns that uniquely identify a row. Leave empty for base
+            tables (their primary key is used automatically).
+          </span>
         </label>
 
         <label class="block text-sm font-medium text-gray-700">
@@ -266,6 +285,19 @@ onMounted(loadData)
               v-model="table.allowedColumnsText"
               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
+          </label>
+
+          <label class="block text-sm font-medium text-gray-700 md:col-span-2">
+            Identifier columns
+            <input
+              v-model="table.identifierColumnsText"
+              placeholder="Required for views (no primary key), e.g. country, year, month"
+              class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <span class="mt-1 block text-xs font-normal text-gray-500">
+              Comma-separated columns that uniquely identify a row. Leave empty for base
+              tables (their primary key is used automatically).
+            </span>
           </label>
 
           <label class="block text-sm font-medium text-gray-700">

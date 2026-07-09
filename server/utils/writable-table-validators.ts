@@ -7,7 +7,7 @@ const parseString = (value: unknown, fieldName: string) => {
   return value.trim()
 }
 
-const parseAllowedColumns = (value: unknown) => {
+const parseColumnList = (value: unknown, fieldName: string) => {
   if (value === undefined || value === null) {
     return null
   }
@@ -15,7 +15,7 @@ const parseAllowedColumns = (value: unknown) => {
   if (!Array.isArray(value)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'allowed_columns must be an array or null'
+      statusMessage: `${fieldName} must be an array or null`
     })
   }
 
@@ -25,6 +25,10 @@ const parseAllowedColumns = (value: unknown) => {
 
   return Array.from(new Set(columns))
 }
+
+const parseAllowedColumns = (value: unknown) => parseColumnList(value, 'allowed_columns')
+
+const parseIdentifierColumns = (value: unknown) => parseColumnList(value, 'identifier_columns')
 
 export const parseWritableTableCreateInput = (value: unknown) => {
   if (!value || typeof value !== 'object') {
@@ -37,6 +41,9 @@ export const parseWritableTableCreateInput = (value: unknown) => {
     dataSourceId: parseString(record.dataSourceId ?? record.data_source_id, 'dataSourceId'),
     tableName: parseString(record.tableName ?? record.table_name, 'tableName'),
     allowedColumns: parseAllowedColumns(record.allowedColumns ?? record.allowed_columns),
+    identifierColumns: parseIdentifierColumns(
+      record.identifierColumns ?? record.identifier_columns
+    ),
     allowInsert:
       typeof record.allowInsert === 'boolean'
         ? record.allowInsert
@@ -66,6 +73,7 @@ export const parseWritableTableUpdateInput = (value: unknown) => {
     dataSourceId: string
     tableName: string
     allowedColumns: string[] | null
+    identifierColumns: string[] | null
     allowInsert: boolean
     allowUpdate: boolean
     description: string | null
@@ -85,6 +93,12 @@ export const parseWritableTableUpdateInput = (value: unknown) => {
   if (record.allowedColumns !== undefined || record.allowed_columns !== undefined) {
     updates.allowedColumns = parseAllowedColumns(
       record.allowedColumns ?? record.allowed_columns
+    )
+  }
+
+  if (record.identifierColumns !== undefined || record.identifier_columns !== undefined) {
+    updates.identifierColumns = parseIdentifierColumns(
+      record.identifierColumns ?? record.identifier_columns
     )
   }
 

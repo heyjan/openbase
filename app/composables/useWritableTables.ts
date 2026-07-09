@@ -7,6 +7,7 @@ export const useWritableTables = () => {
     dataSourceId: string
     tableName: string
     allowedColumns: string[] | null
+    identifierColumns: string[] | null
     allowInsert: boolean
     allowUpdate: boolean
     description?: string | null
@@ -22,6 +23,7 @@ export const useWritableTables = () => {
       dataSourceId: string
       tableName: string
       allowedColumns: string[] | null
+      identifierColumns: string[] | null
       allowInsert: boolean
       allowUpdate: boolean
       description: string | null

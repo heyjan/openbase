@@ -16,6 +16,7 @@ export interface WritableTable {
   dataSourceType?: string
   tableName: string
   allowedColumns: string[] | null
+  identifierColumns: string[] | null
   allowInsert: boolean
   allowUpdate: boolean
   description?: string

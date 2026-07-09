@@ -6,6 +6,7 @@ type WritableTableRow = {
   data_source_id: string
   table_name: string
   allowed_columns: string[] | null
+  identifier_columns: string[] | null
   allow_insert: boolean
   allow_update: boolean
   description: string | null
@@ -22,6 +23,7 @@ export type WritableTableRecord = {
   dataSourceType?: string
   tableName: string
   allowedColumns: string[] | null
+  identifierColumns: string[] | null
   allowInsert: boolean
   allowUpdate: boolean
   description?: string
@@ -36,6 +38,7 @@ const mapWritableTable = (row: WritableTableRow): WritableTableRecord => ({
   dataSourceType: row.data_source_type,
   tableName: row.table_name,
   allowedColumns: row.allowed_columns,
+  identifierColumns: row.identifier_columns,
   allowInsert: row.allow_insert,
   allowUpdate: row.allow_update,
   description: row.description ?? undefined,
@@ -75,6 +78,7 @@ export const listWritableTables = async (): Promise<WritableTableRecord[]> => {
        wt.data_source_id,
        wt.table_name,
        wt.allowed_columns,
+       wt.identifier_columns,
        wt.allow_insert,
        wt.allow_update,
        wt.description,
@@ -99,6 +103,7 @@ export const getWritableTableById = async (
        wt.data_source_id,
        wt.table_name,
        wt.allowed_columns,
+       wt.identifier_columns,
        wt.allow_insert,
        wt.allow_update,
        wt.description,
@@ -124,6 +129,7 @@ export const createWritableTable = async (input: {
   dataSourceId: string
   tableName: string
   allowedColumns: string[] | null
+  identifierColumns?: string[] | null
   allowInsert?: boolean
   allowUpdate?: boolean
   description?: string | null
@@ -134,16 +140,18 @@ export const createWritableTable = async (input: {
          data_source_id,
          table_name,
          allowed_columns,
+         identifier_columns,
          allow_insert,
          allow_update,
          description
        )
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, data_source_id, table_name, allowed_columns, allow_insert, allow_update, description, created_at, updated_at`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id`,
       [
         input.dataSourceId,
         input.tableName,
         input.allowedColumns,
+        input.identifierColumns ?? null,
         input.allowInsert ?? true,
         input.allowUpdate ?? true,
         input.description ?? null
@@ -164,6 +172,7 @@ export const updateWritableTable = async (
     dataSourceId: string
     tableName: string
     allowedColumns: string[] | null
+    identifierColumns: string[] | null
     allowInsert: boolean
     allowUpdate: boolean
     description: string | null
@@ -184,6 +193,10 @@ export const updateWritableTable = async (
   if (updates.allowedColumns !== undefined) {
     fields.push(`allowed_columns = $${index++}`)
     values.push(updates.allowedColumns)
+  }
+  if (updates.identifierColumns !== undefined) {
+    fields.push(`identifier_columns = $${index++}`)
+    values.push(updates.identifierColumns)
   }
   if (updates.allowInsert !== undefined) {
     fields.push(`allow_insert = $${index++}`)

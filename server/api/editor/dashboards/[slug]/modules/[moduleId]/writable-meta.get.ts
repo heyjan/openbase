@@ -103,11 +103,23 @@ export default defineEventHandler(async (event): Promise<WritableMetaResponse> =
     dataSource.connection,
     permission.config.tableName
   )
-  if (!primaryKeyColumns.length) {
+
+  // Views have no primary key, so fall back to the admin-declared identifier
+  // columns. These are validated against the real columns to guard against typos
+  // and to keep the update WHERE clause targeting columns that actually exist.
+  const configuredIdentifierColumns = permission.config.identifierColumns
+    ? permission.config.identifierColumns
+        .map((column) => allColumnsByNormalizedName.get(normalizeColumn(column)))
+        .filter((column): column is string => Boolean(column))
+    : []
+
+  const identifierColumns = primaryKeyColumns.length
+    ? primaryKeyColumns
+    : Array.from(new Set(configuredIdentifierColumns))
+
+  if (!identifierColumns.length) {
     return NON_EDITABLE
   }
-
-  const identifierColumns = primaryKeyColumns
 
   return {
     editable: true,
