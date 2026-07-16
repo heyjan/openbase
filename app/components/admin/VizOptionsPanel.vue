@@ -19,6 +19,8 @@ import type {
   QueryPreviewVisualization,
   ScatterCompareSeriesOption,
   ScatterVizMode,
+  TableColumnFormatMatchMode,
+  TableColumnFormatRule,
   TableColumnValueFormat,
   VizSeriesOption
 } from '~/types/viz-options'
@@ -27,14 +29,15 @@ import {
   getCategoryColumns,
   getNumericColumns,
   parseConditionalFormattingRules,
-  resolveColumnColors,
+  parseTableColumnValueFormats,
   resolveColumnGradients,
+  resolveExplicitColumnColors,
   resolveTableColumnOrder,
-  resolveTableColumnValueFormats,
   resolveTableTabDefault,
   resolveTableTabGroupSeparator,
   resolveTableTabSharedColumns,
   resolveTableVisibleColumns,
+  stripTableTabGroupPrefix,
   toNumber
 } from '~/composables/useVizConfig'
 
@@ -60,6 +63,9 @@ const emit = defineEmits<{
 
 const isOpen = ref(false)
 const draggingColumn = ref('')
+const sharedColumnSearch = ref('')
+const totalsExcludeLabelSearch = ref('')
+const totalsExcludeColumnSearch = ref('')
 const SELECT_NONE_VALUE = '__none__'
 const DEFAULT_SERIES_COLORS = ['#1f2937', '#2563eb', '#16a34a', '#dc2626', '#ea580c', '#7c3aed']
 const sharedSelectProps = {
@@ -232,12 +238,148 @@ const tableTabGroups = computed(() =>
   ).groups.keys()]
 )
 
+const tableVisibleTabGrouping = computed(() =>
+  detectTableTabGroups(
+    visibleColumns.value,
+    tableTabGroupSeparator.value,
+    resolveTableTabSharedColumns(visibleColumns.value, props.modelValue)
+  )
+)
+
+const filteredTableTabSharedColumns = computed(() => {
+  const query = sharedColumnSearch.value.trim().toLowerCase()
+  const selected = new Set(tableTabSharedColumns.value)
+
+  return orderedColumns.value
+    .filter((column) => !selected.has(column))
+    .filter((column) => !query || column.toLowerCase().includes(query))
+    .slice(0, 12)
+})
+
+const totalsRowEnabled = computed(() =>
+  readBoolean('showTotalsRow', false)
+)
+
+const totalsExcludedColumns = computed(() => {
+  const value = props.modelValue.totalsExcludeColumns
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .filter((column): column is string => typeof column === 'string')
+    .filter(
+      (column, index, source) =>
+        visibleColumns.value.includes(column) && source.indexOf(column) === index
+    )
+})
+
+const totalsExcludeLabelOptions = computed(() => {
+  const labels = new Set<string>()
+
+  if (tableTabbedEnabled.value && tableVisibleTabGrouping.value.groups.size) {
+    tableVisibleTabGrouping.value.shared.forEach((column) => labels.add(column))
+
+    for (const [groupName, columns] of tableVisibleTabGrouping.value.groups.entries()) {
+      columns.forEach((column) => {
+        labels.add(stripTableTabGroupPrefix(column, groupName, tableTabGroupSeparator.value))
+      })
+    }
+
+    return [...labels]
+  }
+
+  return visibleColumns.value
+})
+
+const totalsExcludedLabels = computed(() => {
+  const value = props.modelValue.totalsExcludeLabels ?? props.modelValue.totals_exclude_labels
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .filter((label): label is string => typeof label === 'string')
+    .map((label) => label.trim())
+    .filter(
+      (label, index, source) =>
+        totalsExcludeLabelOptions.value.includes(label) && source.indexOf(label) === index
+    )
+})
+
+const filteredTotalsExcludeLabels = computed(() => {
+  const query = totalsExcludeLabelSearch.value.trim().toLowerCase()
+
+  return totalsExcludeLabelOptions.value
+    .filter((label) => !query || label.toLowerCase().includes(query))
+    .slice(0, 24)
+})
+
+const filteredTotalsExcludeColumns = computed(() => {
+  const query = totalsExcludeColumnSearch.value.trim().toLowerCase()
+
+  return visibleColumns.value
+    .filter((column) => !query || column.toLowerCase().includes(query))
+    .slice(0, 24)
+})
+
+const formatRuleMatchModes: Array<{ label: string; value: TableColumnFormatMatchMode }> = [
+  { label: 'Exact', value: 'exact' },
+  { label: 'Starts with', value: 'startsWith' },
+  { label: 'Ends with', value: 'endsWith' },
+  { label: 'Contains', value: 'contains' }
+]
+
 const columnValueFormats = computed(() =>
-  resolveTableColumnValueFormats(props.columns, props.modelValue)
+  parseTableColumnValueFormats(props.modelValue.columnValueFormats, props.columns)
+)
+
+const exactColumnValueFormats = computed(() =>
+  Object.keys(columnValueFormats.value).length
+    ? columnValueFormats.value
+    : parseTableColumnValueFormats(props.modelValue.column_value_formats, props.columns)
+)
+
+const readColumnFormatRulesForEditor = (value: unknown): TableColumnFormatRule[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return null
+      }
+
+      const record = entry as Record<string, unknown>
+      const matchMode = formatRuleMatchModes.some((option) => option.value === record.matchMode)
+        ? record.matchMode as TableColumnFormatMatchMode
+        : 'endsWith'
+      const fractionDigits =
+        typeof record.fractionDigits === 'number' && Number.isFinite(record.fractionDigits)
+          ? Math.max(0, Math.min(20, Math.trunc(record.fractionDigits)))
+          : undefined
+
+      return {
+        matchMode,
+        pattern: typeof record.pattern === 'string' ? record.pattern : '',
+        prefix: typeof record.prefix === 'string' ? record.prefix : '',
+        suffix: typeof record.suffix === 'string' ? record.suffix : '',
+        fractionDigits,
+        color: typeof record.color === 'string' && record.color.trim()
+          ? record.color.trim()
+          : undefined
+      } satisfies TableColumnFormatRule
+    })
+    .filter((entry): entry is TableColumnFormatRule => entry !== null)
+}
+
+const columnFormatRules = computed(() =>
+  readColumnFormatRulesForEditor(props.modelValue.columnFormatRules)
 )
 
 const columnColors = computed(() =>
-  resolveColumnColors(orderedColumns.value, props.modelValue)
+  resolveExplicitColumnColors(orderedColumns.value, props.modelValue)
 )
 
 const columnGradients = computed(() =>
@@ -321,25 +463,89 @@ const toggleVisibleColumn = (column: string) => {
   })
 }
 
-const toggleTabSharedColumn = (column: string) => {
-  const next = new Set(tableTabSharedColumns.value)
-  if (next.has(column)) {
-    next.delete(column)
-  } else {
-    next.add(column)
-  }
-
-  const nextColumns = orderedColumns.value.filter((entry) => next.has(entry))
-  const nextConfig = { ...props.modelValue }
+const updateTabSharedColumns = (columns: string[]) => {
+  const nextColumns = orderedColumns.value.filter((entry) => columns.includes(entry))
+  const nextConfig = Object.fromEntries(
+    Object.entries(props.modelValue).filter(
+      ([key]) => key !== 'tabSharedColumns' && key !== 'tab_shared_columns'
+    )
+  )
 
   if (nextColumns.length) {
     nextConfig.tabSharedColumns = nextColumns
-  } else {
-    delete nextConfig.tabSharedColumns
+  }
+  emitNext(nextConfig)
+}
+
+const addTabSharedColumn = (column: string) => {
+  if (!orderedColumns.value.includes(column)) {
+    return
   }
 
-  delete nextConfig.tab_shared_columns
+  updateTabSharedColumns([...tableTabSharedColumns.value, column])
+  sharedColumnSearch.value = ''
+}
+
+const removeTabSharedColumn = (column: string) => {
+  updateTabSharedColumns(tableTabSharedColumns.value.filter((entry) => entry !== column))
+}
+
+const updateTotalsExcludedColumns = (columns: string[]) => {
+  const nextColumns = visibleColumns.value.filter((entry) => columns.includes(entry))
+  const nextConfig = Object.fromEntries(
+    Object.entries(props.modelValue).filter(
+      ([key]) => key !== 'totalsExcludeColumns' && key !== 'totals_exclude_columns'
+    )
+  )
+
+  if (nextColumns.length) {
+    nextConfig.totalsExcludeColumns = nextColumns
+  }
   emitNext(nextConfig)
+}
+
+const updateTotalsExcludedLabels = (labels: string[]) => {
+  const nextLabels = totalsExcludeLabelOptions.value.filter((entry) => labels.includes(entry))
+  const nextConfig = Object.fromEntries(
+    Object.entries(props.modelValue).filter(
+      ([key]) => key !== 'totalsExcludeLabels' && key !== 'totals_exclude_labels'
+    )
+  )
+
+  if (nextLabels.length) {
+    nextConfig.totalsExcludeLabels = nextLabels
+  }
+  emitNext(nextConfig)
+}
+
+const toggleTotalsExcludedColumn = (column: string) => {
+  if (!visibleColumns.value.includes(column)) {
+    return
+  }
+
+  const selected = new Set(totalsExcludedColumns.value)
+  if (selected.has(column)) {
+    selected.delete(column)
+  } else {
+    selected.add(column)
+  }
+
+  updateTotalsExcludedColumns([...selected])
+}
+
+const toggleTotalsExcludedLabel = (label: string) => {
+  if (!totalsExcludeLabelOptions.value.includes(label)) {
+    return
+  }
+
+  const selected = new Set(totalsExcludedLabels.value)
+  if (selected.has(label)) {
+    selected.delete(label)
+  } else {
+    selected.add(label)
+  }
+
+  updateTotalsExcludedLabels([...selected])
 }
 
 const updateColumnColor = (column: string, color: string) => {
@@ -377,21 +583,34 @@ const updateColumnValueFormat = (
   key: keyof TableColumnValueFormat,
   rawValue: unknown
 ) => {
-  const text = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
   const next: Record<string, TableColumnValueFormat> = {
-    ...columnValueFormats.value
+    ...exactColumnValueFormats.value
   }
   const current: TableColumnValueFormat = {
     ...(next[column] ?? {})
   }
 
-  if (text.trim()) {
-    current[key] = text
+  if (key === 'fractionDigits') {
+    const text = typeof rawValue === 'string' ? rawValue.trim() : String(rawValue ?? '').trim()
+    if (text) {
+      const parsed = Number(text)
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return
+      }
+      current.fractionDigits = Math.min(20, Math.trunc(parsed))
+    } else {
+      delete current.fractionDigits
+    }
   } else {
-    delete current[key]
+    const text = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
+    if (text.trim()) {
+      current[key] = text
+    } else {
+      delete current[key]
+    }
   }
 
-  if (!current.prefix && !current.suffix) {
+  if (!current.prefix && !current.suffix && current.fractionDigits === undefined) {
     delete next[column]
   } else {
     next[column] = current
@@ -401,6 +620,199 @@ const updateColumnValueFormat = (
     columnValueFormats: next
   })
 }
+
+const addColumnFormatRule = () => {
+  updateConfig({
+    columnFormatRules: [
+      ...columnFormatRules.value,
+      {
+        matchMode: 'endsWith',
+        pattern: '',
+        prefix: '',
+        suffix: ''
+      } satisfies TableColumnFormatRule
+    ]
+  })
+}
+
+const removeColumnFormatRule = (index: number) => {
+  updateConfig({
+    columnFormatRules: columnFormatRules.value.filter((_, ruleIndex) => ruleIndex !== index)
+  })
+}
+
+const moveColumnFormatRule = (index: number, direction: -1 | 1) => {
+  const next = [...columnFormatRules.value]
+  const targetIndex = index + direction
+  if (targetIndex < 0 || targetIndex >= next.length) {
+    return
+  }
+
+  const [moved] = next.splice(index, 1)
+  if (!moved) {
+    return
+  }
+  next.splice(targetIndex, 0, moved)
+
+  updateConfig({
+    columnFormatRules: next
+  })
+}
+
+const updateColumnFormatRule = (index: number, patch: Partial<TableColumnFormatRule>) => {
+  const next = [...columnFormatRules.value]
+  const current = next[index]
+  if (!current) {
+    return
+  }
+
+  const merged = {
+    ...current,
+    ...patch
+  }
+
+  if (merged.fractionDigits !== undefined) {
+    const digits = Number(merged.fractionDigits)
+    if (Number.isFinite(digits) && digits >= 0) {
+      merged.fractionDigits = Math.min(20, Math.trunc(digits))
+    } else {
+      delete merged.fractionDigits
+    }
+  }
+
+  next[index] = merged
+  updateConfig({
+    columnFormatRules: next
+  })
+}
+
+const updateColumnFormatRuleText = (
+  index: number,
+  key: 'pattern' | 'prefix' | 'suffix',
+  rawValue: unknown
+) => {
+  updateColumnFormatRule(index, {
+    [key]: typeof rawValue === 'string' ? rawValue : String(rawValue ?? '')
+  })
+}
+
+const updateColumnFormatRuleDigits = (index: number, rawValue: unknown) => {
+  const text = typeof rawValue === 'string' ? rawValue.trim() : String(rawValue ?? '').trim()
+  updateColumnFormatRule(index, {
+    fractionDigits: text ? Number(text) : undefined
+  })
+}
+
+const updateColumnFormatRuleColor = (index: number, color: string) => {
+  const next = [...columnFormatRules.value]
+  const current = next[index]
+  if (!current) {
+    return
+  }
+
+  const updated = {
+    ...current,
+    color
+  }
+  next[index] = updated
+
+  const prunedColumnColors = pruneColumnColorsForFormatRules([current, updated])
+  const nextConfig = {
+    ...props.modelValue,
+    columnFormatRules: next
+  }
+
+  if (prunedColumnColors) {
+    nextConfig.columnColors = Object.keys(prunedColumnColors).length ? prunedColumnColors : undefined
+  }
+
+  emitNext(nextConfig)
+}
+
+const clearColumnFormatRuleColor = (index: number) => {
+  const next = [...columnFormatRules.value]
+  const current = next[index]
+  if (!current) {
+    return
+  }
+
+  const updated = { ...current }
+  delete updated.color
+  next[index] = updated
+
+  const prunedColumnColors = pruneColumnColorsForFormatRules([current])
+  const nextConfig = {
+    ...props.modelValue,
+    columnFormatRules: next
+  }
+
+  if (prunedColumnColors) {
+    nextConfig.columnColors = Object.keys(prunedColumnColors).length ? prunedColumnColors : undefined
+  }
+
+  emitNext(nextConfig)
+}
+
+const hasColumnFormatRuleFormat = (rule: TableColumnFormatRule) =>
+  Boolean(rule.prefix || rule.suffix || rule.fractionDigits !== undefined || rule.color)
+
+const columnMatchesFormatRule = (column: string, rule: TableColumnFormatRule) => {
+  const pattern = rule.pattern.trim()
+  if (!pattern) {
+    return false
+  }
+  if (rule.matchMode === 'exact') {
+    return column === pattern
+  }
+  if (rule.matchMode === 'startsWith') {
+    return column.startsWith(pattern)
+  }
+  if (rule.matchMode === 'endsWith') {
+    return column.endsWith(pattern)
+  }
+  return column.includes(pattern)
+}
+
+const pruneColumnColorsForFormatRules = (rules: TableColumnFormatRule[]) => {
+  const next = { ...columnColors.value }
+  let changed = false
+
+  for (const rule of rules) {
+    if (!rule.color) {
+      continue
+    }
+
+    for (const column of orderedColumns.value) {
+      if (next[column] !== rule.color || !columnMatchesFormatRule(column, rule)) {
+        continue
+      }
+
+      delete next[column]
+      changed = true
+    }
+  }
+
+  return changed ? next : undefined
+}
+
+const countColumnFormatRuleMatches = (rule: TableColumnFormatRule) =>
+  props.columns.filter((column) => columnMatchesFormatRule(column, rule)).length
+
+const winningColumnFormatRuleIndex = (column: string) => {
+  for (let index = columnFormatRules.value.length - 1; index >= 0; index -= 1) {
+    const rule = columnFormatRules.value[index]
+    if (!rule || !hasColumnFormatRuleFormat(rule)) {
+      continue
+    }
+    if (columnMatchesFormatRule(column, rule)) {
+      return index
+    }
+  }
+  return -1
+}
+
+const countColumnFormatRuleApplications = (index: number) =>
+  props.columns.filter((column) => winningColumnFormatRuleIndex(column) === index).length
 
 const currentSeries = computed<VizSeriesOption[]>(() => {
   const raw = props.modelValue.series
@@ -831,6 +1243,86 @@ watch(
               />
             </div>
           </div>
+
+          <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+            <div class="flex items-center justify-between gap-3">
+              <p class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-600">
+                <Calculator class="h-3.5 w-3.5" />
+                Totals row
+              </p>
+              <USwitch
+                :model-value="totalsRowEnabled"
+                @update:model-value="updateBoolean('showTotalsRow', $event)"
+              />
+            </div>
+
+            <div v-if="totalsRowEnabled" class="mt-3 space-y-3">
+              <label class="block text-xs font-medium uppercase tracking-wide text-gray-600">
+                Label
+                <UInput
+                  class="mt-1"
+                  :model-value="readString('totalsRowLabel', 'Total')"
+                  @update:model-value="updateString('totalsRowLabel', $event)"
+                />
+              </label>
+
+              <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Exclude labels</p>
+                <UInput
+                  v-model="totalsExcludeLabelSearch"
+                  class="mt-2"
+                  placeholder="Search labels"
+                />
+
+                <div class="mt-2 max-h-48 overflow-y-auto rounded border border-gray-200 bg-white p-1">
+                  <label
+                    v-for="label in filteredTotalsExcludeLabels"
+                    :key="`totals-exclude-label-${label}`"
+                    class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      class="h-3.5 w-3.5 rounded border-gray-300"
+                      :checked="totalsExcludedLabels.includes(label)"
+                      @change="toggleTotalsExcludedLabel(label)"
+                    >
+                    <span class="truncate">{{ label }}</span>
+                  </label>
+                  <p v-if="!filteredTotalsExcludeLabels.length" class="px-2 py-1.5 text-xs text-gray-500">
+                    No matches
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Exclude exact columns</p>
+                <UInput
+                  v-model="totalsExcludeColumnSearch"
+                  class="mt-2"
+                  placeholder="Search columns"
+                />
+
+                <div class="mt-2 max-h-36 overflow-y-auto rounded border border-gray-200 bg-white p-1">
+                  <label
+                    v-for="column in filteredTotalsExcludeColumns"
+                    :key="`totals-exclude-${column}`"
+                    class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      class="h-3.5 w-3.5 rounded border-gray-300"
+                      :checked="totalsExcludedColumns.includes(column)"
+                      @change="toggleTotalsExcludedColumn(column)"
+                    >
+                    <span class="truncate">{{ column }}</span>
+                  </label>
+                  <p v-if="!filteredTotalsExcludeColumns.length" class="px-2 py-1.5 text-xs text-gray-500">
+                    No matches
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="rounded border border-gray-200 bg-gray-50 p-3">
@@ -871,20 +1363,151 @@ watch(
 
             <div>
               <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Shared columns</p>
-              <div class="mt-2 grid gap-2 grid-cols-1">
-                <label
-                  v-for="column in orderedColumns"
-                  :key="`tab-shared-${column}`"
-                  class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+              <UInput
+                v-model="sharedColumnSearch"
+                class="mt-2"
+                placeholder="Search columns"
+                @keydown.enter.prevent="filteredTableTabSharedColumns[0] && addTabSharedColumn(filteredTableTabSharedColumns[0])"
+              />
+
+              <div v-if="tableTabSharedColumns.length" class="mt-2 flex flex-wrap gap-1.5">
+                <span
+                  v-for="column in tableTabSharedColumns"
+                  :key="`tab-shared-selected-${column}`"
+                  class="inline-flex max-w-full items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
                 >
-                  <input
-                    type="checkbox"
-                    :checked="tableTabSharedColumns.includes(column)"
-                    @change="toggleTabSharedColumn(column)"
-                  >
                   <span class="truncate">{{ column }}</span>
-                </label>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Remove"
+                    @click="removeTabSharedColumn(column)"
+                  >
+                    <Trash2 class="h-3 w-3" />
+                  </UButton>
+                </span>
               </div>
+
+              <div
+                v-if="sharedColumnSearch.trim()"
+                class="mt-2 max-h-48 overflow-y-auto rounded border border-gray-200 bg-white p-1"
+              >
+                <button
+                  v-for="column in filteredTableTabSharedColumns"
+                  :key="`tab-shared-result-${column}`"
+                  type="button"
+                  class="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                  @click="addTabSharedColumn(column)"
+                >
+                  {{ column }}
+                </button>
+                <p v-if="!filteredTableTabSharedColumns.length" class="px-2 py-1.5 text-xs text-gray-500">
+                  No matches
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-600">Format rules</p>
+            <UButton color="neutral" variant="outline" size="xs" @click="addColumnFormatRule">Add rule</UButton>
+          </div>
+
+          <div v-if="!columnFormatRules.length" class="rounded border border-gray-200 bg-gray-50 px-2 py-2 text-sm text-gray-500">
+            No rules
+          </div>
+
+          <div v-else class="space-y-2">
+            <div
+              v-for="(rule, index) in columnFormatRules"
+              :key="`format-rule-${index}`"
+              class="rounded border border-gray-200 bg-gray-50 p-2"
+            >
+              <div class="grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto_auto]">
+                <USelect
+                  v-bind="sharedSelectProps"
+                  :items="formatRuleMatchModes"
+                  :model-value="rule.matchMode"
+                  @update:model-value="updateColumnFormatRule(index, { matchMode: ($event || 'endsWith') as TableColumnFormatMatchMode })"
+                />
+                <UInput
+                  :model-value="rule.pattern"
+                  placeholder="Pattern"
+                  @update:model-value="updateColumnFormatRuleText(index, 'pattern', $event)"
+                />
+                <UInput
+                  :model-value="rule.prefix ?? ''"
+                  placeholder="Prefix"
+                  @update:model-value="updateColumnFormatRuleText(index, 'prefix', $event)"
+                />
+                <UInput
+                  :model-value="rule.suffix ?? ''"
+                  placeholder="Suffix"
+                  @update:model-value="updateColumnFormatRuleText(index, 'suffix', $event)"
+                />
+                <UInput
+                  :model-value="rule.fractionDigits === undefined ? '' : String(rule.fractionDigits)"
+                  type="number"
+                  min="0"
+                  max="20"
+                  placeholder="Decimals"
+                  @update:model-value="updateColumnFormatRuleDigits(index, $event)"
+                />
+                <span class="inline-flex items-center gap-1">
+                  <label
+                    class="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded border border-gray-300 bg-white"
+                    title="Background color"
+                  >
+                    <input
+                      :value="rule.color ?? '#2563eb'"
+                      type="color"
+                      class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      @input="updateColumnFormatRuleColor(index, ($event.target as HTMLInputElement).value)"
+                    >
+                    <span
+                      v-if="rule.color"
+                      class="h-3.5 w-3.5 rounded border border-gray-300"
+                      :style="{ backgroundColor: rule.color }"
+                    />
+                    <Palette v-else class="h-3.5 w-3.5 text-gray-500" />
+                  </label>
+                  <UButton
+                    v-if="rule.color"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Clear color"
+                    @click="clearColumnFormatRuleColor(index)"
+                  >
+                    <Trash2 class="h-3.5 w-3.5" />
+                  </UButton>
+                </span>
+                <span class="inline-flex items-center gap-1">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Move up"
+                    @click="moveColumnFormatRule(index, -1)"
+                  >↑</UButton>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    title="Move down"
+                    @click="moveColumnFormatRule(index, 1)"
+                  >↓</UButton>
+                  <UButton color="error" variant="ghost" size="xs" @click="removeColumnFormatRule(index)">
+                    <Trash2 class="h-3.5 w-3.5" />
+                  </UButton>
+                </span>
+              </div>
+              <p class="mt-1 text-xs text-gray-500">
+                Applies {{ countColumnFormatRuleApplications(index) }} of {{ countColumnFormatRuleMatches(rule) }} matches
+              </p>
             </div>
           </div>
         </div>
@@ -978,16 +1601,24 @@ watch(
                 </span>
               </div>
 
-              <div class="mt-2 grid grid-cols-2 gap-2">
+              <div class="mt-2 grid grid-cols-3 gap-2">
                 <UInput
-                  :model-value="columnValueFormats[column]?.prefix ?? ''"
+                  :model-value="exactColumnValueFormats[column]?.prefix ?? ''"
                   placeholder="Prefix"
                   @update:model-value="updateColumnValueFormat(column, 'prefix', $event)"
                 />
                 <UInput
-                  :model-value="columnValueFormats[column]?.suffix ?? ''"
+                  :model-value="exactColumnValueFormats[column]?.suffix ?? ''"
                   placeholder="Suffix"
                   @update:model-value="updateColumnValueFormat(column, 'suffix', $event)"
+                />
+                <UInput
+                  :model-value="exactColumnValueFormats[column]?.fractionDigits === undefined ? '' : String(exactColumnValueFormats[column]?.fractionDigits)"
+                  type="number"
+                  min="0"
+                  max="20"
+                  placeholder="Decimals"
+                  @update:model-value="updateColumnValueFormat(column, 'fractionDigits', $event)"
                 />
               </div>
             </li>

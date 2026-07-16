@@ -5,6 +5,7 @@
   "packageManager": "pnpm@11.13.1",
   "scripts": {
     "build": "nuxt build",
+    "build:profile": "nuxt build --profile",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
@@ -36,8 +37,7 @@
     "nuxt": "^4.4.8",
     "pg": "^8.18.0",
     "vue": "^3.5.28",
-    "vue-echarts": "^7.0.3",
-    "vue-router": "^4.6.4"
+    "vue-echarts": "^7.0.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
@@ -45,5 +45,10 @@
     "@types/nodemailer": "^7.0.10",
     "husky": "^9.1.7",
     "tailwindcss": "^4.2.0"
+  },
+  "overrides": {
+    "duckdb": {
+      "node-gyp": "^12.3.0"
+    }
   }
 }

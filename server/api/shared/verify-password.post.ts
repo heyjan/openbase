@@ -1,7 +1,6 @@
 import {
   createError,
   defineEventHandler,
-  getRequestIP,
   readBody,
   setCookie,
   setHeader
@@ -13,6 +12,7 @@ import {
   createShareLinkSessionValue
 } from '~~/server/utils/share-link-session'
 import { getShareLinkByToken } from '~~/server/utils/share-link-store'
+import { getClientIp } from '~~/server/utils/request-ip'
 
 const PASSWORD_VERIFY_LIMIT = 5
 const PASSWORD_VERIFY_WINDOW_MS = 60_000
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
+  const ip = getClientIp(event) ?? 'unknown'
   const rateLimit = consumeRateLimit(
     `shared-password:${token}:${ip}`,
     PASSWORD_VERIFY_LIMIT,

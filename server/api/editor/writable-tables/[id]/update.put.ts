@@ -1,9 +1,10 @@
-import { createError, defineEventHandler, getRequestIP, getRouterParam, readBody } from 'h3'
+import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
 import { Pool } from 'pg'
 import { createAuditEntry } from '~~/server/utils/audit-store'
 import { getDataSourceById } from '~~/server/utils/data-source-store'
 import { toPostgresConnectionString } from '~~/server/utils/data-source-adapters/postgresql'
 import { canEditorWriteToTable } from '~~/server/utils/permission-store'
+import { getClientIp } from '~~/server/utils/request-ip'
 import { getPostgresTableSchema } from '~~/server/utils/table-schema'
 import { buildUpdateQuery } from '~~/server/utils/write-query-builder'
 import { validateWhereValues, validateWriteValues } from '~~/server/utils/write-validators'
@@ -80,7 +81,7 @@ export default defineEventHandler(async (event) => {
         columns: validatedValues.columns,
         whereColumns: validatedWhere.columns
       },
-      ipAddress: getRequestIP(event, { xForwardedFor: true }) ?? null
+      ipAddress: getClientIp(event)
     })
 
     return {

@@ -22,6 +22,7 @@ import type {
 } from '~/types/viz-options'
 import {
   applyTableSortAndLimit,
+  buildTableTotalsRow,
   detectTableTabGroups,
   formatTableCellDisplayValue,
   getCategoryColumns,
@@ -1013,6 +1014,10 @@ const tableColumns = computed(() =>
   }))
 )
 
+const tableActiveColumnLabels = computed(() =>
+  Object.fromEntries(tableColumns.value.map((column) => [column.key, column.label]))
+)
+
 const tableColumnValueFormats = computed(() =>
   resolveTableColumnValueFormats(tableVisibleColumns.value, config.value)
 )
@@ -1068,6 +1073,24 @@ const tableCellValueFormatter = (input: { columnKey: string; defaultValue: strin
     input.value,
     tableUseThousandsSeparator.value
   )
+
+const tableSummaryRow = computed(() => {
+  const built = buildTableTotalsRow({
+    rows: filteredTableRows.value,
+    columns: tableActiveColumns.value,
+    labelColumns: tableShouldUseTabs.value ? tableSharedColumns.value : undefined,
+    displayLabels: tableActiveColumnLabels.value,
+    valueFormats: tableColumnValueFormats.value,
+    config: config.value
+  })
+
+  return built
+    ? {
+        values: built.row,
+        label: built.label
+      }
+    : null
+})
 
 const chartRenderKey = computed(
   () => `${props.visualization}:${JSON.stringify(config.value)}:${rows.value.length}`
@@ -1704,6 +1727,7 @@ const chartOption = computed<EChartsOption>(() => {
             :columns="tableColumns"
             :cell-style-resolver="tableCellStyleResolver"
             :cell-value-formatter="tableCellValueFormatter"
+            :summary-row="tableSummaryRow"
             empty-label="No preview rows found."
           />
         </div>

@@ -6,6 +6,7 @@ import TabbedDataTable from '~/components/modules/TabbedDataTable.vue'
 import { useInlineCellEdit } from '~/composables/useInlineCellEdit'
 import {
   applyTableSortAndLimit,
+  buildTableTotalsRow,
   formatTableCellDisplayValue,
   getColumnGradientStyle,
   getColumnNumericExtents,
@@ -170,6 +171,22 @@ const cellValueFormatter = (input: { columnKey: string; defaultValue: string; va
     useThousandsSeparator.value
   )
 
+const summaryRow = computed(() => {
+  const built = buildTableTotalsRow({
+    rows: filteredRows.value,
+    columns: visibleColumns.value,
+    valueFormats: columnValueFormats.value,
+    config: props.module.config ?? {}
+  })
+
+  return built
+    ? {
+        values: built.row,
+        label: built.label
+      }
+    : null
+})
+
 const moduleId = computed(() => props.module.id)
 const inlineEditEnabled = computed(() => Boolean(props.editable))
 const inlineCellEdit = useInlineCellEdit({
@@ -225,6 +242,7 @@ const onSaveEdit = () => inlineCellEdit.saveCell(filteredRows.value)
           :columns="tableColumns"
           :cell-style-resolver="cellStyleResolver"
           :cell-value-formatter="cellValueFormatter"
+          :summary-row="summaryRow"
           :editing-cell="isInlineEditable ? inlineCellEdit.editingCell.value : null"
           :edit-value="inlineCellEdit.editValue.value"
           :editable-columns="editableColumns"

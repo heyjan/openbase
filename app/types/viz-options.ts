@@ -47,6 +47,21 @@ type SharedVizOptions = {
 export type TableColumnValueFormat = {
   prefix?: string
   suffix?: string
+  fractionDigits?: number
+}
+
+export type TableColumnFormatMatchMode = 'exact' | 'startsWith' | 'endsWith' | 'contains'
+
+export type TableColumnFormatRule = TableColumnValueFormat & {
+  matchMode: TableColumnFormatMatchMode
+  pattern: string
+  color?: string
+}
+
+export type TableTotalsPercentRecompute = {
+  numerator: string
+  denominator: string
+  mode?: 'ratio' | 'delta'
 }
 
 export type TableVizOptions = SharedVizOptions & {
@@ -57,6 +72,12 @@ export type TableVizOptions = SharedVizOptions & {
   rowLimit?: number
   showSearch?: boolean
   useThousandsSeparator?: boolean
+  showTotalsRow?: boolean
+  totalsRowLabel?: string
+  totalsExcludeColumns?: string[]
+  totalsExcludeLabels?: string[]
+  totalsPercentColumns?: string[]
+  totalsPercentRecompute?: Record<string, TableTotalsPercentRecompute>
   tabbed?: boolean
   tabGroupSeparator?: string
   tabSharedColumns?: string[]
@@ -64,6 +85,7 @@ export type TableVizOptions = SharedVizOptions & {
   columnColors?: Record<string, string>
   columnGradients?: Record<string, boolean>
   columnValueFormats?: Record<string, TableColumnValueFormat>
+  columnFormatRules?: TableColumnFormatRule[]
   conditionalFormatting?: ConditionalFormatRule[]
 }
 

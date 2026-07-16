@@ -1,11 +1,9 @@
 import {
   createError,
   defineEventHandler,
-  getRequestIP,
   readBody,
   setCookie
 } from 'h3'
-import bcrypt from 'bcryptjs'
 import { createAuditEntry } from '~~/server/utils/audit-store'
 import {
   createSession,
@@ -13,6 +11,13 @@ import {
   updateLastLogin
 } from '~~/server/utils/admin-store'
 import { ADMIN_SESSION_COOKIE, SESSION_TTL_DAYS } from '~~/server/utils/auth'
+import {
+  assertLoginAccountAllowed,
+  recordFailedLogin,
+  resetLoginAccountLimit
+} from '~~/server/utils/login-rate-limit'
+import { verifyPassword } from '~~/server/utils/password'
+import { getClientIp } from '~~/server/utils/request-ip'
 
 type Body = {
   email?: string
@@ -28,16 +33,19 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Email and password required' })
   }
 
+  assertLoginAccountAllowed(event, 'admin', email)
   const admin = await getAdminByEmail(email)
-  if (!admin || !admin.is_active) {
+
+  // Verify against a constant-time helper that always runs bcrypt (even for a
+  // missing account) so response timing does not reveal account existence.
+  const matches = await verifyPassword(password, admin?.password_hash)
+
+  if (!admin || !admin.is_active || !matches) {
+    recordFailedLogin(event, 'admin', email)
     throw createError({ statusCode: 401, statusMessage: 'Invalid credentials' })
   }
 
-  const matches = await bcrypt.compare(password, admin.password_hash)
-  if (!matches) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid credentials' })
-  }
-
+  resetLoginAccountLimit('admin', email)
   await updateLastLogin(admin.id)
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000)
   const sessionToken = await createSession(admin.id, expiresAt)
@@ -59,7 +67,7 @@ export default defineEventHandler(async (event) => {
       action: 'auth.login',
       resource: 'admin_session',
       details: { email: admin.email },
-      ipAddress: getRequestIP(event, { xForwardedFor: true }) ?? null
+      ipAddress: getClientIp(event)
     })
   } catch {
     // Audit logging failures should not block auth.

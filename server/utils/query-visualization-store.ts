@@ -1,6 +1,7 @@
 import { createError } from 'h3'
 import type { ModuleType } from '~/types/module'
 import { query } from './db'
+import { ensureQueryOrganizationSchema } from './query-organization-schema'
 
 type QueryVisualizationRow = {
   id: string
@@ -100,6 +101,8 @@ const selectLatestProjection = `SELECT
 export const listQueryVisualizations = async (input?: {
   savedQueryId?: string
 }): Promise<QueryVisualizationRecord[]> => {
+  await ensureQueryOrganizationSchema()
+
   if (input?.savedQueryId) {
     const result = await query<QueryVisualizationRow>(
       `${selectLatestBase}
@@ -124,6 +127,7 @@ export const listQueryVisualizations = async (input?: {
 export const getQueryVisualizationById = async (
   id: string
 ): Promise<QueryVisualizationRecord> => {
+  await ensureQueryOrganizationSchema()
   const result = await query<QueryVisualizationRow>(
     `${selectBase}
      WHERE qv.id = $1`,
@@ -143,6 +147,7 @@ export const createQueryVisualization = async (input: {
   moduleType: ModuleType
   config?: Record<string, unknown>
 }): Promise<QueryVisualizationRecord> => {
+  await ensureQueryOrganizationSchema()
   try {
     const existing = await query<{ id: string }>(
       `SELECT id
@@ -212,6 +217,7 @@ export const updateQueryVisualization = async (
     config: Record<string, unknown>
   }>
 ): Promise<QueryVisualizationRecord> => {
+  await ensureQueryOrganizationSchema()
   const fields: string[] = []
   const values: unknown[] = []
   let index = 1
@@ -269,6 +275,7 @@ export const updateQueryVisualization = async (
 }
 
 export const deleteQueryVisualization = async (id: string) => {
+  await ensureQueryOrganizationSchema()
   const result = await query('DELETE FROM query_visualizations WHERE id = $1', [id])
   if (result.rowCount === 0) {
     throw createError({ statusCode: 404, statusMessage: 'Query visualization not found' })
@@ -279,6 +286,7 @@ export const assignVisualizationToFolder = async (
   visualizationId: string,
   folderId: string | null
 ) => {
+  await ensureQueryOrganizationSchema()
   const result = await query(
     `UPDATE query_visualizations
      SET folder_id = $1, updated_at = now()

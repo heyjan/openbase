@@ -21,11 +21,31 @@ services:
       SMTP_PASS: ${SMTP_PASS}
       SMTP_FROM: ${SMTP_FROM}
       OPENBASE_ENCRYPTION_KEY: ${OPENBASE_ENCRYPTION_KEY}
+      OPENBASE_AI_SERVICE_URL: http://ai:8000
+      OPENBASE_AI_SERVICE_TOKEN: ${OPENBASE_AI_SERVICE_TOKEN}
+    depends_on:
+      - db
+      - ai
+
+  ai:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    environment:
+      OPENBASE_APP_URL: http://app:3000
+      OPENBASE_AI_SERVICE_TOKEN: ${OPENBASE_AI_SERVICE_TOKEN}
+      PYDANTIC_AI_MODEL: ${PYDANTIC_AI_MODEL:-openai:gpt-5.2}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-07-01-preview}
     depends_on:
       - db
 
   db:
-    image: postgres:16
+    image: postgres:17.10
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
