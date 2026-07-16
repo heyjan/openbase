@@ -2,16 +2,18 @@
   "name": "openbase",
   "type": "module",
   "private": true,
+  "packageManager": "pnpm@11.13.1",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "test:e2e": "npx playwright test",
-    "test:e2e:ui": "npx playwright test --ui",
-    "test:e2e:headed": "npx playwright test --headed",
-    "playwright:install": "npx playwright install --with-deps chromium"
+    "prepare": "husky",
+    "test:e2e": "pnpm exec playwright test",
+    "test:e2e:ui": "pnpm exec playwright test --ui",
+    "test:e2e:headed": "pnpm exec playwright test --headed",
+    "playwright:install": "pnpm exec playwright install --with-deps chromium"
   },
   "dependencies": {
     "@ai-sdk/vue": "^2.0.155",
@@ -41,6 +43,7 @@
     "@playwright/test": "^1.52.0",
     "@tailwindcss/vite": "^4.2.0",
     "@types/nodemailer": "^7.0.10",
+    "husky": "^9.1.7",
     "tailwindcss": "^4.2.0"
   }
 }

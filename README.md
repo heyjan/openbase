@@ -55,10 +55,11 @@ Then open `http://localhost:3000` and complete setup.
 
 ## Local Development
 
-1. Install dependencies:
+1. Enable the project-pinned pnpm version and install dependencies:
 
 ```bash
-npm install
+corepack enable pnpm
+pnpm install
 ```
 
 2. Configure environment:
@@ -70,13 +71,13 @@ cp .env.example .env
 3. Start the dev server:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 4. Build for verification:
 
 ```bash
-npm run build
+pnpm build
 ```
 
 ## Testing
@@ -84,8 +85,10 @@ npm run build
 End-to-end tests use Playwright:
 
 ```bash
-npm run test:e2e
+pnpm test:e2e
 ```
+
+Husky runs `pnpm audit --audit-level high` before every push. Pushes are blocked when high- or critical-severity dependency vulnerabilities are found.
 
 ## Security Notes
 
