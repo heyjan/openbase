@@ -2,6 +2,7 @@
   "name": "openbase",
   "type": "module",
   "private": true,
+  "packageManager": "pnpm@11.13.1",
   "scripts": {
     "build": "nuxt build",
     "build:profile": "nuxt build --profile",
@@ -9,20 +10,21 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "test:e2e": "npx playwright test",
-    "test:e2e:ui": "npx playwright test --ui",
-    "test:e2e:headed": "npx playwright test --headed",
-    "playwright:install": "npx playwright install --with-deps chromium"
+    "prepare": "husky",
+    "test:e2e": "pnpm exec playwright test",
+    "test:e2e:ui": "pnpm exec playwright test --ui",
+    "test:e2e:headed": "pnpm exec playwright test --headed",
+    "playwright:install": "pnpm exec playwright install --with-deps chromium"
   },
   "dependencies": {
     "@ai-sdk/vue": "^2.0.155",
-    "@nuxt/ui": "^4.9.0",
+    "@nuxt/ui": "^4.10.0",
     "@nuxtjs/google-fonts": "^3.2.0",
-    "@nuxtjs/mdc": "^0.18.4",
+    "@nuxtjs/mdc": "^0.22.1",
     "ai": "^5.0.155",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.6.2",
-    "csv-parse": "^6.1.0",
+    "better-sqlite3": "^12.11.1",
+    "csv-parse": "^7.0.1",
     "duckdb": "^1.4.4",
     "echarts": "^5.6.0",
     "gridstack": "^12.4.2",
@@ -31,8 +33,8 @@
     "lucide-vue-next": "^0.575.0",
     "mongodb": "^7.1.0",
     "mysql2": "^3.15.3",
-    "nodemailer": "^8.0.1",
-    "nuxt": "^4.4.5",
+    "nodemailer": "^9.0.3",
+    "nuxt": "^4.4.8",
     "pg": "^8.18.0",
     "vue": "^3.5.28",
     "vue-echarts": "^7.0.3"
@@ -41,6 +43,7 @@
     "@playwright/test": "^1.52.0",
     "@tailwindcss/vite": "^4.2.0",
     "@types/nodemailer": "^7.0.10",
+    "husky": "^9.1.7",
     "tailwindcss": "^4.2.0"
   },
   "overrides": {

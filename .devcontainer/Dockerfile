@@ -1,5 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/javascript-node:24-bookworm
 
+RUN corepack enable pnpm
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-pip build-essential \
     # Playwright system dependencies (Chromium)
