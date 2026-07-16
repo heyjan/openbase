@@ -5,3 +5,7 @@ allowBuilds:
   duckdb: true
   esbuild: true
   vue-demi: true
+minimumReleaseAgeExclude:
+  - '@nuxt/ui@4.10.0'
+overrides:
+  linkify-it: 5.0.2
