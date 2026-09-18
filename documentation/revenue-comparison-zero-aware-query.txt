@@ -55,6 +55,10 @@ WITH monthly AS (
     SELECT 'Iberia WOL', revenue, month, year FROM partner_iberia_wol
   ) combined
   WHERE year IN (2025, 2026)
+    AND (
+      year <> 2026
+      OR make_date(year, month, 1) < date_trunc('month', CURRENT_DATE)::date
+    )
   GROUP BY month
 ),
 ytd AS (
