@@ -1,0 +1,253 @@
+WITH monthly AS (
+  SELECT
+    month,
+    MAX(revenue) FILTER (WHERE country = 'Deutschland' AND year = 2025) AS de_25,
+    MAX(revenue) FILTER (WHERE country = 'Deutschland' AND year = 2026) AS de_26,
+    MAX(revenue) FILTER (WHERE country = 'Kfzteile24 DE' AND year = 2025) AS kfz_25,
+    MAX(revenue) FILTER (WHERE country = 'Kfzteile24 DE' AND year = 2026) AS kfz_26,
+    MAX(revenue) FILTER (WHERE country = 'Retromotion DE' AND year = 2025) AS retro_25,
+    MAX(revenue) FILTER (WHERE country = 'Retromotion DE' AND year = 2026) AS retro_26,
+    MAX(revenue) FILTER (WHERE country = 'Sonstige DE' AND year = 2025) AS sonst_25,
+    MAX(revenue) FILTER (WHERE country = 'Sonstige DE' AND year = 2026) AS sonst_26,
+    MAX(revenue) FILTER (WHERE country = 'UK' AND year = 2025) AS uk_25,
+    MAX(revenue) FILTER (WHERE country = 'UK' AND year = 2026) AS uk_26,
+    MAX(revenue) FILTER (WHERE country = 'WOL UK' AND year = 2025) AS wol_25,
+    MAX(revenue) FILTER (WHERE country = 'WOL UK' AND year = 2026) AS wol_26,
+    MAX(revenue) FILTER (WHERE country = 'Opie Oils UK' AND year = 2025) AS opie_25,
+    MAX(revenue) FILTER (WHERE country = 'Opie Oils UK' AND year = 2026) AS opie_26,
+    MAX(revenue) FILTER (WHERE country = 'Arnold Clark UK' AND year = 2025) AS ac_25,
+    MAX(revenue) FILTER (WHERE country = 'Arnold Clark UK' AND year = 2026) AS ac_26,
+    MAX(revenue) FILTER (WHERE country = 'Iberia' AND year = 2025) AS ib_25,
+    MAX(revenue) FILTER (WHERE country = 'Iberia' AND year = 2026) AS ib_26,
+    MAX(revenue) FILTER (WHERE country = 'Iberia WOL' AND year = 2025) AS ib_wol_25,
+    MAX(revenue) FILTER (WHERE country = 'Iberia WOL' AND year = 2026) AS ib_wol_26,
+    MAX(revenue) FILTER (WHERE country = 'Italy' AND year = 2025) AS it_25,
+    MAX(revenue) FILTER (WHERE country = 'Italy' AND year = 2026) AS it_26,
+    MAX(revenue) FILTER (WHERE country = 'USA' AND year = 2025) AS us_25,
+    MAX(revenue) FILTER (WHERE country = 'USA' AND year = 2026) AS us_26,
+    MAX(revenue) FILTER (WHERE country = 'France' AND year = 2025) AS fr_25,
+    MAX(revenue) FILTER (WHERE country = 'France' AND year = 2026) AS fr_26,
+    MAX(revenue) FILTER (WHERE country = 'Mexico' AND year = 2025) AS mx_25,
+    MAX(revenue) FILTER (WHERE country = 'Mexico' AND year = 2026) AS mx_26,
+    MAX(revenue) FILTER (WHERE country = 'NL' AND year = 2025) AS nl_25,
+    MAX(revenue) FILTER (WHERE country = 'NL' AND year = 2026) AS nl_26,
+    MAX(revenue) FILTER (WHERE country = 'Japan' AND year = 2025) AS jp_25,
+    MAX(revenue) FILTER (WHERE country = 'Japan' AND year = 2026) AS jp_26,
+    MAX(revenue) FILTER (WHERE country = 'Australia' AND year = 2025) AS au_25,
+    MAX(revenue) FILTER (WHERE country = 'Australia' AND year = 2026) AS au_26,
+    MAX(revenue) FILTER (WHERE country = 'Saudi Arabia' AND year = 2025) AS sa_25,
+    MAX(revenue) FILTER (WHERE country = 'Saudi Arabia' AND year = 2026) AS sa_26
+  FROM (
+    SELECT country, revenue, month, year FROM amazon_rev
+    UNION ALL
+    SELECT 'WOL UK', ROUND(revenue * rate, 2), month, year FROM amazon_rev_wol
+    UNION ALL
+    SELECT 'Opie Oils UK', ROUND(revenue * rate, 2), month, year FROM amazon_rev_opieoils
+    UNION ALL
+    SELECT 'Arnold Clark UK', ROUND(revenue * rate, 2), month, year FROM amazon_rev_arnoldclark
+    UNION ALL
+    SELECT 'Kfzteile24 DE', revenue, month, year FROM partner_kfzteile24
+    UNION ALL
+    SELECT 'Retromotion DE', revenue, month, year FROM partner_retromotion
+    UNION ALL
+    SELECT 'Sonstige DE', revenue, month, year FROM partner_sonstige
+    UNION ALL
+    SELECT 'Iberia WOL', revenue, month, year FROM partner_iberia_wol
+  ) combined
+  WHERE year IN (2025, 2026)
+    AND (
+      year <> 2026
+      OR make_date(year, month, 1) < date_trunc('month', CURRENT_DATE)::date
+    )
+  GROUP BY month
+),
+ytd AS (
+  SELECT
+    m.*,
+    SUM(de_25) OVER w AS de_25_ytd,
+    SUM(de_26) OVER w AS de_26_ytd,
+    SUM(kfz_25) OVER w AS kfz_25_ytd,
+    SUM(kfz_26) OVER w AS kfz_26_ytd,
+    SUM(retro_25) OVER w AS retro_25_ytd,
+    SUM(retro_26) OVER w AS retro_26_ytd,
+    SUM(sonst_25) OVER w AS sonst_25_ytd,
+    SUM(sonst_26) OVER w AS sonst_26_ytd,
+    SUM(uk_25) OVER w AS uk_25_ytd,
+    SUM(uk_26) OVER w AS uk_26_ytd,
+    SUM(wol_25) OVER w AS wol_25_ytd,
+    SUM(wol_26) OVER w AS wol_26_ytd,
+    SUM(opie_25) OVER w AS opie_25_ytd,
+    SUM(opie_26) OVER w AS opie_26_ytd,
+    SUM(ac_25) OVER w AS ac_25_ytd,
+    SUM(ac_26) OVER w AS ac_26_ytd,
+    SUM(ib_25) OVER w AS ib_25_ytd,
+    SUM(ib_26) OVER w AS ib_26_ytd,
+    SUM(ib_wol_25) OVER w AS ib_wol_25_ytd,
+    SUM(ib_wol_26) OVER w AS ib_wol_26_ytd,
+    SUM(it_25) OVER w AS it_25_ytd,
+    SUM(it_26) OVER w AS it_26_ytd,
+    SUM(us_25) OVER w AS us_25_ytd,
+    SUM(us_26) OVER w AS us_26_ytd,
+    SUM(fr_25) OVER w AS fr_25_ytd,
+    SUM(fr_26) OVER w AS fr_26_ytd,
+    SUM(mx_25) OVER w AS mx_25_ytd,
+    SUM(mx_26) OVER w AS mx_26_ytd,
+    SUM(nl_25) OVER w AS nl_25_ytd,
+    SUM(nl_26) OVER w AS nl_26_ytd,
+    SUM(jp_25) OVER w AS jp_25_ytd,
+    SUM(jp_26) OVER w AS jp_26_ytd,
+    SUM(au_25) OVER w AS au_25_ytd,
+    SUM(au_26) OVER w AS au_26_ytd,
+    SUM(sa_25) OVER w AS sa_25_ytd,
+    SUM(sa_26) OVER w AS sa_26_ytd
+  FROM monthly m
+  WINDOW w AS (ORDER BY month)
+)
+SELECT
+  month,
+
+  -- DE
+  COALESCE(de_25, 0) AS "DE Vorjahr",
+  COALESCE(de_26, 0) AS "DE 2026",
+  CASE WHEN de_26 IS NOT NULL THEN de_26 - COALESCE(de_25, 0) ELSE NULL END AS "DE Abw.",
+  CASE WHEN de_26 IS NOT NULL THEN ROUND((de_26 - COALESCE(de_25, 0)) / NULLIF(de_25, 0) * 100, 2) ELSE NULL END AS "DE Abw.%",
+  CASE WHEN de_26 IS NOT NULL THEN COALESCE(de_26_ytd, 0) - COALESCE(de_25_ytd, 0) ELSE NULL END AS "DE Abw. YTD",
+  CASE WHEN de_26 IS NOT NULL THEN ROUND((COALESCE(de_26_ytd, 0) - COALESCE(de_25_ytd, 0)) / NULLIF(de_25_ytd, 0) * 100, 2) ELSE NULL END AS "DE Abw.% YTD",
+
+  -- DE Kfzteile24
+  COALESCE(kfz_25, 0) AS "DE Kfzteile24-Vorjahr",
+  COALESCE(kfz_26, 0) AS "DE Kfzteile24-2026",
+  CASE WHEN kfz_26 IS NOT NULL THEN kfz_26 - COALESCE(kfz_25, 0) ELSE NULL END AS "DE Kfzteile24-Abw.",
+  CASE WHEN kfz_26 IS NOT NULL THEN ROUND((kfz_26 - COALESCE(kfz_25, 0)) / NULLIF(kfz_25, 0) * 100, 2) ELSE NULL END AS "DE Kfzteile24-Abw.%",
+  CASE WHEN kfz_26 IS NOT NULL THEN COALESCE(kfz_26_ytd, 0) - COALESCE(kfz_25_ytd, 0) ELSE NULL END AS "DE Kfzteile24-Abw. YTD",
+  CASE WHEN kfz_26 IS NOT NULL THEN ROUND((COALESCE(kfz_26_ytd, 0) - COALESCE(kfz_25_ytd, 0)) / NULLIF(kfz_25_ytd, 0) * 100, 2) ELSE NULL END AS "DE Kfzteile24-Abw.% YTD",
+
+  -- DE Retromotion
+  COALESCE(retro_25, 0) AS "DE Retromotion-Vorjahr",
+  COALESCE(retro_26, 0) AS "DE Retromotion-2026",
+  CASE WHEN retro_26 IS NOT NULL THEN retro_26 - COALESCE(retro_25, 0) ELSE NULL END AS "DE Retromotion-Abw.",
+  CASE WHEN retro_26 IS NOT NULL THEN ROUND((retro_26 - COALESCE(retro_25, 0)) / NULLIF(retro_25, 0) * 100, 2) ELSE NULL END AS "DE Retromotion-Abw.%",
+  CASE WHEN retro_26 IS NOT NULL THEN COALESCE(retro_26_ytd, 0) - COALESCE(retro_25_ytd, 0) ELSE NULL END AS "DE Retromotion-Abw. YTD",
+  CASE WHEN retro_26 IS NOT NULL THEN ROUND((COALESCE(retro_26_ytd, 0) - COALESCE(retro_25_ytd, 0)) / NULLIF(retro_25_ytd, 0) * 100, 2) ELSE NULL END AS "DE Retromotion-Abw.% YTD",
+
+  -- DE Sonstige
+  COALESCE(sonst_25, 0) AS "DE Sonstige-Vorjahr",
+  COALESCE(sonst_26, 0) AS "DE Sonstige-2026",
+  CASE WHEN sonst_26 IS NOT NULL THEN sonst_26 - COALESCE(sonst_25, 0) ELSE NULL END AS "DE Sonstige-Abw.",
+  CASE WHEN sonst_26 IS NOT NULL THEN ROUND((sonst_26 - COALESCE(sonst_25, 0)) / NULLIF(sonst_25, 0) * 100, 2) ELSE NULL END AS "DE Sonstige-Abw.%",
+  CASE WHEN sonst_26 IS NOT NULL THEN COALESCE(sonst_26_ytd, 0) - COALESCE(sonst_25_ytd, 0) ELSE NULL END AS "DE Sonstige-Abw. YTD",
+  CASE WHEN sonst_26 IS NOT NULL THEN ROUND((COALESCE(sonst_26_ytd, 0) - COALESCE(sonst_25_ytd, 0)) / NULLIF(sonst_25_ytd, 0) * 100, 2) ELSE NULL END AS "DE Sonstige-Abw.% YTD",
+
+  -- UK Amazon
+  COALESCE(uk_25, 0) AS "UK Amazon-Vorjahr",
+  COALESCE(uk_26, 0) AS "UK Amazon-2026",
+  CASE WHEN uk_26 IS NOT NULL THEN uk_26 - COALESCE(uk_25, 0) ELSE NULL END AS "UK Amazon-Abw.",
+  CASE WHEN uk_26 IS NOT NULL THEN ROUND((uk_26 - COALESCE(uk_25, 0)) / NULLIF(uk_25, 0) * 100, 2) ELSE NULL END AS "UK Amazon-Abw.%",
+  CASE WHEN uk_26 IS NOT NULL THEN COALESCE(uk_26_ytd, 0) - COALESCE(uk_25_ytd, 0) ELSE NULL END AS "UK Amazon-Abw. YTD",
+  CASE WHEN uk_26 IS NOT NULL THEN ROUND((COALESCE(uk_26_ytd, 0) - COALESCE(uk_25_ytd, 0)) / NULLIF(uk_25_ytd, 0) * 100, 2) ELSE NULL END AS "UK Amazon-Abw.% YTD",
+
+  -- UK WOL
+  COALESCE(wol_25, 0) AS "UK WOL-Vorjahr",
+  COALESCE(wol_26, 0) AS "UK WOL-2026",
+  CASE WHEN wol_26 IS NOT NULL THEN wol_26 - COALESCE(wol_25, 0) ELSE NULL END AS "UK WOL-Abw.",
+  CASE WHEN wol_26 IS NOT NULL THEN ROUND((wol_26 - COALESCE(wol_25, 0)) / NULLIF(wol_25, 0) * 100, 2) ELSE NULL END AS "UK WOL-Abw.%",
+  CASE WHEN wol_26 IS NOT NULL THEN COALESCE(wol_26_ytd, 0) - COALESCE(wol_25_ytd, 0) ELSE NULL END AS "UK WOL-Abw. YTD",
+  CASE WHEN wol_26 IS NOT NULL THEN ROUND((COALESCE(wol_26_ytd, 0) - COALESCE(wol_25_ytd, 0)) / NULLIF(wol_25_ytd, 0) * 100, 2) ELSE NULL END AS "UK WOL-Abw.% YTD",
+
+  -- UK Opie Oils
+  COALESCE(opie_25, 0) AS "UK OpieOils-Vorjahr",
+  COALESCE(opie_26, 0) AS "UK OpieOils-2026",
+  CASE WHEN opie_26 IS NOT NULL THEN opie_26 - COALESCE(opie_25, 0) ELSE NULL END AS "UK OpieOils-Abw.",
+  CASE WHEN opie_26 IS NOT NULL THEN ROUND((opie_26 - COALESCE(opie_25, 0)) / NULLIF(opie_25, 0) * 100, 2) ELSE NULL END AS "UK OpieOils-Abw.%",
+  CASE WHEN opie_26 IS NOT NULL THEN COALESCE(opie_26_ytd, 0) - COALESCE(opie_25_ytd, 0) ELSE NULL END AS "UK OpieOils-Abw. YTD",
+  CASE WHEN opie_26 IS NOT NULL THEN ROUND((COALESCE(opie_26_ytd, 0) - COALESCE(opie_25_ytd, 0)) / NULLIF(opie_25_ytd, 0) * 100, 2) ELSE NULL END AS "UK OpieOils-Abw.% YTD",
+
+  -- UK Arnold Clark
+  COALESCE(ac_25, 0) AS "UK ArnoldClark-Vorjahr",
+  COALESCE(ac_26, 0) AS "UK ArnoldClark-2026",
+  CASE WHEN ac_26 IS NOT NULL THEN ac_26 - COALESCE(ac_25, 0) ELSE NULL END AS "UK ArnoldClark-Abw.",
+  CASE WHEN ac_26 IS NOT NULL THEN ROUND((ac_26 - COALESCE(ac_25, 0)) / NULLIF(ac_25, 0) * 100, 2) ELSE NULL END AS "UK ArnoldClark-Abw.%",
+  CASE WHEN ac_26 IS NOT NULL THEN COALESCE(ac_26_ytd, 0) - COALESCE(ac_25_ytd, 0) ELSE NULL END AS "UK ArnoldClark-Abw. YTD",
+  CASE WHEN ac_26 IS NOT NULL THEN ROUND((COALESCE(ac_26_ytd, 0) - COALESCE(ac_25_ytd, 0)) / NULLIF(ac_25_ytd, 0) * 100, 2) ELSE NULL END AS "UK ArnoldClark-Abw.% YTD",
+
+  -- Iberia
+  COALESCE(ib_25, 0) AS "Iberia Vorjahr",
+  COALESCE(ib_26, 0) AS "Iberia 2026",
+  CASE WHEN ib_26 IS NOT NULL THEN ib_26 - COALESCE(ib_25, 0) ELSE NULL END AS "Iberia Abw.",
+  CASE WHEN ib_26 IS NOT NULL THEN ROUND((ib_26 - COALESCE(ib_25, 0)) / NULLIF(ib_25, 0) * 100, 2) ELSE NULL END AS "Iberia Abw.%",
+  CASE WHEN ib_26 IS NOT NULL THEN COALESCE(ib_26_ytd, 0) - COALESCE(ib_25_ytd, 0) ELSE NULL END AS "Iberia Abw. YTD",
+  CASE WHEN ib_26 IS NOT NULL THEN ROUND((COALESCE(ib_26_ytd, 0) - COALESCE(ib_25_ytd, 0)) / NULLIF(ib_25_ytd, 0) * 100, 2) ELSE NULL END AS "Iberia Abw.% YTD",
+
+  -- Iberia WOL
+  COALESCE(ib_wol_25, 0) AS "Iberia WOL-Vorjahr",
+  COALESCE(ib_wol_26, 0) AS "Iberia WOL-2026",
+  CASE WHEN ib_wol_26 IS NOT NULL THEN ib_wol_26 - COALESCE(ib_wol_25, 0) ELSE NULL END AS "Iberia WOL-Abw.",
+  CASE WHEN ib_wol_26 IS NOT NULL THEN ROUND((ib_wol_26 - COALESCE(ib_wol_25, 0)) / NULLIF(ib_wol_25, 0) * 100, 2) ELSE NULL END AS "Iberia WOL-Abw.%",
+  CASE WHEN ib_wol_26 IS NOT NULL THEN COALESCE(ib_wol_26_ytd, 0) - COALESCE(ib_wol_25_ytd, 0) ELSE NULL END AS "Iberia WOL-Abw. YTD",
+  CASE WHEN ib_wol_26 IS NOT NULL THEN ROUND((COALESCE(ib_wol_26_ytd, 0) - COALESCE(ib_wol_25_ytd, 0)) / NULLIF(ib_wol_25_ytd, 0) * 100, 2) ELSE NULL END AS "Iberia WOL-Abw.% YTD",
+
+  -- Italy
+  COALESCE(it_25, 0) AS "Italy Vorjahr",
+  COALESCE(it_26, 0) AS "Italy 2026",
+  CASE WHEN it_26 IS NOT NULL THEN it_26 - COALESCE(it_25, 0) ELSE NULL END AS "Italy Abw.",
+  CASE WHEN it_26 IS NOT NULL THEN ROUND((it_26 - COALESCE(it_25, 0)) / NULLIF(it_25, 0) * 100, 2) ELSE NULL END AS "Italy Abw.%",
+  CASE WHEN it_26 IS NOT NULL THEN COALESCE(it_26_ytd, 0) - COALESCE(it_25_ytd, 0) ELSE NULL END AS "Italy Abw. YTD",
+  CASE WHEN it_26 IS NOT NULL THEN ROUND((COALESCE(it_26_ytd, 0) - COALESCE(it_25_ytd, 0)) / NULLIF(it_25_ytd, 0) * 100, 2) ELSE NULL END AS "Italy Abw.% YTD",
+
+  -- USA
+  COALESCE(us_25, 0) AS "USA Vorjahr",
+  COALESCE(us_26, 0) AS "USA 2026",
+  CASE WHEN us_26 IS NOT NULL THEN us_26 - COALESCE(us_25, 0) ELSE NULL END AS "USA Abw.",
+  CASE WHEN us_26 IS NOT NULL THEN ROUND((us_26 - COALESCE(us_25, 0)) / NULLIF(us_25, 0) * 100, 2) ELSE NULL END AS "USA Abw.%",
+  CASE WHEN us_26 IS NOT NULL THEN COALESCE(us_26_ytd, 0) - COALESCE(us_25_ytd, 0) ELSE NULL END AS "USA Abw. YTD",
+  CASE WHEN us_26 IS NOT NULL THEN ROUND((COALESCE(us_26_ytd, 0) - COALESCE(us_25_ytd, 0)) / NULLIF(us_25_ytd, 0) * 100, 2) ELSE NULL END AS "USA Abw.% YTD",
+
+  -- France
+  COALESCE(fr_25, 0) AS "France Vorjahr",
+  COALESCE(fr_26, 0) AS "France 2026",
+  CASE WHEN fr_26 IS NOT NULL THEN fr_26 - COALESCE(fr_25, 0) ELSE NULL END AS "France Abw.",
+  CASE WHEN fr_26 IS NOT NULL THEN ROUND((fr_26 - COALESCE(fr_25, 0)) / NULLIF(fr_25, 0) * 100, 2) ELSE NULL END AS "France Abw.%",
+  CASE WHEN fr_26 IS NOT NULL THEN COALESCE(fr_26_ytd, 0) - COALESCE(fr_25_ytd, 0) ELSE NULL END AS "France Abw. YTD",
+  CASE WHEN fr_26 IS NOT NULL THEN ROUND((COALESCE(fr_26_ytd, 0) - COALESCE(fr_25_ytd, 0)) / NULLIF(fr_25_ytd, 0) * 100, 2) ELSE NULL END AS "France Abw.% YTD",
+
+  -- Mexico
+  COALESCE(mx_25, 0) AS "Mexico Vorjahr",
+  COALESCE(mx_26, 0) AS "Mexico 2026",
+  CASE WHEN mx_26 IS NOT NULL THEN mx_26 - COALESCE(mx_25, 0) ELSE NULL END AS "Mexico Abw.",
+  CASE WHEN mx_26 IS NOT NULL THEN ROUND((mx_26 - COALESCE(mx_25, 0)) / NULLIF(mx_25, 0) * 100, 2) ELSE NULL END AS "Mexico Abw.%",
+  CASE WHEN mx_26 IS NOT NULL THEN COALESCE(mx_26_ytd, 0) - COALESCE(mx_25_ytd, 0) ELSE NULL END AS "Mexico Abw. YTD",
+  CASE WHEN mx_26 IS NOT NULL THEN ROUND((COALESCE(mx_26_ytd, 0) - COALESCE(mx_25_ytd, 0)) / NULLIF(mx_25_ytd, 0) * 100, 2) ELSE NULL END AS "Mexico Abw.% YTD",
+
+  -- NL
+  COALESCE(nl_25, 0) AS "NL Vorjahr",
+  COALESCE(nl_26, 0) AS "NL 2026",
+  CASE WHEN nl_26 IS NOT NULL THEN nl_26 - COALESCE(nl_25, 0) ELSE NULL END AS "NL Abw.",
+  CASE WHEN nl_26 IS NOT NULL THEN ROUND((nl_26 - COALESCE(nl_25, 0)) / NULLIF(nl_25, 0) * 100, 2) ELSE NULL END AS "NL Abw.%",
+  CASE WHEN nl_26 IS NOT NULL THEN COALESCE(nl_26_ytd, 0) - COALESCE(nl_25_ytd, 0) ELSE NULL END AS "NL Abw. YTD",
+  CASE WHEN nl_26 IS NOT NULL THEN ROUND((COALESCE(nl_26_ytd, 0) - COALESCE(nl_25_ytd, 0)) / NULLIF(nl_25_ytd, 0) * 100, 2) ELSE NULL END AS "NL Abw.% YTD",
+
+  -- Japan
+  COALESCE(jp_25, 0) AS "Japan Vorjahr",
+  COALESCE(jp_26, 0) AS "Japan 2026",
+  CASE WHEN jp_26 IS NOT NULL THEN jp_26 - COALESCE(jp_25, 0) ELSE NULL END AS "Japan Abw.",
+  CASE WHEN jp_26 IS NOT NULL THEN ROUND((jp_26 - COALESCE(jp_25, 0)) / NULLIF(jp_25, 0) * 100, 2) ELSE NULL END AS "Japan Abw.%",
+  CASE WHEN jp_26 IS NOT NULL THEN COALESCE(jp_26_ytd, 0) - COALESCE(jp_25_ytd, 0) ELSE NULL END AS "Japan Abw. YTD",
+  CASE WHEN jp_26 IS NOT NULL THEN ROUND((COALESCE(jp_26_ytd, 0) - COALESCE(jp_25_ytd, 0)) / NULLIF(jp_25_ytd, 0) * 100, 2) ELSE NULL END AS "Japan Abw.% YTD",
+
+  -- Australia
+  COALESCE(au_25, 0) AS "Australia Vorjahr",
+  COALESCE(au_26, 0) AS "Australia 2026",
+  CASE WHEN au_26 IS NOT NULL THEN au_26 - COALESCE(au_25, 0) ELSE NULL END AS "Australia Abw.",
+  CASE WHEN au_26 IS NOT NULL THEN ROUND((au_26 - COALESCE(au_25, 0)) / NULLIF(au_25, 0) * 100, 2) ELSE NULL END AS "Australia Abw.%",
+  CASE WHEN au_26 IS NOT NULL THEN COALESCE(au_26_ytd, 0) - COALESCE(au_25_ytd, 0) ELSE NULL END AS "Australia Abw. YTD",
+  CASE WHEN au_26 IS NOT NULL THEN ROUND((COALESCE(au_26_ytd, 0) - COALESCE(au_25_ytd, 0)) / NULLIF(au_25_ytd, 0) * 100, 2) ELSE NULL END AS "Australia Abw.% YTD",
+
+  -- Saudi Arabia
+  COALESCE(sa_25, 0) AS "Saudi Arabia Vorjahr",
+  COALESCE(sa_26, 0) AS "Saudi Arabia 2026",
+  CASE WHEN sa_26 IS NOT NULL THEN sa_26 - COALESCE(sa_25, 0) ELSE NULL END AS "Saudi Arabia Abw.",
+  CASE WHEN sa_26 IS NOT NULL THEN ROUND((sa_26 - COALESCE(sa_25, 0)) / NULLIF(sa_25, 0) * 100, 2) ELSE NULL END AS "Saudi Arabia Abw.%",
+  CASE WHEN sa_26 IS NOT NULL THEN COALESCE(sa_26_ytd, 0) - COALESCE(sa_25_ytd, 0) ELSE NULL END AS "Saudi Arabia Abw. YTD",
+  CASE WHEN sa_26 IS NOT NULL THEN ROUND((COALESCE(sa_26_ytd, 0) - COALESCE(sa_25_ytd, 0)) / NULLIF(sa_25_ytd, 0) * 100, 2) ELSE NULL END AS "Saudi Arabia Abw.% YTD"
+FROM ytd
+ORDER BY month;
