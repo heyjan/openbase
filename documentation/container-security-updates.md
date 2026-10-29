@@ -105,27 +105,73 @@ so `COPY . .` cannot overwrite freshly installed container dependencies with old
 laptop artifacts. It also excludes runtime environment secrets and local databases.
 
 Obsolete broad overrides, including the forced Vite 7 version, are removed so
-Nuxt can resolve its supported Vite 8 dependency. Two targeted overrides remain:
+Nuxt can resolve its supported Vite 8 dependency. One targeted override remains:
+DuckDB's `node-gyp` is upgraded to 13.1.0 to remove its old tar 6 dependency.
+The old `package.json` overrides entry was not in pnpm's workspace configuration.
 
-- DuckDB's `node-gyp` is upgraded to 13.1.0 to remove its old tar 6 dependency.
-  The old `package.json` overrides entry was not in pnpm's workspace configuration.
-- Fontless's esbuild is upgraded to 0.28.2 for its security fix.
+The initial Fontless-to-esbuild 0.28 override was removed after review because
+Fontless 0.2 declares esbuild `^0.27.0`. Nuxt UI 4.12 still declares
+`@nuxt/fonts ^0.14.0`, which in turn declares Fontless `^0.2.1`. Forcing newer
+Fontless or Nuxt Fonts majors would move the compatibility risk to another package.
+Keep their declared ranges until the parent packages support an upgrade.
 
 The pnpm release-age exclusion is scoped to the explicit Lucide release selected
 for this migration, rather than disabling the supply-chain checks globally.
 
 The lockfile audit after this refresh reports no critical, high or moderate
-findings and one low-severity advisory,
-[deepmerge GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4).
-It affects the paths through google-fonts-helper and Rollup's node-resolve plugin.
-The advisory lists no published patched version. Do not treat this as a clean
-vulnerability scan or downgrade to an old release solely to hide the finding.
-Recheck the advisory when upgrading those parent dependencies.
+findings and two low-severity advisories:
+
+- [deepmerge GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)
+  affects the paths through google-fonts-helper and Rollup's node-resolve plugin.
+  The advisory lists no published patched version.
+- [esbuild GHSA-g7r4-m6w7-qqqr](https://github.com/advisories/GHSA-g7r4-m6w7-qqqr)
+  affects Fontless's esbuild 0.27.7. The fix is in 0.28.1+, outside Fontless's
+  declared range. It concerns arbitrary file reads through esbuild's development
+  server on Windows. Inspection of Fontless 0.2.1's published source shows that
+  it imports only `transform` from esbuild to minify CSS, not the server API.
+  Nuxt UI's automatic font integration is also disabled by `ui.fonts: false`.
+  This is a dependency-path assessment, not a proof of runtime safety. Reassess
+  if font settings change or esbuild's server is introduced.
+
+Neither finding is suppressed. Do not treat this as a clean vulnerability scan,
+force an unsupported dependency major without validation, or downgrade to an old
+release solely to hide a finding. Recheck the advisories when upgrading the parent
+packages.
 
 Package resolution, `pnpm outdated`, the audit gate and static diff checks were
 run for this refresh. Container builds, regression tests and UI checks remain
 pending because Podman was unavailable in the editing environment. The version
 listed in `packageManager` has not yet been validated by a full application build.
+
+## Chart upgrade review and required runtime checks
+
+The published [Vue ECharts 8 migration notes](https://github.com/ecomfe/vue-echarts#migration-to-v8)
+list removal of Vue 2 support, legacy browser compatibility and the `/csp` entry
+point. Openbase uses Vue 3, Chromium for E2E tests, and the standard `vue-echarts`
+entry. Its existing `option`, `autoresize`, `loading` and `init-options` props
+remain documented in 8.3.2. No required wrapper API migration was identified.
+That contract review does not verify resize, reactive updates or tooltip behavior
+in the browser.
+
+The [ECharts 6 upgrade guide](https://echarts.apache.org/handbook/en/basics/release-note/v6-upgrade-guide/)
+documents new theme defaults, legend positioning, axis overflow prevention and
+rich-text inheritance. Openbase's modular imports, chart series and SVG SSR init
+API remain supported. Defaults can still alter output without an API error.
+Do not mark chart-review warnings resolved until these checks pass:
+
+- Render line, vertical and horizontal bar, pie, radar, scatter and waterfall
+  modules, including query previews and shared dashboards.
+- Update chart data and options, resize cards, and toggle loading. Check tooltips,
+  legends, axis labels and pie colors, and inspect browser errors.
+- Run `e2e/pdf-export.spec.ts` to check SVG card layout and a multi-page PDF.
+  This existing test covers server-rendered charts, not the browser Vue wrapper.
+- Compare chart and PDF screenshots with the main-branch application using the
+  same data, dimensions, browser and OS. Record any intentional style changes;
+  do not generate or accept new baselines merely to silence a failing check.
+
+These runtime and visual checks have not been performed in this environment.
+The PR remains a draft pending verification. No chart majors were downgraded or
+new rendering options added solely to silence speculative review warnings.
 
 ## Build and verification
 
