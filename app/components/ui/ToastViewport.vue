@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertCircle, CheckCircle2, Info, X } from 'lucide-vue-next'
+import { AlertCircle, CheckCircle2, Info, X } from '@lucide/vue'
 import type { ToastTone } from '~/types/toast'
 
 const { toasts, dismiss } = useAppToast()

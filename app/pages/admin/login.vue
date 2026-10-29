@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LogIn } from 'lucide-vue-next'
+import { LogIn } from '@lucide/vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 
 const email = ref('')

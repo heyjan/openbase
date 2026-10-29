@@ -8,7 +8,7 @@ import {
   StretchHorizontal,
   Type,
   UnfoldHorizontal
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { QueryVisualization } from '~/types/query-visualization'
 
 type CanvasWidthMode = 'fixed' | 'full'

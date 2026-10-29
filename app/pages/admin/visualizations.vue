@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, BarChart3, LayoutList, MoreHorizontal, Table } from 'lucide-vue-next'
+import { Activity, BarChart3, LayoutList, MoreHorizontal, Table } from '@lucide/vue'
 import type { Component } from 'vue'
 import VisualizationCard from '~/components/admin/VisualizationCard.vue'
 import VisualizationFolderTree from '~/components/admin/VisualizationFolderTree.vue'

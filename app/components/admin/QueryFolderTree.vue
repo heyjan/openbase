@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FolderOpen, Folder, FolderPlus, Trash2, Pencil, Check, X, LayoutList } from 'lucide-vue-next'
+import { FolderOpen, Folder, FolderPlus, Trash2, Pencil, Check, X, LayoutList } from '@lucide/vue'
 import type { QueryFolder } from '~/types/query'
 
 const props = defineProps<{

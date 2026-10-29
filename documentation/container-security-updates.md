@@ -68,6 +68,65 @@ own inventory and review. If a previously deployed environment contained a
 compromised package, rebuilding alone does not address potential credential
 exposure; investigate that deployment and rotate affected credentials.
 
+## JavaScript dependency refresh
+
+The security branch updates all direct JavaScript dependencies to the registry's
+latest stable releases, including these major changes:
+
+| Package | Previous | Updated |
+| --- | --- | --- |
+| pnpm | 11.13.1 | 12.16.1 |
+| Nuxt | 4.4.8 | 4.6.3 |
+| Nuxt UI | 4.10.0 | 4.12.0 |
+| Vue | 3.5.28 | 3.5.44 |
+| AI SDK | 5.0.155 | 7.0.155 |
+| AI SDK Vue | 2.0.155 | 4.0.155 |
+| ECharts | 5.6.0 | 6.1.0 |
+| Vue ECharts | 7.0.3 | 8.3.2 |
+| GridStack | 12.4.2 | 14.0.0 |
+| better-sqlite3 | 12.11.1 | 13.0.3 |
+| Nodemailer | 9.0.3 | 10.2.1 |
+| Playwright | 1.58.2 in the old lockfile | 1.64.1 |
+
+Use a current Node 24 image. Nuxt and the updated native build tool require at
+least Node 24.15.0 on this branch. The package manifest declares that minimum
+within Node 24; it does not pin an exact patch. pnpm remains pinned to the selected
+release in `packageManager` for consistent lockfile handling.
+
+The deprecated `lucide-vue-next` package is replaced by `@lucide/vue` 1.64.0.
+All existing icon imports retain their exported names. GridStack's `float: true`
+option becomes `mode: 'float'`, and its stylesheet now comes from the installed
+package instead of a vendored version 12 copy. Nodemailer now supplies its own
+TypeScript declarations, so the separate declaration package is removed.
+ECharts 6 changes default styling; chart and PDF visual checks are required.
+No application code currently imports the JavaScript AI SDK packages directly.
+The root `.dockerignore` excludes host `node_modules` and generated Nuxt output
+so `COPY . .` cannot overwrite freshly installed container dependencies with old
+laptop artifacts. It also excludes runtime environment secrets and local databases.
+
+Obsolete broad overrides, including the forced Vite 7 version, are removed so
+Nuxt can resolve its supported Vite 8 dependency. Two targeted overrides remain:
+
+- DuckDB's `node-gyp` is upgraded to 13.1.0 to remove its old tar 6 dependency.
+  The old `package.json` overrides entry was not in pnpm's workspace configuration.
+- Fontless's esbuild is upgraded to 0.28.2 for its security fix.
+
+The pnpm release-age exclusion is scoped to the explicit Lucide release selected
+for this migration, rather than disabling the supply-chain checks globally.
+
+The lockfile audit after this refresh reports no critical, high or moderate
+findings and one low-severity advisory,
+[deepmerge GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4).
+It affects the paths through google-fonts-helper and Rollup's node-resolve plugin.
+The advisory lists no published patched version. Do not treat this as a clean
+vulnerability scan or downgrade to an old release solely to hide the finding.
+Recheck the advisory when upgrading those parent dependencies.
+
+Package resolution, `pnpm outdated`, the audit gate and static diff checks were
+run for this refresh. Container builds, regression tests and UI checks remain
+pending because Podman was unavailable in the editing environment. The version
+listed in `packageManager` has not yet been validated by a full application build.
+
 ## Build and verification
 
 Run in the Podman environment from the repository root:

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus } from 'lucide-vue-next'
+import { Plus } from '@lucide/vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 import QueryFolderTree from '~/components/admin/QueryFolderTree.vue'
 import QueryCard from '~/components/admin/QueryCard.vue'

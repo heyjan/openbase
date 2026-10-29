@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckCircle } from 'lucide-vue-next'
+import { CheckCircle } from '@lucide/vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 import { getPasswordScore, passwordStrengthLabel } from '~/utils/password'
 

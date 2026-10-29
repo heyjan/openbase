@@ -9,7 +9,7 @@ import {
   PieChart,
   Radar,
   ScatterChart
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { EChartsOption } from 'echarts'
 import EChart from '~/components/charts/EChart.vue'
 import Table from '~/components/ui/Table.vue'

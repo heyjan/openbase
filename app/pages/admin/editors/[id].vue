@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Save } from 'lucide-vue-next'
+import { Save } from '@lucide/vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 
 const route = useRoute()

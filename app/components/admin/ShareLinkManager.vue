@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Copy, Link2Off, Lock, LockOpen, Plus, RefreshCw } from 'lucide-vue-next'
+import { Copy, Link2Off, Lock, LockOpen, Plus, RefreshCw } from '@lucide/vue'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import type { ShareLinkWithStats } from '~/types/share-link'
 

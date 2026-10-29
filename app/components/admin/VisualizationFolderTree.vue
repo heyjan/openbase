@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, Folder, FolderOpen, FolderPlus, LayoutList, Pencil, Trash2, X } from 'lucide-vue-next'
+import { Check, Folder, FolderOpen, FolderPlus, LayoutList, Pencil, Trash2, X } from '@lucide/vue'
 import type { VisualizationFolder } from '~/types/visualization-folder'
 
 const props = defineProps<{

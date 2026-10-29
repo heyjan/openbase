@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link2, Settings } from 'lucide-vue-next'
+import { Link2, Settings } from '@lucide/vue'
 import CanvasToolbar from '~/components/dashboard/CanvasToolbar.vue'
 import DashboardEditor from '~/components/dashboard/DashboardEditor.vue'
 import DashboardMetadataModal from '~/components/dashboard/DashboardMetadataModal.vue'

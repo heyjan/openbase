@@ -2,7 +2,10 @@
   "name": "openbase",
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@11.13.1",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": "^24.15.0"
+  },
   "scripts": {
     "build": "nuxt build",
     "build:profile": "nuxt build --profile",
@@ -17,38 +20,32 @@
     "playwright:install": "pnpm exec playwright install --with-deps chromium"
   },
   "dependencies": {
-    "@ai-sdk/vue": "^2.0.155",
-    "@nuxt/ui": "^4.10.0",
+    "@ai-sdk/vue": "^4.0.155",
+    "@lucide/vue": "^1.64.0",
+    "@nuxt/ui": "^4.12.0",
     "@nuxtjs/google-fonts": "^3.2.0",
-    "@nuxtjs/mdc": "^0.22.1",
-    "ai": "^5.0.155",
+    "@nuxtjs/mdc": "^0.23.2",
+    "ai": "^7.0.155",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.11.1",
-    "csv-parse": "^7.0.1",
+    "better-sqlite3": "^13.0.3",
+    "csv-parse": "^7.0.3",
     "duckdb": "^1.4.4",
-    "echarts": "^5.6.0",
-    "gridstack": "^12.4.2",
+    "echarts": "^6.1.0",
+    "gridstack": "^14.0.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
-    "lucide-vue-next": "^0.575.0",
-    "mongodb": "^7.1.0",
-    "mysql2": "^3.15.3",
-    "nodemailer": "^9.0.3",
-    "nuxt": "^4.4.8",
-    "pg": "^8.18.0",
-    "vue": "^3.5.28",
-    "vue-echarts": "^7.0.3"
+    "mongodb": "^7.7.0",
+    "mysql2": "^3.24.6",
+    "nodemailer": "^10.2.1",
+    "nuxt": "^4.6.3",
+    "pg": "^8.23.1",
+    "vue": "^3.5.44",
+    "vue-echarts": "^8.3.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.52.0",
-    "@tailwindcss/vite": "^4.2.0",
-    "@types/nodemailer": "^7.0.10",
+    "@playwright/test": "^1.64.1",
+    "@tailwindcss/vite": "^4.3.3",
     "husky": "^9.1.7",
-    "tailwindcss": "^4.2.0"
-  },
-  "overrides": {
-    "duckdb": {
-      "node-gyp": "^12.3.0"
-    }
+    "tailwindcss": "^4.3.3"
   }
 }

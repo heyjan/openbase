@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Info } from 'lucide-vue-next'
+import { Info } from '@lucide/vue'
 import { isTextModuleType, type ModuleConfig } from '~/types/module'
 import type { QueryVariable, SelectorMode } from '~/types/query-variable'
 import Spinner from '~/components/ui/Spinner.vue'

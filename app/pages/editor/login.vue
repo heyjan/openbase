@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LogIn } from 'lucide-vue-next'
+import { LogIn } from '@lucide/vue'
 
 const email = ref('')
 const password = ref('')

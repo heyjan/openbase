@@ -13,7 +13,7 @@ import {
   PieChart,
   ScatterChart,
   Radar
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import QueryPreviewResult from '~/components/admin/QueryPreviewResult.vue'
 import VizOptionsPanel from '~/components/admin/VizOptionsPanel.vue'
 import SettingsNavCard from '~/components/ui/SettingsNavCard.vue'

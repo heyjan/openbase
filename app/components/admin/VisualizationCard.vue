@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { GripVertical, Pencil, Trash2 } from 'lucide-vue-next'
+import { GripVertical, Pencil, Trash2 } from '@lucide/vue'
 import type { QueryVisualization } from '~/types/query-visualization'
 
 const props = defineProps<{

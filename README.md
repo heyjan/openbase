@@ -55,6 +55,9 @@ Then open `http://localhost:3000` and complete setup.
 
 ## Local Development
 
+Use a current Node 24 release, at least 24.15.0. The Dockerfiles track Node 24
+patch updates; `packageManager` selects pnpm 12.16.1.
+
 1. Enable the project-pinned pnpm version and install dependencies:
 
 ```bash

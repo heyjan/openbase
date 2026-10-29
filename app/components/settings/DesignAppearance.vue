@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Save } from 'lucide-vue-next'
+import { Save } from '@lucide/vue'
 import type { DesignSettings } from '~~/shared/design-settings'
 import {
   DEFAULT_DESIGN_SETTINGS,

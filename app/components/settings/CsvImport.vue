@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, CheckCircle2, Loader2, Upload } from 'lucide-vue-next'
+import { AlertTriangle, CheckCircle2, Loader2, Upload } from '@lucide/vue'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import type { DataSource } from '~/types/data-source'
 import type {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Save, Table2, Trash2 } from 'lucide-vue-next'
+import { Plus, Save, Table2, Trash2 } from '@lucide/vue'
 import type { DataSource } from '~/types/data-source'
 import type { WritableTable } from '~/types/editor'
 

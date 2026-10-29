@@ -5,17 +5,11 @@ allowBuilds:
   duckdb: true
   esbuild: true
   vue-demi: true
-minimumReleaseAgeExclude:
-  - '@nuxt/ui@4.10.0'
+# DuckDB's published package still requests node-gyp 9 and its vulnerable tar 6.
+# Override the build tool rather than forcing tar 7 into tar 6's consumers.
+# Fontless 0.2 is pinned by @nuxt/fonts and otherwise keeps esbuild 0.27.
 overrides:
-  h3: ^1.15.9
-  linkify-it: 5.0.2
-  lodash: ^4.18.0
-  'minimatch@9': ^9.0.7
-  'minimatch@10': ^10.2.3
-  'picomatch@2': ^2.3.2
-  'picomatch@4': ^4.0.4
-  rollup: ^4.59.0
-  tar: ^7.5.20
-  vite: ^7.3.5
-  ws: ^8.21.1
+  'duckdb>node-gyp': ^13.1.0
+  'fontless>esbuild': ^0.28.2
+minimumReleaseAgeExclude:
+  - '@lucide/vue@1.64.0'
