@@ -21,5 +21,5 @@ export default defineNuxtConfig({
     display: 'swap',
     preload: true
   },
-  css: ['~/assets/css/main.css', '~/assets/css/gridstack.css']
+  css: ['~/assets/css/main.css', 'gridstack/dist/gridstack.min.css']
 })

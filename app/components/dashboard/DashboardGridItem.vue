@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Copy, Link, Settings2, Trash2 } from 'lucide-vue-next'
+import { Copy, Link, Settings2, Trash2 } from '@lucide/vue'
 import { isTextModuleType, type ModuleConfig } from '~/types/module'
 import ModuleRenderer from '~/components/modules/ModuleRenderer.vue'
 

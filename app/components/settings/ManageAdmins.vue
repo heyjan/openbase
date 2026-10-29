@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Save } from 'lucide-vue-next'
+import { Plus, Save } from '@lucide/vue'
 import type { AdminUser } from '~/types/admin'
 import { getPasswordScore, passwordStrengthLabel } from '~/utils/password'
 

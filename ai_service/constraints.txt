@@ -1,0 +1,3 @@
+# Openbase uses Pydantic AI directly, not LiteLLM. Fail dependency resolution
+# if a future direct or transitive dependency attempts to introduce LiteLLM.
+litellm<0

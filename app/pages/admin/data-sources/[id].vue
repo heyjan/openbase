@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, Table, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, Table, Trash2 } from '@lucide/vue'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 

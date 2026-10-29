@@ -1,3 +1,5 @@
+-c constraints.txt
+certifi>=2026.10.19
 fastapi>=0.115,<1.0
 httpx>=0.27,<1.0
 pydantic>=2.9,<3.0

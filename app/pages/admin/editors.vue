@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ExternalLink, Plus, Save } from 'lucide-vue-next'
+import { ExternalLink, Plus, Save } from '@lucide/vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 import type { EditorUser } from '~/types/editor'
 import { getPasswordScore, passwordStrengthLabel } from '~/utils/password'

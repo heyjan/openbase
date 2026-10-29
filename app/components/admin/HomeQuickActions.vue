@@ -4,7 +4,7 @@ import {
   Link2,
   Search,
   Users
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 
 const quickActions = [
   {

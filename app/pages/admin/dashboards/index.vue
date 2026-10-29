@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Link2,
   Plus
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 import type { Dashboard } from '~/types/dashboard'

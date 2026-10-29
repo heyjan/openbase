@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ExternalLink, X } from 'lucide-vue-next'
+import { ExternalLink, X } from '@lucide/vue'
 
 type MetadataPayload = {
   name: string

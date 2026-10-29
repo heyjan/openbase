@@ -268,7 +268,7 @@ const initGrid = async () => {
     grid = gridFactory.init(
       {
         column: DASHBOARD_GRID_COLUMNS,
-        float: true,
+        mode: 'float',
         margin: DASHBOARD_GRID_GAP,
         cellHeight: props.rowHeight,
         minRow: DASHBOARD_GRID_MIN_ROWS,

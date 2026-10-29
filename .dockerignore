@@ -1,0 +1,16 @@
+# Keep host dependencies and generated output out of the container build.
+node_modules*
+**/node_modules
+.nuxt*
+.output*
+.git
+
+# Runtime secrets and local data must not enter the build context.
+.env
+.env.*
+!.env.example
+db/*.db*
+SECURITY-AUDIT.md
+
+playwright-report
+test-results

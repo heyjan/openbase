@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Copy, Plus, Trash2 } from 'lucide-vue-next'
+import { Copy, Plus, Trash2 } from '@lucide/vue'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import PageHeader from '~/components/ui/PageHeader.vue'
 import type { ModuleType } from '~/types/module'

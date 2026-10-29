@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Database, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { Database, Plus, RefreshCw, Trash2 } from '@lucide/vue'
 import ConfirmDialog from '~/components/ui/ConfirmDialog.vue'
 import type { DataSource } from '~/types/data-source'
 

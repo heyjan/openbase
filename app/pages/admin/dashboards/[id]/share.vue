@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { X } from 'lucide-vue-next'
+import { X } from '@lucide/vue'
 import ShareLinkManager from '~/components/admin/ShareLinkManager.vue'
 
 const route = useRoute()

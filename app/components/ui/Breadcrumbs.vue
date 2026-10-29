@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight, Home } from 'lucide-vue-next'
+import { ChevronRight, Home } from '@lucide/vue'
 
 export type BreadcrumbItem = {
   label: string

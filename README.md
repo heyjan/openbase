@@ -47,13 +47,16 @@ Detailed capability breakdown: [Feature Guide](documentation/features.md)
 ```bash
 cp .env.example .env
 podman compose down
-podman compose build
+podman compose build --pull --no-cache
 podman compose up
 ```
 
 Then open `http://localhost:3000` and complete setup.
 
 ## Local Development
+
+Use a current Node 24 release, at least 24.15.0. The Dockerfiles track Node 24
+patch updates; `packageManager` selects pnpm 12.16.1.
 
 1. Enable the project-pinned pnpm version and install dependencies:
 
@@ -95,6 +98,11 @@ Husky runs `pnpm audit --audit-level high` before every push. Pushes are blocked
 - Connection strings and credentials must be provided through environment variables.
 - `OPENBASE_ENCRYPTION_KEY` is required in production for encrypted data-source settings.
 - Do not commit secrets or production credentials.
+- Container builds track Node 24 and Python 3.12 patch releases. Refresh base images
+  and rebuild without cached layers for security updates; running containers do not
+  update themselves.
+- See [Container security updates](documentation/container-security-updates.md) for
+  certificate incident mitigations and the LiteLLM dependency exclusion.
 
 ## Documentation
 
