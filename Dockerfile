@@ -1,4 +1,10 @@
-FROM node:24-slim AS builder
+# Track the latest Node 24 release. Build with --pull to refresh this tag.
+FROM node:24-slim AS base
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base AS builder
 WORKDIR /app
 
 RUN corepack enable pnpm
@@ -9,7 +15,7 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm run build
 
-FROM node:24-slim
+FROM base AS runtime
 WORKDIR /app
 
 COPY --from=builder /app/.output ./.output

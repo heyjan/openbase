@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: .devcontainer/Dockerfile
+      pull: true
+      no_cache: true
     userns_mode: keep-id
     volumes:
       - .:/workspace:z
@@ -31,6 +33,8 @@ services:
     build:
       context: ./ai_service
       dockerfile: Dockerfile
+      pull: true
+      no_cache: true
     environment:
       OPENBASE_APP_URL: http://app:3000
       OPENBASE_AI_SERVICE_TOKEN: ${OPENBASE_AI_SERVICE_TOKEN}

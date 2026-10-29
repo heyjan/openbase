@@ -47,7 +47,7 @@ Detailed capability breakdown: [Feature Guide](documentation/features.md)
 ```bash
 cp .env.example .env
 podman compose down
-podman compose build
+podman compose build --pull --no-cache
 podman compose up
 ```
 
@@ -95,6 +95,11 @@ Husky runs `pnpm audit --audit-level high` before every push. Pushes are blocked
 - Connection strings and credentials must be provided through environment variables.
 - `OPENBASE_ENCRYPTION_KEY` is required in production for encrypted data-source settings.
 - Do not commit secrets or production credentials.
+- Container builds track Node 24 and Python 3.12 patch releases. Refresh base images
+  and rebuild without cached layers for security updates; running containers do not
+  update themselves.
+- See [Container security updates](documentation/container-security-updates.md) for
+  certificate incident mitigations and the LiteLLM dependency exclusion.
 
 ## Documentation
 
