@@ -24,7 +24,7 @@ logs
 !.env.example
 
 # Playwright
-e2e/
+e2e/.results/
 playwright-report/
 blob-report/
 test-results/

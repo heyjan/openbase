@@ -85,11 +85,21 @@ pnpm build
 
 ## Testing
 
-End-to-end tests use Playwright:
+End-to-end tests use Playwright with the Chrome stable channel. Run setup and
+tests only inside Podman, not on the host:
 
 ```bash
-pnpm test:e2e
+podman compose exec --user root app pnpm install --frozen-lockfile
+podman compose exec --user root app pnpm test:e2e
 ```
+
+The E2E scripts refresh Chrome stable and its OS dependencies before testing.
+This requires network access and package-install privileges inside the container.
+They do not use the older bundled Chromium/headless-shell cache. A preflight
+checks the actual browser version against the security floor and reports it.
+Chrome's Linux distribution requires an amd64 Debian/Ubuntu container; use an
+amd64 test environment on ARM hosts rather than silently falling back to an old
+browser. See [browser security maintenance](documentation/container-security-updates.md#browser-security-maintenance).
 
 Husky runs `pnpm audit --audit-level high` before every push. Pushes are blocked when high- or critical-severity dependency vulnerabilities are found.
 
