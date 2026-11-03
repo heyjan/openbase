@@ -1,7 +1,9 @@
 import { defineConfig } from '@playwright/test'
+import { CHROME_CHANNEL } from './shared/utils/chrome-security'
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
   outputDir: './e2e/.results',
   timeout: 30_000,
   retries: 0,
@@ -13,7 +15,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: { browserName: 'chromium', channel: CHROME_CHANNEL },
     },
   ],
   webServer: process.env.CI
