@@ -171,7 +171,7 @@ importers:
     dependencies:
       '@ai-sdk/vue':
         specifier: ^4.0.155
-        version: 4.0.155(vue@3.5.44(typescript@7.0.2))(zod@4.6.7)
+        version: 4.0.170(vue@3.5.44(typescript@7.0.2))(zod@4.6.7)
       '@lucide/vue':
         specifier: ^1.64.0
         version: 1.64.0(vue@3.5.44(typescript@7.0.2))
@@ -254,8 +254,20 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/gateway@4.0.143':
+    resolution: {integrity: sha512-N+n+7oHGtx4PtetjcBSe48ANVrcHTVV3rJtEfrPMUJMtak2Iw3aDhDFf7nxfpqKVEPMf7XvQ1dJ9yexdMEJiSw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider-utils@5.0.70':
     resolution: {integrity: sha512-nU213UNVHWDoEKIZ5Hm3uGPmfW7EBHC2GkIJJEDKh4HLQWgh/eizrW2jmY4efxWf7Tf/yTzKD0t6sd4kVUKlyQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@5.0.79':
+    resolution: {integrity: sha512-IYu6MT0NDE3JFWBWEJWAXjhskHTSj6NfRp9FuEAOcyS2Jrj3qBePu7OEoXVmoCWT3pYPgrF4DBKzjjjOMRyw9Q==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -264,8 +276,12 @@ packages:
     resolution: {integrity: sha512-Ip7ZQBq/FiGpM1mmOVseTtX9PBjnzo0bLC41WTgBSBBRUBz6LhNFGbYaNUzI6hPm6ll1oNSPOAZc/q/z+3QZEQ==}
     engines: {node: '>=22'}
 
-  '@ai-sdk/vue@4.0.155':
-    resolution: {integrity: sha512-c8jsW9liq9RHQQ6A8ycua8O2taMPK2bZtU/ttSC22wzFvRrwH8h0Paso9G9+irs9TTBfnPqsfKgKObCD7koElw==}
+  '@ai-sdk/provider@4.0.37':
+    resolution: {integrity: sha512-4uPgZ3qiX/JaQFr0dQoibUzHImZit9u05ro2BxGUnJwU4fV28BOAbKUa2OjQvqtM1tMac3bTKkaXdyzGovQXqg==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/vue@4.0.170':
+    resolution: {integrity: sha512-d/CWE1ab9WU5Bn1kPH5yiQY5MM7LcOWnEqe+sWsPaugdHpE+6+gsa89GjntahKSjr8D+V2qnGIlbG6c0fGM7pw==}
     engines: {node: '>=22'}
     peerDependencies:
       vue: ^3.3.4
@@ -2231,6 +2247,12 @@ packages:
 
   ai@7.0.155:
     resolution: {integrity: sha512-df/UwKgOix8Vc+dj684bQlHCClNojrG5T7Jr5aJvFyz+PlBo7gEgMALPzP7LdeD12Gxc6i0pzpboEszDh9V1wA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  ai@7.0.170:
+    resolution: {integrity: sha512-hvgFzDNuheJA+FEN0nieIvKgjriGBd5b1Z4ntvJ5fAQel9l4Og0aUVBuPH5hbk5sx1pomtbC92cy/Vj/QIU4ig==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -5286,9 +5308,25 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.6.7
 
+  '@ai-sdk/gateway@4.0.143(zod@4.6.7)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.37
+      '@ai-sdk/provider-utils': 5.0.79(zod@4.6.7)
+      '@vercel/oidc': 3.2.0
+      zod: 4.6.7
+
   '@ai-sdk/provider-utils@5.0.70(zod@4.6.7)':
     dependencies:
       '@ai-sdk/provider': 4.0.34
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.1
+      undici: 7.30.1
+      zod: 4.6.7
+
+  '@ai-sdk/provider-utils@5.0.79(zod@4.6.7)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.37
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
@@ -5299,10 +5337,14 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/vue@4.0.155(vue@3.5.44(typescript@7.0.2))(zod@4.6.7)':
+  '@ai-sdk/provider@4.0.37':
     dependencies:
-      '@ai-sdk/provider-utils': 5.0.70(zod@4.6.7)
-      ai: 7.0.155(zod@4.6.7)
+      json-schema: 0.4.0
+
+  '@ai-sdk/vue@4.0.170(vue@3.5.44(typescript@7.0.2))(zod@4.6.7)':
+    dependencies:
+      '@ai-sdk/provider-utils': 5.0.79(zod@4.6.7)
+      ai: 7.0.170(zod@4.6.7)
       swrv: 1.3.0(vue@3.5.44(typescript@7.0.2))
       vue: 3.5.44(typescript@7.0.2)
     transitivePeerDependencies:
@@ -7525,6 +7567,13 @@ snapshots:
       '@ai-sdk/gateway': 4.0.128(zod@4.6.7)
       '@ai-sdk/provider': 4.0.34
       '@ai-sdk/provider-utils': 5.0.70(zod@4.6.7)
+      zod: 4.6.7
+
+  ai@7.0.170(zod@4.6.7):
+    dependencies:
+      '@ai-sdk/gateway': 4.0.143(zod@4.6.7)
+      '@ai-sdk/provider': 4.0.37
+      '@ai-sdk/provider-utils': 5.0.79(zod@4.6.7)
       zod: 4.6.7
 
   ansi-regex@5.0.1: {}
