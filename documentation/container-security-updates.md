@@ -118,8 +118,9 @@ Keep their declared ranges until the parent packages support an upgrade.
 The pnpm release-age exclusion is scoped to the explicit Lucide release selected
 for this migration, rather than disabling the supply-chain checks globally.
 
-The lockfile audit after this refresh reports no critical, high or moderate
-findings and two low-severity advisories:
+The initial lockfile refresh left two low-severity advisories. The latest audit
+during the browser-security follow-up still has no critical or high findings,
+but now reports two moderate findings as well. The two low findings are:
 
 - [deepmerge GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)
   affects the paths through google-fonts-helper and Rollup's node-resolve plugin.
@@ -133,7 +134,15 @@ findings and two low-severity advisories:
   This is a dependency-path assessment, not a proof of runtime safety. Reassess
   if font settings change or esbuild's server is introduced.
 
-Neither finding is suppressed. Do not treat this as a clean vulnerability scan,
+The newly reported moderate findings are
+[minimatch GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)
+and [glob GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)
+through Nitro's archiver and Vercel NFT dependencies. They are separate from the
+browser binaries and were not changed by the browser follow-up. Their fixes
+require newer dependency majors; do not force them globally without validating
+the consuming packages.
+
+None of these findings is suppressed. Do not treat this as a clean vulnerability scan,
 force an unsupported dependency major without validation, or downgrade to an old
 release solely to hide a finding. Recheck the advisories when upgrading the parent
 packages.
@@ -143,11 +152,79 @@ run for this refresh. Container builds, regression tests and UI checks remain
 pending because Podman was unavailable in the editing environment. The version
 listed in `packageManager` has not yet been validated by a full application build.
 
+## Browser security maintenance
+
+The latest Playwright package is not proof that its bundled browser contains the
+latest stable security patches. Inspection for this change found:
+
+| Source | Playwright | Bundled Chromium |
+| --- | --- | --- |
+| Existing local node_modules | 1.58.2 | 145.0.7632.6, revision 1208 |
+| Current lockfile and latest stable npm package | 1.64.1 | 156.0.8078.4, revision 1248 |
+
+These are package-manifest versions, not measurements of a running browser. The
+shared host browser cache also contains older revisions. Neither an npm audit
+nor updating the lockfile patches those downloaded browser executables. No host
+browser cache was deleted because other projects may use it.
+
+Google's [stable security release](https://chromereleases.googleblog.com/2026/10/stable-channel-update-for-desktop_02107719452.html)
+updates Linux Chrome to 156.0.8078.79 and includes 21 security fixes, including a
+critical MediaStream issue. Google's apt repository metadata lists
+`google-chrome-stable 156.0.8078.79-1` for amd64. Chrome for Testing's stable feed
+lists 156.0.8078.80; patch suffixes differ by distribution/platform. Do not equate
+the older 156.0.8078.4 bundled snapshot with that patched stable release.
+
+E2E and server-side PDF rendering now explicitly request Playwright's supported
+`chrome` channel, not the bundled `chromium`/headless-shell snapshot. There is no
+silent fallback. `shared/utils/chrome-security.ts` enforces a minimum of
+156.0.8078.79 before tests or PDF content are rendered. Global setup logs the
+actual launched browser version; the browser-security test also attaches it to
+the test results. Failed preflight and PDF rendering checks close the browser.
+
+The `test:e2e`, `test:e2e:ui` and `test:e2e:headed` scripts first run
+`playwright install --with-deps --force chrome` to refresh the stable browser
+and required OS packages, then run tests. This deliberately favors current
+security patches over a reproducible stale browser revision. The minimum-version
+check is an incident baseline, not a guarantee of no vulnerabilities: continue
+refreshing Chrome and raise the minimum when later advisories require it.
+
+Only run this setup in the isolated Podman environment. The installer upgrades
+the system Chrome package and requires network access and package-install
+privileges. Do not run these scripts against a developer's host Chrome install.
+Linux Chrome stable is distributed for amd64 Debian/Ubuntu, not Linux ARM64.
+Use an amd64 test runner or an amd64 container with configured emulation on ARM;
+unsupported environments should fail rather than use old cached Chromium.
+
+```bash
+podman compose exec --user root app pnpm install --frozen-lockfile
+podman compose exec --user root app pnpm test:e2e
+```
+
+The full E2E command includes the browser-version regression tests and the
+existing PDF tests. For a targeted PDF run after a full setup:
+
+```bash
+podman compose exec --user root app pnpm test:e2e e2e/pdf-export.spec.ts
+```
+
+For production PDF export, provision Playwright and Chrome stable in the runtime
+image, refresh that browser during image construction and rebuild/redeploy for
+security updates. The current production Dockerfile does not provision either
+the Playwright runtime or Chrome; this change does not add a production browser
+installation. A deployment that previously supplied only cached Chromium must
+supply Chrome stable now or PDF rendering will fail. No AWS browser version was
+inspected or changed by this source update.
+
+The setup commands, actual installed Chrome version, new browser-policy tests
+and PDF rendering have not been executed here because Podman is unavailable.
+The inspected metadata and new policy do not certify a patched local or deployed
+browser installation. Verify the logged browser version in the Podman test run.
+
 ## Chart upgrade review and required runtime checks
 
 The published [Vue ECharts 8 migration notes](https://github.com/ecomfe/vue-echarts#migration-to-v8)
 list removal of Vue 2 support, legacy browser compatibility and the `/csp` entry
-point. Openbase uses Vue 3, Chromium for E2E tests, and the standard `vue-echarts`
+point. Openbase uses Vue 3, Chrome's Chromium engine for E2E tests, and the standard `vue-echarts`
 entry. Its existing `option`, `autoresize`, `loading` and `init-options` props
 remain documented in 8.3.2. No required wrapper API migration was identified.
 That contract review does not verify resize, reactive updates or tooltip behavior

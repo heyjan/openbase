@@ -1,4 +1,5 @@
 import * as echarts from 'echarts'
+import { assertPatchedChromeVersion, CHROME_CHANNEL } from '~~/shared/utils/chrome-security'
 
 export type PdfChartType = 'line' | 'bar' | 'horizontal_bar' | 'pie'
 export type PdfModuleType = PdfChartType | 'kpi' | 'table' | 'text'
@@ -53,6 +54,7 @@ type PdfPage = {
 
 type ChromiumLike = {
   launch: (options?: Record<string, unknown>) => Promise<{
+    version: () => string
     newPage: (options?: Record<string, unknown>) => Promise<{
       setContent: (html: string, options?: Record<string, unknown>) => Promise<void>
       emulateMedia: (options: { media: 'print' | 'screen' }) => Promise<void>
@@ -596,10 +598,14 @@ const loadChromium = async () => {
 export const renderPdfDashboardBuffer = async (rawSpec: unknown) => {
   const html = renderPdfDashboardHtml(rawSpec)
   const chromium = await loadChromium()
-  const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage'] })
-  const page = await browser.newPage({ viewport: { width: PAGE_WIDTH_PX, height: PAGE_HEIGHT_PX } })
+  const browser = await chromium.launch({
+    channel: CHROME_CHANNEL,
+    args: ['--no-sandbox', '--disable-dev-shm-usage']
+  })
 
   try {
+    assertPatchedChromeVersion(browser.version())
+    const page = await browser.newPage({ viewport: { width: PAGE_WIDTH_PX, height: PAGE_HEIGHT_PX } })
     await page.setContent(html, { waitUntil: 'networkidle' })
     await page.emulateMedia({ media: 'print' })
     return await page.pdf({
@@ -610,7 +616,6 @@ export const renderPdfDashboardBuffer = async (rawSpec: unknown) => {
       margin: { top: '0', right: '0', bottom: '0', left: '0' }
     })
   } finally {
-    await page.close()
     await browser.close()
   }
 }
